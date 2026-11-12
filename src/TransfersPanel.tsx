@@ -32,13 +32,12 @@ import {
   X,
 } from "lucide-react";
 import { Role, UserRecord, areaName, fullName } from "./data";
+import { transferApi, tramiteApi } from "./api";
 import { ArchivalRecord } from "./records";
 import {
   DocumentaryTransfer,
   ReceptionStatus,
-  TransferHistoryEvent,
   TransferStatus,
-  todayIso,
 } from "./transfers";
 
 type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
@@ -1375,213 +1374,60 @@ export default function TransfersPanel({
     (role === "Personal de área" || role === "Encargado de área") &&
     permissions.includes("prepare-transfers");
 
-  const addHistory = (
-    transfer: DocumentaryTransfer,
-    type: TransferHistoryEvent["type"],
-    detail: string,
-  ): TransferHistoryEvent[] => [
-    ...transfer.history,
-    {
-      id: `H-${transfer.id}-${transfer.history.length + 1}`,
-      type,
-      date: todayIso(),
-      actor: currentUser.id,
-      detail,
-    },
-  ];
-
-  const submitTransfer = (recordIds: string[], existing: DocumentaryTransfer | null) => {
-    if (existing) {
-      const updated: DocumentaryTransfer = {
-        ...existing,
-        recordIds,
-        status: "Pendiente de visto bueno del área",
-        submittedAt: todayIso(),
-        reviewerId: "",
-        reviewedAt: "",
-        history: addHistory(existing, "Reenvío", "Solicitud corregida y reenviada para revisión."),
-      };
-      onTransfersChange(transfers.map((item) => (item.id === existing.id ? updated : item)));
-      setMessage(`${existing.folio} fue reenviada para revisión.`);
-    } else {
-      const nextNumber =
-        Math.max(0, ...transfers.map((item) => Number(item.folio.split("-").at(-1)) || 0)) + 1;
-      const folio = `TP-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`;
-      const id = `TR-${String(transfers.length + 1).padStart(3, "0")}`;
-      const created: DocumentaryTransfer = {
-        id,
-        folio,
-        areaId: currentUser.areaId,
-        requestedBy: currentUser.id,
-        createdAt: todayIso(),
-        submittedAt: todayIso(),
-        status: "Pendiente de visto bueno del área",
-        recordIds,
-        reviewerId: "",
-        reviewedAt: "",
-        acceptedAt: "",
-        observation: "",
-        receptionStatus: "Pendiente",
-        receptionDate: "",
-        receptionResponsible: "",
-        receptionNotes: "",
-        history: [
-          {
-            id: `H-${id}-1`,
-            type: "Preparación",
-            date: todayIso(),
-            actor: currentUser.id,
-            detail: `Solicitud preparada con ${recordIds.length} expediente${recordIds.length === 1 ? "" : "s"}.`,
-          },
-          {
-            id: `H-${id}-2`,
-            type: "Envío",
-            date: todayIso(),
-            actor: currentUser.id,
-            detail: "Solicitud enviada para visto bueno del encargado de área.",
-          },
-        ],
-      };
-      onTransfersChange([created, ...transfers]);
-      setMessage(`${folio} fue enviada para revisión.`);
-    }
-    setWizardTransfer(null);
-    setView("list");
-    window.setTimeout(() => setMessage(""), 3000);
-  };
-
-  const returnTransfer = (observation: string) => {
-    if (!selected) return;
-    const updated: DocumentaryTransfer = {
-      ...selected,
-      status: "Con observaciones",
-      reviewerId: currentUser.id,
-      reviewedAt: todayIso(),
-      observation,
-      history: [
-        ...addHistory(selected, "Revisión", "Inventario revisado por la coordinación."),
-        {
-          id: `H-${selected.id}-${selected.history.length + 2}`,
-          type: "Observaciones",
-          date: todayIso(),
-          actor: currentUser.id,
-          detail: observation,
-        },
-      ],
-    };
-    onTransfersChange(transfers.map((item) => (item.id === selected.id ? updated : item)));
+  const saveTransferState=(updated:DocumentaryTransfer)=>{
+    onTransfersChange(transfers.some(t=>t.id===updated.id)
+      ? transfers.map(t=>t.id===updated.id?updated:t)
+      : [updated,...transfers]);
     setSelected(updated);
-    setReturnOpen(false);
   };
-
-  const approveAreaTransfer = () => {
-    if (
-      !selected ||
-      role !== "Encargado de área" ||
-      selected.areaId !== currentUser.areaId ||
-      selected.status !== "Pendiente de visto bueno del área"
-    )
-      return;
-    const updated: DocumentaryTransfer = {
-      ...selected,
-      status: "Pendiente de revisión administrativa",
-      areaApproverId: currentUser.id,
-      areaApprovedAt: todayIso(),
-      observation: "",
-      history: addHistory(
-        selected,
-        "Visto bueno de área",
-        "El encargado del área otorgó el visto bueno; la etapa archivística no cambió.",
-      ),
-    };
-    onTransfersChange(transfers.map((item) => (item.id === selected.id ? updated : item)));
-    setSelected(updated);
-    setMessage("El visto bueno fue registrado y la solicitud pasó a revisión administrativa.");
+  const failure=(error:unknown)=>{
+    setMessage(error instanceof Error ? error.message : "No se pudo completar la operación en MySQL.");
   };
-
-  const acceptTransfer = () => {
-    if (!selected || selected.requestedBy === currentUser.id) return;
-    const reviewHistory = addHistory(
-      selected,
-      "Revisión",
-      "Inventario y expedientes revisados por la coordinación.",
-    );
-    const updated: DocumentaryTransfer = {
-      ...selected,
-      status: "Aceptada",
-      reviewerId: currentUser.id,
-      reviewedAt: todayIso(),
-      acceptedAt: todayIso(),
-      history: [
-        ...reviewHistory,
-        {
-          id: `H-${selected.id}-${selected.history.length + 2}`,
-          type: "Aceptación",
-          date: todayIso(),
-          actor: currentUser.id,
-          detail: "Transferencia aceptada; los expedientes cambiaron a Archivo de concentración.",
-        },
-      ],
-    };
-    onTransfersChange(transfers.map((item) => (item.id === selected.id ? updated : item)));
-    onRecordsChange(
-      records.map((record) =>
-        selected.recordIds.includes(record.id)
-          ? {
-              ...record,
-              stage: "Archivo de concentración",
-              transferReference: selected.folio,
-              transferDate: selected.submittedAt,
-              transferAcceptedDate: todayIso(),
-              archiveZone: "Ubicación pendiente de recepción",
-              room: "",
-              shelf: "",
-              level: "",
-              physicalSection: "",
-              position: "",
-              locationBox: record.boxNumber,
-              locationNotes: "",
-            }
-          : record,
-      ),
-    );
-    setSelected(updated);
-    setAcceptOpen(false);
+  const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
+    try{
+      const updated=await transferApi.submit(recordIds,existing);
+      saveTransferState(updated);
+      setWizardTransfer(null);
+      setView("list");
+      setMessage(updated.folio+" fue enviada para visto bueno del área en MySQL.");
+    }catch(error){ failure(error);window.alert(error instanceof Error?error.message:"No se pudo enviar la transferencia"); }
   };
-
-  const saveReception = (status: ReceptionStatus, date: string, notes: string) => {
-    if (!selected) return;
-    const updated: DocumentaryTransfer = {
-      ...selected,
-      receptionStatus: status,
-      receptionDate: date,
-      receptionResponsible: currentUser.id,
-      receptionNotes: notes,
-      history: addHistory(
-        selected,
-        "Recepción física",
-        status === "Recibida"
-          ? "Recepción física registrada sin diferencias."
-          : `Diferencias: ${notes}`,
-      ),
-    };
-    onTransfersChange(transfers.map((item) => (item.id === selected.id ? updated : item)));
-    onRecordsChange(
-      records.map((record) =>
-        selected.recordIds.includes(record.id)
-          ? {
-              ...record,
-              receptionDate: date,
-              receptionResponsible: fullName(currentUser),
-              receptionNotes: notes,
-            }
-          : record,
-      ),
-    );
-    setSelected(updated);
-    setMessage("El seguimiento de recepción física fue actualizado.");
-    setView("detail");
-    window.setTimeout(() => setMessage(""), 3000);
+  const returnTransfer=async(observation:string)=>{
+    if(!selected)return;
+    try{
+      const updated=await transferApi.observe(selected.id,observation);
+      saveTransferState(updated);
+      setReturnOpen(false);
+      setMessage("La solicitud fue devuelta con observaciones.");
+    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo devolver");}
+  };
+  const approveAreaTransfer=async()=>{
+    if(!selected)return;
+    try{
+      const updated=await transferApi.areaApprove(selected.id);
+      saveTransferState(updated);
+      setMessage("El visto bueno quedó registrado en MySQL.");
+    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aprobar");}
+  };
+  const acceptTransfer=async()=>{
+    if(!selected)return;
+    try{
+      const updated=await transferApi.accept(selected.id);
+      const nextRecords=await tramiteApi.list();
+      onRecordsChange(nextRecords);
+      saveTransferState(updated);
+      setAcceptOpen(false);
+      setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
+    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
+  };
+  const saveReception=async(status:ReceptionStatus,date:string,notes:string)=>{
+    if(!selected)return;
+    try{
+      const updated=await transferApi.receive(selected.id,status,date,notes);
+      saveTransferState(updated);
+      setMessage("La recepción física quedó registrada en MySQL.");
+      setView("detail");
+    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo registrar recepción");}
   };
 
   if (view === "wizard")
