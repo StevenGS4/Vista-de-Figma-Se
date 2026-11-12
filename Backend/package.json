@@ -9,7 +9,9 @@
     "test:db": "node src/test-db.js",
     "seed:admin": "node src/seed-admin.js",
     "test": "node --test tests/*.test.js",
-    "seed:cadido": "node src/seed-cadido.js"
+    "seed:cadido": "node src/seed-cadido.js",
+    "preflight": "node src/preflight.js",
+    "smoke": "node src/smoke-api.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
