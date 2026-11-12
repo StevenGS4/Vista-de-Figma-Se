@@ -31,6 +31,8 @@ jobs:
           node --check src/tramite.js
           node --check src/transfers.js
           node --check src/transfer-policy.js
+          node --check src/concentration.js
+          node --check src/concentration-policy.js
       - name: Pruebas unitarias
         working-directory: Backend
         run: npm test
