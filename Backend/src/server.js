@@ -6,6 +6,7 @@ import { parseCookies,rejectCrossOriginWrites } from './http.js';
 import { authRouter } from './auth.js';
 import { usersRouter } from './users.js';
 import { tramiteRouter } from './tramite.js';
+import { transfersRouter } from './transfers.js';
 
 const app=express();
 const port=Number(process.env.PORT||3001);
@@ -24,6 +25,7 @@ app.get('/api/db/status',async(_req,res)=>{
 app.use('/api/auth',authRouter);
 app.use('/api/users',usersRouter);
 app.use('/api/tramite',tramiteRouter);
+app.use('/api/transferencias',transfersRouter);
 app.use((err,_req,res,_next)=>{
  console.error('Error de API:',err.code||err.message);
  res.status(err.status||500).json({error:err.status?err.message:'Error interno del servidor'});
