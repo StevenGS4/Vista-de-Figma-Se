@@ -946,8 +946,10 @@ function Application({
   transfers,
   users,
   rolePermissions,
+  recordsLoadError,
 }: {
   archivalRecords: ArchivalRecord[];
+  recordsLoadError: string;
   currentUser: UserRecord;
   loans: ArchivalLoan[];
   onLogout: () => void;
@@ -959,6 +961,7 @@ function Application({
   onUsersChange: (users: UserRecord[]) => void;
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
+  recordsLoadError: string;
   rolePermissions: Record<Role, string[]>;
 }) {
   const [active, setActive] = useState<ModuleId>("inicio");
@@ -1048,6 +1051,7 @@ function Application({
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
               <RecordsPanel
+                loadError={recordsLoadError}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
                 role={role}
@@ -1129,6 +1133,7 @@ function Application({
 export default function App() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [archivalRecords, setArchivalRecords] = useState<ArchivalRecord[]>([]);
+  const [recordsLoadError, setRecordsLoadError] = useState("");
   const [loans, setLoans] = useState(initialLoans);
   const [transfers, setTransfers] = useState(initialTransfers);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
@@ -1159,15 +1164,19 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
+    if (!currentUser.roles.some((r)=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador")) return;
     let alive = true;
+    setRecordsLoadError("");
     Promise.all([tramiteApi.catalog(), tramiteApi.list()])
       .then(([catalog, records]) => {
         if (!alive) return;
         setCadidoCatalog(catalog.sections, catalog.series);
         setArchivalRecords(records);
+        setRecordsLoadError("");
       }).catch((error) => {
         if (alive) {
           setArchivalRecords([]);
+          setRecordsLoadError(error instanceof Error ? error.message : "Error consultando MySQL");
           console.error("No fue posible consultar Archivo de Trámite en MySQL:", error);
         }
       });
@@ -1187,6 +1196,7 @@ export default function App() {
     <>
       <Application
         archivalRecords={archivalRecords}
+        recordsLoadError={recordsLoadError}
         currentUser={currentUser}
         loans={loans}
         onLogout={logout}
