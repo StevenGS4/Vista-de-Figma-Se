@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { makeInventoryWorkbook,makeTransferWorkbook } from '../src/exports.js';
+import { makeInventoryWorkbook,makeTransferWorkbook } from '../src/export-workbooks.js';
 
 const sample={
  inventoryId:'INV-TEST',recordNumber:'EXP-0001',consecutive:'1',cadidoCode:'DEMO-1C.1',
