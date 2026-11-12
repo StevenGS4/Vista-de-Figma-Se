@@ -53,7 +53,7 @@ function layout(book,records,kind,index,total){
  const sheet=book.addWorksheet(total===1?(kind==='tramite'?'INVENTARIO A.T.':kind==='concentracion'?'INVENTARIO A.C.':'TRANSFERENCIA PRIMARIA'):
   ('INV '+String(index+1).padStart(3,'0')).slice(0,31));
  sheet.views=[{state:'frozen',ySplit:22}];
- sheet.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,
+ sheet.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:22',
   margins:{left:0.2,right:0.2,top:0.4,bottom:0.4,header:0.15,footer:0.15}};
  for(const [col,w] of Object.entries(columnWidths))sheet.getColumn(col).width=w;
  for(const a of BASE_MERGES)merge(sheet,a);
@@ -61,7 +61,7 @@ function layout(book,records,kind,index,total){
  const first=records[0];
  const title=kind==='tramite'?'INVENTARIO DOCUMENTAL ARCHIVO DE TRÁMITE':
  kind==='concentracion'?'INVENTARIO DOCUMENTAL ARCHIVO DE CONCENTRACIÓN':
- 'RELACIÓN DOCUMENTAL PARA TRANSFERENCIA PRIMARIA';
+ 'INVENTARIO DOCUMENTAL TRANSFERENCIA PRIMARIA';
  put(sheet,'G2','SECRETARÍA DE MEDIO AMBIENTE Y RECURSOS NATURALES');
  put(sheet,'G3',title);
  put(sheet,'B5','NOMBRE DE LA UNIDAD ADMINISTRATIVA:');
