@@ -24,3 +24,18 @@ export const usersApi={
  body:JSON.stringify({...user,password:user.password||undefined}),
  })).user),
 };
+
+import type { ArchivalRecord, CadidoSection, CadidoSeries } from './records';
+export const tramiteApi = {
+  catalog:()=>request<{sections:CadidoSection[],series:CadidoSeries[]}>('/api/tramite/catalogo'),
+  list:async()=>((await request<{records:ArchivalRecord[]}>('/api/tramite/inventarios')).records),
+  save:async(rows:ArchivalRecord[],editing:boolean)=>{
+    const folio=rows[0]?.inventoryId;
+    if(!folio) throw new Error('Inventario sin identificador');
+    const path=editing?'/api/tramite/inventarios/'+encodeURIComponent(folio):'/api/tramite/inventarios';
+    return (await request<{records:ArchivalRecord[]}>(path,{
+      method:editing?'PUT':'POST',body:JSON.stringify({rows}),
+    })).records;
+  },
+  remove:(folio:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
+};
