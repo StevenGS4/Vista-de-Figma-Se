@@ -7,6 +7,7 @@ export const exportTypes = Object.freeze({
 
 export function safeCell(value) {
  if (value == null) return '';
+ if (typeof value === 'number') return Number.isFinite(value) ? value : '';
  const text = Array.isArray(value) ? value.join(', ') : String(value);
  // El lector de Excel no debe interpretar como fórmula datos capturados por usuarios.
  return /^[\s]*[=+\-@]/.test(text) ? "'" + text : text;
