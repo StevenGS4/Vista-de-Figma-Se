@@ -11,7 +11,9 @@ if(!email||!password||password.length<12||!/[A-Z]/.test(password)||!/[a-z]/.test
 let conn;
 try{
  conn=await pool.getConnection();await conn.beginTransaction();
- const [area]=await conn.execute('SELECT id FROM areas WHERE codigo=?',['SEMARNAT-ADMIN']);
+ const areas=[['AR-001','Coordinación Administrativa'],['AR-002','Unidad Jurídica'],['AR-003','Archivo de Concentración'],['AR-004','Recursos Materiales'],['AR-005','Recursos Humanos']];
+ for(const [code,name] of areas) await conn.execute('INSERT IGNORE INTO areas(codigo,nombre) VALUES (?,?)',[code,name]);
+ const [area]=await conn.execute('SELECT id FROM areas WHERE codigo=?',['AR-001']);
  let areaId=area[0]?.id;
  if(!areaId){const [r]=await conn.execute('INSERT INTO areas(codigo,nombre) VALUES (?,?)',['SEMARNAT-ADMIN','Área de administración (demostración)']);areaId=r.insertId;}
  const [old]=await conn.execute('SELECT id FROM usuarios WHERE correo=?',[email.toLowerCase()]);
