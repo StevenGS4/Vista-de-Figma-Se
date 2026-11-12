@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -45,7 +45,7 @@ import {
 } from "./data";
 import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan, initialLoans } from "./loans";
-import { DocumentaryTransfer, initialTransfers } from "./transfers";
+import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
 const ConcentrationPanel = lazy(() => import("./ConcentrationPanel"));
@@ -1134,7 +1134,7 @@ export default function App() {
   const [archivalRecords, setArchivalRecords] = useState<ArchivalRecord[]>([]);
   const [recordsLoadError, setRecordsLoadError] = useState("");
   const [loans, setLoans] = useState(initialLoans);
-  const [transfers, setTransfers] = useState(initialTransfers);
+  const [transfers, setTransfers] = useState<DocumentaryTransfer[]>([]);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -1181,6 +1181,14 @@ export default function App() {
       });
     return () => { alive = false; };
   }, [currentUser?.id, currentUser?.mustChangePassword]);
+
+  useEffect(()=>{
+    if(!currentUser||currentUser.mustChangePassword)return;
+    let active=true;
+    transferApi.list().then((list)=>{if(active)setTransfers(list);})
+     .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
+    return ()=>{active=false;};
+  },[currentUser?.id,currentUser?.mustChangePassword]);
 
   const logout = async () => {
     try { await authApi.logout(); }
