@@ -22,6 +22,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
+import { tramiteApi } from "./api";
 import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
@@ -1343,15 +1344,11 @@ function InventoryForm({
       setMaxVisited((current) => Math.max(current, invalidStep));
       return;
     }
-    let nextId = Math.max(0, ...records.map((record) => Number(record.id.replace(/\D/g, "")) || 0));
     onSave(
       drafts.map((record) => ({
         ...record,
-        id: record.id.startsWith("DRAFT-") ? `REG-${String(++nextId).padStart(3, "0")}` : record.id,
         recordNumber: record.recordNumber.trim().toUpperCase(),
-        totalValidity: String(
-          Number(record.currentValidity) + Number(record.concentrationValidity),
-        ),
+        totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
       })),
     );
   };
@@ -1641,6 +1638,7 @@ function InventoryDetail({
 }
 
 export default function RecordsPanel({
+  loadError,
   onRecordsChange,
   permissions,
   protectedRecordIds,
@@ -1648,6 +1646,7 @@ export default function RecordsPanel({
   role,
   user,
 }: {
+  loadError?: string;
   onRecordsChange: (records: ArchivalRecord[]) => void;
   permissions: string[];
   protectedRecordIds: Set<string>;
@@ -1667,19 +1666,19 @@ export default function RecordsPanel({
           record.areaId === user.areaId && (isAreaManager || record.createdBy === user.id),
       );
   const selected = authorized.filter((record) => record.inventoryId === selectedId);
-  const save = (rows: ArchivalRecord[]) => {
-    const ids = new Set(rows.map((row) => row.id));
-    const inventoryId = rows[0].inventoryId;
-    const next = records.filter(
-      (record) =>
-        record.inventoryId !== inventoryId ||
-        (!ids.has(record.id) && record.stage === "Archivo de concentración"),
-    );
-    onRecordsChange([...rows, ...next]);
-    setSelectedId("");
-    setView("list");
-    setMessage("El inventario y sus expedientes se guardaron correctamente.");
-    window.setTimeout(() => setMessage(""), 3000);
+  const save = async (rows: ArchivalRecord[]) => {
+    try {
+      const editing = selected.length > 0;
+      const saved = await tramiteApi.save(rows,editing);
+      const oldInventory = rows[0].inventoryId;
+      onRecordsChange([...saved,...records.filter((record)=>record.inventoryId!==oldInventory)]);
+      setSelectedId("");
+      setView("list");
+      setMessage("El inventario y sus expedientes se guardaron en MySQL.");
+      window.setTimeout(()=>setMessage(""),3000);
+    } catch(error) {
+      window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
+    }
   };
   if (view === "form")
     return (
@@ -1717,6 +1716,9 @@ export default function RecordsPanel({
     );
   return (
     <>
+      {loadError && <div className="validation-summary" role="alert">
+        No fue posible cargar inventarios desde MySQL: {loadError}
+      </div>}
       {message && (
         <div className="toast record-toast" role="status">
           <Check size={18} />
@@ -1724,7 +1726,7 @@ export default function RecordsPanel({
         </div>
       )}
       <InventoryList
-        canCreate={permissions.includes("register-records")}
+        canCreate={!loadError && permissions.includes("register-records")}
         canDelete={role === "Encargado de área" || isAdmin}
         canEdit={permissions.includes("edit-records")}
         onCreate={() => {
@@ -1735,10 +1737,15 @@ export default function RecordsPanel({
           setSelectedId(id);
           setView("form");
         }}
-        onDelete={(id) => {
+        onDelete={async (id) => {
           if (!window.confirm(`¿Eliminar el inventario ${id} sin movimientos históricos?`)) return;
-          onRecordsChange(records.filter((record) => record.inventoryId !== id));
-          setMessage("El inventario elegible fue eliminado.");
+          try {
+            await tramiteApi.remove(id);
+            onRecordsChange(records.filter((record) => record.inventoryId !== id));
+            setMessage("Inventario eliminado de MySQL.");
+          } catch(error) {
+            window.alert(error instanceof Error ? error.message : "No fue posible eliminar el inventario.");
+          }
         }}
         onOpen={(id) => {
           setSelectedId(id);

@@ -18,4 +18,5 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   decimalNumbers: false,
   timezone: 'Z',
+  dateStrings: true,
 });
