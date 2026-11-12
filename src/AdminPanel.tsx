@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { usersApi } from "./api";
 import {
   ArrowLeft,
   Check,
@@ -855,7 +856,7 @@ function PermissionMatrix({
                       <input
                         aria-label={`${permission.label}: ${role}`}
                         checked={matrix[role].includes(permission.id)}
-                        onChange={() => toggle(role, permission.id)}
+                        disabled
                         type="checkbox"
                       />
                       <span>{matrix[role].includes(permission.id) && <Check size={14} />}</span>
@@ -870,8 +871,7 @@ function PermissionMatrix({
       <div className="permission-legend">
         <ShieldCheck size={18} />
         <span>
-          <strong>Control de acceso por rol.</strong> Los cambios son locales y se restablecen al
-          recargar el prototipo.
+          <strong>Control de acceso por rol.</strong> La matriz de permisos es ilustrativa en esta etapa. Los permisos reales se verifican en el servidor.
         </span>
       </div>
     </div>
@@ -895,30 +895,30 @@ export default function AdminPanel({
   const [permissionsUser, setPermissionsUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState("");
 
-  const saveUser = (user: UserRecord) => {
+  const saveUser = async (user: UserRecord) => {
     const exists = users.some((item) => item.id === user.id);
-    onUsersChange(
-      exists ? users.map((item) => (item.id === user.id ? user : item)) : [user, ...users],
-    );
-    setToast(
-      exists ? "Los cambios del usuario se guardaron correctamente." : "El usuario fue registrado.",
-    );
-    setView("list");
-    setSelected(null);
-    window.setTimeout(() => setToast(""), 2800);
+    try {
+      const saved = await usersApi.save(user);
+      onUsersChange(exists ? users.map((item) => (item.id === saved.id ? saved : item)) : [saved,...users]);
+      setToast(exists ? "Los cambios del usuario se guardaron en MySQL." : "El usuario fue registrado en MySQL.");
+      setView("list");
+      setSelected(null);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+    }
   };
 
-  const updateRoles = (nextRoles: Role[]) => {
+  const updateRoles = async (nextRoles: Role[]) => {
     if (!permissionsUser) return;
-    onUsersChange(
-      users.map((user) => (user.id === permissionsUser.id ? { ...user, roles: nextRoles } : user)),
-    );
-    if (selected?.id === permissionsUser.id) {
-      setSelected({ ...selected, roles: nextRoles });
+    try {
+      const saved = await usersApi.save({...permissionsUser,roles:nextRoles});
+      onUsersChange(users.map((user)=>(user.id===saved.id?saved:user)));
+      if (selected?.id === saved.id) setSelected(saved);
+      setPermissionsUser(null);
+      setToast("Los roles del usuario se actualizaron en MySQL.");
+    } catch(error) {
+      setToast(error instanceof Error ? error.message : "No se pudieron actualizar los roles.");
     }
-    setPermissionsUser(null);
-    setToast("Los permisos del usuario se actualizaron.");
-    window.setTimeout(() => setToast(""), 2800);
   };
 
   if (view === "form")
