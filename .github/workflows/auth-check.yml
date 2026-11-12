@@ -1,0 +1,30 @@
+name: Verificar frontend y backend
+on:
+  pull_request:
+  push:
+    branches: [feature/auth-mysql-etapa-1]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar frontend
+        run: npm install
+      - name: Construir interfaz React
+        run: npm run build
+      - name: Instalar backend
+        working-directory: Backend
+        run: npm install
+      - name: Validar sintaxis del backend
+        working-directory: Backend
+        run: |
+          node --check src/server.js
+          node --check src/auth.js
+          node --check src/users.js
+          node --check src/seed-admin.js
+      - name: Pruebas unitarias
+        working-directory: Backend
+        run: npm test
