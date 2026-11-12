@@ -67,3 +67,25 @@ export const concentrationApi={
   )).record;
  },
 };
+
+import type { ArchivalLoan } from './loans';
+export type NewLoanPayload={
+ mode:'INDIVIDUAL'|'INVENTARIO_COMPLETO';
+ recordIds:string[];
+ requestingAreaId:string;
+ requesterName:string;
+ loanDate:string;
+ expectedReturnDate:string;
+ receivedBy:string;
+ observations:string;
+};
+export const loanApi={
+ list:async()=>((await request<{loans:ArchivalLoan[]}>('/api/prestamos')).loans),
+ create:async(payload:NewLoanPayload)=>(await request<{loan:ArchivalLoan}>('/api/prestamos',{
+  method:'POST',body:JSON.stringify(payload)
+ })).loan,
+ returnItems:async(id:string,recordIds:string[],date:string,receivedBy:string,notes:string)=>
+  (await request<{loan:ArchivalLoan}>('/api/prestamos/'+encodeURIComponent(id)+'/returns',{
+    method:'POST',body:JSON.stringify({recordIds,date,receivedBy,notes})
+  })).loan,
+};

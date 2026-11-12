@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi, concentrationApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -44,7 +44,7 @@ import {
   initials,
 } from "./data";
 import { ArchivalRecord, setCadidoCatalog } from "./records";
-import { ArchivalLoan, initialLoans } from "./loans";
+import { ArchivalLoan } from "./loans";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
@@ -1133,7 +1133,7 @@ export default function App() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [archivalRecords, setArchivalRecords] = useState<ArchivalRecord[]>([]);
   const [recordsLoadError, setRecordsLoadError] = useState("");
-  const [loans, setLoans] = useState(initialLoans);
+  const [loans, setLoans] = useState<ArchivalLoan[]>([]);
   const [transfers, setTransfers] = useState<DocumentaryTransfer[]>([]);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
@@ -1197,6 +1197,15 @@ export default function App() {
     transferApi.list().then((list)=>{if(active)setTransfers(list);})
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
     return ()=>{active=false;};
+  },[currentUser?.id,currentUser?.mustChangePassword]);
+
+  useEffect(()=>{
+    if(!currentUser||currentUser.mustChangePassword)return;
+    if(!currentUser.roles.some(r=>r==="Encargado de préstamos / Control archivístico"||r==="Administrador / Coordinador"))return;
+    let alive=true;
+    loanApi.list().then(list=>{if(alive)setLoans(list);})
+      .catch(error=>{if(alive){setLoans([]);console.error("No se pudieron cargar préstamos en MySQL:",error);}});
+    return ()=>{alive=false;};
   },[currentUser?.id,currentUser?.mustChangePassword]);
 
   const logout = async () => {

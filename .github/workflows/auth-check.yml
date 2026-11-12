@@ -33,6 +33,8 @@ jobs:
           node --check src/transfer-policy.js
           node --check src/concentration.js
           node --check src/concentration-policy.js
+          node --check src/loans.js
+          node --check src/loan-policy.js
       - name: Pruebas unitarias
         working-directory: Backend
         run: npm test
