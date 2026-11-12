@@ -536,7 +536,10 @@ function TransferWizard({
       .flatMap((transfer) => transfer.recordIds),
   );
   const areaRecords = allRecords.filter(
-    (record) => record.stage === "Archivo de trámite" && record.areaId === currentUser.areaId,
+    (record) =>
+      record.stage === "Archivo de trámite" &&
+      record.areaId === currentUser.areaId &&
+      (currentUser.roles.includes("Encargado de área") || record.createdBy === currentUser.id),
   );
   const blockedInventoryIds = new Set(
     areaRecords.filter((record) => blockedIds.has(record.id)).map((record) => record.inventoryId),
@@ -906,6 +909,7 @@ function RequestDetail({
     role === "Encargado de área" &&
     transfer.areaId === currentUser.areaId &&
     transfer.status === "Pendiente de visto bueno del área" &&
+    transfer.requestedBy !== currentUser.id &&
     permissions.includes("approve-area-transfers");
   return (
     <div className="transfer-detail-page">
