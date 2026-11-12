@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi } from "./api";
+import { authApi, usersApi, tramiteApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -43,7 +43,7 @@ import {
   initialRolePermissions,
   initials,
 } from "./data";
-import { ArchivalRecord, initialArchivalRecords } from "./records";
+import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan, initialLoans } from "./loans";
 import { DocumentaryTransfer, initialTransfers } from "./transfers";
 
@@ -1128,7 +1128,7 @@ function Application({
 
 export default function App() {
   const [users, setUsers] = useState<UserRecord[]>([]);
-  const [archivalRecords, setArchivalRecords] = useState(initialArchivalRecords);
+  const [archivalRecords, setArchivalRecords] = useState<ArchivalRecord[]>([]);
   const [loans, setLoans] = useState(initialLoans);
   const [transfers, setTransfers] = useState(initialTransfers);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
@@ -1156,6 +1156,23 @@ export default function App() {
     });
     return () => {active=false;};
   }, [currentUser?.id, currentUser?.roles.join(",")]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.mustChangePassword) return;
+    let alive = true;
+    Promise.all([tramiteApi.catalog(), tramiteApi.list()])
+      .then(([catalog, records]) => {
+        if (!alive) return;
+        setCadidoCatalog(catalog.sections, catalog.series);
+        setArchivalRecords(records);
+      }).catch((error) => {
+        if (alive) {
+          setArchivalRecords([]);
+          console.error("No fue posible consultar Archivo de Trámite en MySQL:", error);
+        }
+      });
+    return () => { alive = false; };
+  }, [currentUser?.id, currentUser?.mustChangePassword]);
 
   const logout = async () => {
     try { await authApi.logout(); }
