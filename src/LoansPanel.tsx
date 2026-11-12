@@ -1165,7 +1165,17 @@ export default function LoansPanel({
         receivedBy:data.receivedBy,observations:data.observations,
       });
       onLoansChange([created,...loans]);
-      await refreshRecords();
+      const updatedList=await concentrationApi.list().catch(error=>{
+        console.error("Préstamo confirmado; no se pudo actualizar la lista de expedientes:",error);
+        return null;
+      });
+      if(updatedList){
+        const ids=new Set(updatedList.map(row=>row.id));
+        onRecordsChange([...records.filter(row=>!ids.has(row.id)),...updatedList]);
+      } else {
+        const selectedIds=new Set(selectedRecords.map(row=>row.id));
+        onRecordsChange(records.map(row=>selectedIds.has(row.id)?{...row,availability:"Prestado"}:row));
+      }
       setSelectedRecords([]);
       setMessage(created.folio+" quedó registrado en MySQL.");
       setView("list");
@@ -1180,7 +1190,17 @@ export default function LoansPanel({
     try{
       const updated=await loanApi.returnItems(selectedLoan.id,returnedIds,date,receivedBy,notes);
       onLoansChange(loans.map(l=>l.id===updated.id?updated:l));
-      await refreshRecords();
+      const updatedRecords=await concentrationApi.list().catch(error=>{
+        console.error("Devolución confirmada; no se pudo actualizar la consulta:",error);
+        return null;
+      });
+      if(updatedRecords){
+        const ids=new Set(updatedRecords.map(row=>row.id));
+        onRecordsChange([...records.filter(row=>!ids.has(row.id)),...updatedRecords]);
+      } else {
+        const returned=new Set(returnedIds);
+        onRecordsChange(records.map(row=>returned.has(row.id)?{...row,availability:"En archivo"}:row));
+      }
       setSelectedLoan(updated);
       setMessage(updated.status==="Devuelto"
         ?"Todos los expedientes fueron devueltos a MySQL."
