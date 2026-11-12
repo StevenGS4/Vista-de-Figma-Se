@@ -1214,6 +1214,10 @@ export default function App() {
     catch (error) { console.error("Error de cierre de sesión:",error); }
     setCurrentUser(null);
     setUsers([]);
+    setArchivalRecords([]);
+    setLoans([]);
+    setTransfers([]);
+    setRecordsLoadError("");
     setVoluntaryPasswordOpen(false);
   };
 
@@ -1260,6 +1264,13 @@ export default function App() {
       )}
     </>
   ) : (
-    <Login onLogin={(user) => { setCurrentUser(user);setUsers([user]); }} />
+    <Login onLogin={(user) => {
+      setArchivalRecords([]);
+      setLoans([]);
+      setTransfers([]);
+      setRecordsLoadError("");
+      setUsers([user]);
+      setCurrentUser(user);
+    }} />
   );
 }
