@@ -39,3 +39,16 @@ export const tramiteApi = {
   },
   remove:(folio:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
 };
+
+import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
+export const transferApi={
+ list:async()=>((await request<{transfers:DocumentaryTransfer[]}>('/api/transferencias')).transfers),
+ submit:async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
+   const path=existing?'/api/transferencias/'+encodeURIComponent(existing.id)+'/resend':'/api/transferencias';
+   return (await request<{transfer:DocumentaryTransfer}>(path,{method:'POST',body:JSON.stringify({recordIds})})).transfer;
+ },
+ areaApprove:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/approve-area',{method:'POST',body:'{}'})).transfer,
+ observe:async(id:string,observation:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/observe',{method:'POST',body:JSON.stringify({observation})})).transfer,
+ accept:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/accept',{method:'POST',body:'{}'})).transfer,
+ receive:async(id:string,status:ReceptionStatus,date:string,notes:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/reception',{method:'POST',body:JSON.stringify({status,date,notes})})).transfer,
+};
