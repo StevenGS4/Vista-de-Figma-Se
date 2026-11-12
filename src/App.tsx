@@ -1,4 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { authApi, usersApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -40,7 +41,6 @@ import {
   areaName,
   fullName,
   initialRolePermissions,
-  initialUsers,
   initials,
 } from "./data";
 import { ArchivalRecord, initialArchivalRecords } from "./records";
@@ -182,46 +182,29 @@ function InstitutionalMarks({ inverse = false }: { inverse?: boolean }) {
   );
 }
 
-function Login({ onLogin, users }: { onLogin: (user: UserRecord) => void; users: UserRecord[] }) {
+function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const demoUsers = users.filter((user) =>
-    [
-      "admin@semarnat.demo",
-      "personal@semarnat.demo",
-      "encargado.area@semarnat.demo",
-      "archivo@semarnat.demo",
-    ].includes(user.email),
-  );
-
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     if (!email.trim() || !password) {
       setError("Completa el correo electrónico y la contraseña.");
       return;
     }
-    const user = users.find(
-      (item) =>
-        item.email === email.trim().toLowerCase() &&
-        item.password === password &&
-        item.status === "Activo",
-    );
-    if (!user) {
-      setError("Las credenciales no son correctas o la cuenta está inactiva.");
-      return;
-    }
     setLoading(true);
-    window.setTimeout(() => onLogin(user), 650);
-  };
-
-  const selectDemo = (user: UserRecord) => {
-    setEmail(user.email);
-    setPassword(user.password);
-    setError("");
+    try {
+      const user = await authApi.login(email.trim().toLowerCase(), password);
+      setPassword("");
+      onLogin(user);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "No se pudo iniciar sesión.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -338,22 +321,9 @@ function Login({ onLogin, users }: { onLogin: (user: UserRecord) => void; users:
           <div className="demo-access">
             <div className="demo-access__heading">
               <div>
-                <strong>Accesos de demostración</strong>
-                <span>Selecciona un perfil para completar las credenciales.</span>
+                <strong>Acceso institucional</strong>
+                <span>Utiliza una cuenta creada por la administración. Las contraseñas se verifican en el servidor.</span>
               </div>
-              <span>DEMO</span>
-            </div>
-            <div className="demo-access__list">
-              {demoUsers.map((user) => (
-                <button key={user.id} onClick={() => selectDemo(user)}>
-                  <span className="mini-avatar">{initials(user)}</span>
-                  <span>
-                    <strong>{user.roles[0]}</strong>
-                    <small>{user.email}</small>
-                  </span>
-                  <ArrowRight size={16} />
-                </button>
-              ))}
             </div>
           </div>
         </section>
@@ -371,23 +341,22 @@ function MandatoryPasswordChange({
   onComplete,
   user,
 }: {
-  onComplete: (password: string) => void;
+  onComplete: (current: string, next: string) => Promise<void>;
   user: UserRecord;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!current || !next || !confirm) return setError("Todos los campos son obligatorios.");
-    if (current !== user.password)
-      return setError("La contraseña actual o temporal no es correcta.");
     if (next === current) return setError("La nueva contraseña debe ser diferente de la anterior.");
     if (next !== confirm) return setError("La nueva contraseña y su confirmación no coinciden.");
     if (next.length < 8 || !/[A-Z]/.test(next) || !/[a-z]/.test(next) || !/\d/.test(next))
       return setError("Utiliza al menos 8 caracteres, mayúscula, minúscula y número.");
-    onComplete(next);
+    try { await onComplete(current,next); }
+    catch (error) { setError(error instanceof Error ? error.message : "No se pudo actualizar la contraseña."); }
   };
   return (
     <div className="modal-backdrop mandatory-password-backdrop" role="dialog" aria-modal="true">
@@ -456,8 +425,7 @@ function MandatoryPasswordChange({
           <div className="inline-notice">
             <ShieldCheck size={18} />
             <span>
-              <strong>Simulación del prototipo</strong>En producción, esta validación deberá
-              realizarse en servidor y almacenar únicamente hashes seguros.
+              <strong>Protección de cuenta.</strong> La validación se realiza en Node.js y la contraseña se almacena mediante hash en MySQL.
             </span>
           </div>
         </div>
@@ -478,22 +446,22 @@ function VoluntaryPasswordChange({
   user,
 }: {
   onCancel: () => void;
-  onComplete: (password: string) => void;
+  onComplete: (current: string, next: string) => Promise<void>;
   user: UserRecord;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!current || !next || !confirm) return setError("Todos los campos son obligatorios.");
-    if (current !== user.password) return setError("La contraseña actual no es correcta.");
     if (next === current) return setError("La nueva contraseña debe ser diferente de la actual.");
     if (next !== confirm) return setError("La nueva contraseña y su confirmación no coinciden.");
     if (next.length < 8 || !/[A-Z]/.test(next) || !/[a-z]/.test(next) || !/\d/.test(next))
       return setError("Utiliza al menos 8 caracteres, mayúscula, minúscula y número.");
-    onComplete(next);
+    try { await onComplete(current,next); }
+    catch (error) { setError(error instanceof Error ? error.message : "No se pudo actualizar la contraseña."); }
   };
   return (
     <div className="modal-backdrop" role="presentation">
@@ -1159,29 +1127,52 @@ function Application({
 }
 
 export default function App() {
-  const [users, setUsers] = useState(() =>
-    initialUsers.map((user) => ({
-      ...user,
-      mustChangePassword:
-        user.mustChangePassword &&
-        window.localStorage.getItem(`semarnat-password-changed:${user.id}`) !== "true",
-    })),
-  );
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [archivalRecords, setArchivalRecords] = useState(initialArchivalRecords);
   const [loans, setLoans] = useState(initialLoans);
   const [transfers, setTransfers] = useState(initialTransfers);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [voluntaryPasswordOpen, setVoluntaryPasswordOpen] = useState(false);
-  const currentUser =
-    users.find((user) => user.id === sessionId && user.status === "Activo") ?? null;
+
+  useEffect(() => {
+    let mounted = true;
+    authApi.me().then((user) => {
+      if (!mounted) return;
+      setCurrentUser(user);
+      setUsers([user]);
+    }).catch(() => {
+      if (mounted) setCurrentUser(null);
+    }).finally(() => { if (mounted) setAuthLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser?.roles.includes("Administrador / Coordinador")) return;
+    let active = true;
+    usersApi.list().then((list) => { if (active) setUsers(list); }).catch((err) => {
+      console.error("No se pudieron cargar los usuarios:",err);
+    });
+    return () => {active=false;};
+  }, [currentUser?.id, currentUser?.roles.join(",")]);
+
+  const logout = async () => {
+    try { await authApi.logout(); }
+    catch (error) { console.error("Error de cierre de sesión:",error); }
+    setCurrentUser(null);
+    setUsers([]);
+    setVoluntaryPasswordOpen(false);
+  };
+
+  if (authLoading) return <main className="login"><p style={{padding:"3rem"}}>Verificando sesión...</p></main>;
   return currentUser ? (
     <>
       <Application
         archivalRecords={archivalRecords}
         currentUser={currentUser}
         loans={loans}
-        onLogout={() => setSessionId(null)}
+        onLogout={logout}
         onChangePassword={() => setVoluntaryPasswordOpen(true)}
         onLoansChange={setLoans}
         onRecordsChange={setArchivalRecords}
@@ -1194,15 +1185,10 @@ export default function App() {
       />
       {currentUser.mustChangePassword && (
         <MandatoryPasswordChange
-          onComplete={(password) => {
-            setUsers((current) =>
-              current.map((user) =>
-                user.id === currentUser.id
-                  ? { ...user, password, mustChangePassword: false }
-                  : user,
-              ),
-            );
-            window.localStorage.setItem(`semarnat-password-changed:${currentUser.id}`, "true");
+          onComplete={async (current,next) => {
+            const user = await authApi.changePassword(current,next);
+            setCurrentUser(user);
+            setUsers((all)=>all.map(u=>u.id===user.id?user:u));
           }}
           user={currentUser}
         />
@@ -1210,10 +1196,10 @@ export default function App() {
       {voluntaryPasswordOpen && !currentUser.mustChangePassword && (
         <VoluntaryPasswordChange
           onCancel={() => setVoluntaryPasswordOpen(false)}
-          onComplete={(password) => {
-            setUsers((current) =>
-              current.map((user) => (user.id === currentUser.id ? { ...user, password } : user)),
-            );
+          onComplete={async (current,next) => {
+            const user = await authApi.changePassword(current,next);
+            setCurrentUser(user);
+            setUsers((all)=>all.map(u=>u.id===user.id?user:u));
             setVoluntaryPasswordOpen(false);
           }}
           user={currentUser}
@@ -1221,6 +1207,6 @@ export default function App() {
       )}
     </>
   ) : (
-    <Login onLogin={(user) => setSessionId(user.id)} users={users} />
+    <Login onLogin={(user) => { setCurrentUser(user);setUsers([user]); }} />
   );
 }
