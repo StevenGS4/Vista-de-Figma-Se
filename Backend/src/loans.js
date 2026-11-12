@@ -8,7 +8,10 @@ export const loansRouter=express.Router();
 loansRouter.use(requireAuth);
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const name=(v,max=200)=>typeof v==='string'?v.trim().slice(0,max):'';
-const today=()=>new Date().toISOString().slice(0,10);
+const mysqlToday=async()=>{
+ const [[row]]=await pool.query("SELECT DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today");
+ return row.today;
+};
 const shortDate=value=>value?String(value).slice(0,10):'';
 
 async function oneLoan(id) {
@@ -75,9 +78,10 @@ loansRouter.post('/',async(req,res,next)=>{
   try{selected=parseLoanSelection(req.body);}catch(e){throw fail(e.message);}
   const {mode,ids}=selected;
   const data=req.body||{};
-  if(!validDate(data.loanDate)||data.loanDate!==today())
+  const currentDate=await mysqlToday();
+  if(!validDate(data.loanDate)||data.loanDate!==currentDate)
    throw fail('La fecha del préstamo debe ser la fecha actual de registro');
-  if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<today())
+  if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<currentDate)
    throw fail('Fecha prevista de devolución inválida');
   const requester=name(data.requesterName),recipient=name(data.receivedBy),notes=name(data.observations,2000);
   if(!requester||!recipient)throw fail('Nombre de solicitante y receptor son obligatorios');
@@ -133,7 +137,7 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   let ids;
   try{ids=parseReturnItems(req.body?.recordIds);}catch(e){throw fail(e.message);}
   const date=req.body?.date;
-  if(!validDate(date)||date!==today())throw fail('La devolución se registra con la fecha real actual');
+  if(!validDate(date)||date!==await mysqlToday())throw fail('La devolución se registra con la fecha real actual');
   const [loanRows]=await pool.execute('SELECT estado,DATE_FORMAT(fecha_prestamo,\'%Y-%m-%d\') AS loanDate FROM prestamos WHERE id=?',[id]);
   if(!loanRows.length)throw fail('Préstamo no encontrado',404);
   if(loanRows[0].estado!=='ACTIVO')throw fail('El préstamo ya está cerrado',409);
