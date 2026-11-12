@@ -2,7 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
-import { roleNames } from './auth-policy.js';
+import { inventoryScope,hasInventoryAccess,hasCommonHeader,validSupport } from './inventory-policy.js';
 
 export const tramiteRouter = express.Router();
 tramiteRouter.use(requireAuth);
@@ -23,17 +23,14 @@ const date=(v,required=false)=>{
  return s;
 };
 const access=(user)=>{
- if(user.mustChangePassword)throw fail('Debes cambiar tu contraseña',403);
- if(user.roles.includes(roleNames.ADMIN))return 'GLOBAL';
- if(user.roles.includes(roleNames.JEFE_AREA))return 'AREA';
- if(user.roles.includes(roleNames.PERSONAL))return 'PROPIO';
- throw fail('No tienes permiso para consultar Archivo de Trámite',403);
+ const scope=inventoryScope(user);
+ if(!scope)throw fail(user.mustChangePassword?'Debes cambiar tu contraseña':'No tienes permiso para consultar Archivo de Trámite',403);
+ return scope;
 };
 const rowId=id=>'REG-'+id;
 const seriesId=id=>'SER-'+id;
 function checkOwner(user,mode,inventory,editable=false){
- if(mode!=='GLOBAL' && inventory.area_code!==user.areaId)throw fail('Inventario de otra área',403);
- if(mode==='PROPIO' && Number(inventory.creado_por)!==Number(user.id))throw fail('Inventario no creado por este usuario',403);
+ if(!hasInventoryAccess(user,mode,inventory))throw fail('Inventario fuera de tu alcance',403);
  if(editable && inventory.estado!=='TRAMITE')throw fail('El inventario está protegido por transferencia',409);
 }
 async function getInventory(conn,folio,locked=false){
@@ -113,6 +110,7 @@ async function catalog(conn,user,mode){
 }
 function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
+ if(!hasCommonHeader(rows))throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
  if(rows.length>50000)throw fail('Inventario demasiado grande para una sola operación; usa importación por lotes',413);
  const header=rows[0],unique=new Set(),numbers=new Set();
  for(const r of rows){
@@ -126,7 +124,7 @@ function normalize(rows){
    unique.add(consecutivo);numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
    if(close&&close<open)throw fail('Cierre anterior a apertura');
-   if(!['Físico','Electrónico','Mixto'].includes(r.supportType))throw fail('Soporte documental inválido');
+   if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
    if(!Array.isArray(r.documentaryValues)||!r.documentaryValues.length)throw fail('Selecciona valores documentales');
    num(r.filesCount,'legajos',0,2147483647);num(r.foliosCount,'folios',0,2147483647);
    num(r.currentValidity,'vigencia trámite');num(r.concentrationValidity,'vigencia concentración');
