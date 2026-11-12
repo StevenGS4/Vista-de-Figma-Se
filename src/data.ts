@@ -38,38 +38,12 @@ export const roles: Role[] = [
   "Administrador / Coordinador",
 ];
 
-export const areas: Area[] = [
-  {
-    id: "AR-001",
-    name: "Coordinación Administrativa",
-    parent: "Oficina de Representación",
-    manager: "Ana Sofía Martínez Ruiz",
-  },
-  {
-    id: "AR-002",
-    name: "Unidad Jurídica",
-    parent: "Oficina de Representación",
-    manager: "Mariana López Rivera",
-  },
-  {
-    id: "AR-003",
-    name: "Archivo de Concentración",
-    parent: "Coordinación Administrativa",
-    manager: "Carlos Hernández Soto",
-  },
-  {
-    id: "AR-004",
-    name: "Recursos Materiales",
-    parent: "Coordinación Administrativa",
-    manager: "Patricia Gómez Medina",
-  },
-  {
-    id: "AR-005",
-    name: "Recursos Humanos",
-    parent: "Coordinación Administrativa",
-    manager: "Luis Alberto Ramos",
-  },
-];
+// Se rellena desde GET /api/catalogos/areas después de autenticar.
+export const areas: Area[] = [];
+export function setAreasCatalog(next:Area[]) {
+ areas.splice(0,areas.length,...next);
+}
+
 
 // Las cuentas reales se consultan desde MySQL; no publicar contraseñas demo.
 export const initialUsers: UserRecord[] = [];
@@ -123,4 +97,4 @@ export const initials = (user: UserRecord) =>
   `${user.firstName.charAt(0)}${user.paternalName.charAt(0)}`.toUpperCase();
 
 export const areaName = (areaId: string) =>
-  areas.find((area) => area.id === areaId)?.name ?? "Área no asignada";
+  areas.find((area) => area.id === areaId)?.name ?? areaId;
