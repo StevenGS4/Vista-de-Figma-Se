@@ -475,3 +475,12 @@ export const locationSummary = (record: ArchivalRecord) => {
   ].filter(Boolean);
   return parts.join(" / ") || "Ubicación pendiente";
 };
+
+/**
+ * Catálogo recibido del backend. El catálogo inicial es únicamente ficticio.
+ * Conservamos las referencias compartidas por los componentes de Figma.
+ */
+export function setCadidoCatalog(sections: CadidoSection[],series:CadidoSeries[]) {
+ cadidoSections.splice(0,cadidoSections.length,...sections);
+ cadidoSeries.splice(0,cadidoSeries.length,...series);
+}
