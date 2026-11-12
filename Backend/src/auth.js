@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from './config/database.js';
+import { passwordValid, roleNames, hasRole } from './auth-policy.js';
 
 export const authRouter = express.Router();
 const jwtSecret = process.env.JWT_SECRET;
@@ -9,8 +10,6 @@ if (!jwtSecret || jwtSecret.length < 32) throw new Error('JWT_SECRET debe tener 
 const cookieName = 'semarnat_session';
 const cookieOptions = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' };
 const credentialsError = 'Credenciales incorrectas o cuenta inactiva';
-const roleNames = { PERSONAL: 'Personal de área', JEFE_AREA: 'Encargado de área', PRESTAMOS: 'Encargado de préstamos / Control archivístico', ADMIN: 'Administrador / Coordinador' };
-const passwordValid = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 128 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /\d/.test(p);
 export const authCookieName = cookieName;
 
 export async function readUser(id) {
@@ -46,7 +45,7 @@ export async function requireAuth(req,res,next) {
 }
 export function requireAdmin(req,res,next) {
   if (req.auth.user.mustChangePassword) return res.status(403).json({error:'Debes cambiar tu contraseña'});
-  if (!req.auth.user.roles.includes(roleNames.ADMIN)) return res.status(403).json({error:'Permiso de administrador requerido'});
+  if (!hasRole(req.auth.user,roleNames.ADMIN)) return res.status(403).json({error:'Permiso de administrador requerido'});
   next();
 }
 const sessionSeconds = 2*60*60;
