@@ -38,6 +38,10 @@ jobs:
           node --check src/exports.js
           node --check src/export-policy.js
           node --check src/export-workbooks.js
+          node --check src/preflight.js
+          node --check src/preflight-contract.js
+          node --check src/smoke-api.js
+          node --check src/catalogs.js
       - name: Pruebas unitarias
         working-directory: Backend
         run: npm test

@@ -1418,14 +1418,21 @@ export default function TransfersPanel({
     if(!selected)return;
     try{
       const updated=await transferApi.accept(selected.id);
-      const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
-      onRecordsChange([
-        ...tramite.filter(record=>record.stage!=="Archivo de concentración"),
-        ...concentracion,
-      ]);
+      // La aceptación ya fue confirmada por MySQL. Fallos posteriores al
+      // refrescar la pantalla no deben confundirse con un fallo de aceptación.
       saveTransferState(updated);
       setAcceptOpen(false);
-      setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
+      try{
+        const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
+        onRecordsChange([
+          ...tramite.filter(record=>record.stage!=="Archivo de concentración"),
+          ...concentracion,
+        ]);
+        setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
+      }catch(refreshError){
+        console.error("Transferencia aceptada; error al actualizar la vista:",refreshError);
+        setMessage("Transferencia aceptada en MySQL. Recarga la página para actualizar los expedientes.");
+      }
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
   };
   const saveReception=async(status:ReceptionStatus,date:string,notes:string)=>{

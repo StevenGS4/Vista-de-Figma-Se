@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -39,6 +39,7 @@ import {
   Role,
   UserRecord,
   areaName,
+  setAreasCatalog,
   fullName,
   initialRolePermissions,
   initials,
@@ -1153,13 +1154,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser?.roles.includes("Administrador / Coordinador")) return;
+    if (!currentUser?.roles.includes("Administrador / Coordinador") || currentUser.mustChangePassword) return;
     let active = true;
     usersApi.list().then((list) => { if (active) setUsers(list); }).catch((err) => {
       console.error("No se pudieron cargar los usuarios:",err);
     });
     return () => {active=false;};
-  }, [currentUser?.id, currentUser?.roles.join(",")]);
+  }, [currentUser?.id, currentUser?.roles.join(","), currentUser?.mustChangePassword]);
 
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
@@ -1173,9 +1174,11 @@ export default function App() {
       tramiteApi.catalog(),
       canTramite ? tramiteApi.list() : Promise.resolve([] as ArchivalRecord[]),
       concentrationApi.list(),
-    ]).then(([catalog, tramite, concentracion]) => {
+      areasApi.list(),
+    ]).then(([catalog, tramite, concentracion, activeAreas]) => {
       if (!alive) return;
       setCadidoCatalog(catalog.sections, catalog.series);
+      setAreasCatalog(activeAreas);
       setArchivalRecords([
         ...tramite.filter(record => record.stage !== "Archivo de concentración"),
         ...concentracion,
@@ -1193,6 +1196,7 @@ export default function App() {
 
   useEffect(()=>{
     if(!currentUser||currentUser.mustChangePassword)return;
+    if(!currentUser.roles.some(r=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador"))return;
     let active=true;
     transferApi.list().then((list)=>{if(active)setTransfers(list);})
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
@@ -1213,6 +1217,10 @@ export default function App() {
     catch (error) { console.error("Error de cierre de sesión:",error); }
     setCurrentUser(null);
     setUsers([]);
+    setArchivalRecords([]);
+    setLoans([]);
+    setTransfers([]);
+    setRecordsLoadError("");
     setVoluntaryPasswordOpen(false);
   };
 
@@ -1259,6 +1267,13 @@ export default function App() {
       )}
     </>
   ) : (
-    <Login onLogin={(user) => { setCurrentUser(user);setUsers([user]); }} />
+    <Login onLogin={(user) => {
+      setArchivalRecords([]);
+      setLoans([]);
+      setTransfers([]);
+      setRecordsLoadError("");
+      setUsers([user]);
+      setCurrentUser(user);
+    }} />
   );
 }
