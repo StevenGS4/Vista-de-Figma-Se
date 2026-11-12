@@ -39,7 +39,7 @@ async function getInventory(conn,folio,locked=false){
  WHERE i.folio=?${locked?' FOR UPDATE':''}`,[folio]);
  return rows[0]||null;
 }
-async function readRecords(conn,where='',params=[]){
+export async function readRecords(conn,where='',params=[]){
  const [rows]=await conn.execute(`SELECT
  i.folio AS inventoryId,DATE_FORMAT(i.fecha_elaboracion,'%Y-%m-%d') AS inventoryDate,
  i.responsable_cargo AS responsiblePosition,i.hoja_inicial AS initialSheetNumber,
