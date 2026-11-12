@@ -17,8 +17,8 @@ const LABELS={
   N22:'A',O22:'L',P22:'F',Q22:'C',R22:'A.T.',S22:'A.C.',T22:'TOTAL DE AÑOS'
 };
 const BASE_MERGES=[
- 'G2:S2','G3:S3','B5:T5','B8:T8','B11:W11',
- 'B13:D13','B15:D15','B17:D17',
+ 'G2:S2','G3:S3','B5:T5','E6:T7','B8:T8','E9:T10','V9:W10','B11:W11','E12:W12',
+ 'B13:D13','E14:W14','B15:D15','E16:W16','B17:D17','E18:W18',
  'E21:F22','G21:G22','H21:I21','L21:M21','N21:Q21','R21:T21',
  'U21:U22','V21:W22','B21:B22','C21:C22','D21:D22',
  'J21:J22','K21:K22'
@@ -68,14 +68,14 @@ function layout(book,records,kind,index,total){
  put(sheet,'E6',first?.administrativeUnit||'');
  put(sheet,'U5','HOJA 1 DE '+Math.max(1,Math.ceil(records.length/11)));
  put(sheet,'B8','NOMBRE DEL ÁREA GENERADORA:');
- put(sheet,'E9',first?.areaId||'');
+ put(sheet,'E9',[first?.areaId,first?.areaName].filter(Boolean).join(' — '));
  put(sheet,'U8','FECHA DE ELABORACIÓN:');
  put(sheet,'V9',formatDate(first?.inventoryDate));
  put(sheet,'B11','NOMBRE Y CARGO DEL RESPONSABLE DEL ÁREA GENERADORA:');
  put(sheet,'E12',[first?.responsible,first?.responsiblePosition].filter(Boolean).join(' · '));
  put(sheet,'B13','FONDO:');put(sheet,'E14',first?.fund||'');
- put(sheet,'B15','SECCIÓN:');put(sheet,'E16',first?.cadidoSectionId||'');
- put(sheet,'B17','SERIE:');put(sheet,'E18',first?.cadidoCode||'');
+ put(sheet,'B15','SECCIÓN:');put(sheet,'E16',[first?.cadidoSectionId,first?.cadidoSectionName].filter(Boolean).join(' — '));
+ put(sheet,'B17','SERIE:');put(sheet,'E18',[first?.cadidoCode,first?.cadidoSeriesName].filter(Boolean).join(' — '));
  for(const row of [2,3])sheet.getRow(row).height=24;
  for(const row of [5,8,11,13,15,17])sheet.getRow(row).height=20;
  for(const row of [20,21,22])sheet.getRow(row).height=row===21?43:25;
