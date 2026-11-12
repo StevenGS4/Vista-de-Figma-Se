@@ -20,6 +20,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas } from "./data";
+import { concentrationApi } from "./api";
 import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
@@ -726,12 +727,19 @@ export default function ConcentrationPanel({
     permissions.includes("update-location");
   const canViewDetail = role !== "Encargado de área";
 
-  const saveLocation = (record: ArchivalRecord) => {
-    onRecordsChange(records.map((item) => (item.id === record.id ? record : item)));
-    setSelected(record);
-    setView("detail");
-    setMessage("La ubicación física se actualizó correctamente.");
-    window.setTimeout(() => setMessage(""), 3000);
+  const saveLocation = async (record: ArchivalRecord) => {
+    try {
+      const saved=await concentrationApi.saveLocation(record);
+      onRecordsChange(records.map(item=>item.id===saved.id?saved:item));
+      setSelected(saved);
+      setView("detail");
+      setMessage("La ubicación física se actualizó correctamente en MySQL.");
+      window.setTimeout(()=>setMessage(""),3000);
+    } catch(error) {
+      const message=error instanceof Error?error.message:"Error al guardar la ubicación en MySQL.";
+      setMessage(message);
+      window.alert(message);
+    }
   };
 
   if (view === "location" && selected)
