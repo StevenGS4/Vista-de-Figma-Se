@@ -118,13 +118,14 @@ async function scopedRows(user,type,folio){
  if(scope!=='GLOBAL'){filters.push('a.codigo=?');params.push(user.areaId);}
  if(scope==='PROPIO'){filters.push('i.creado_por=?');params.push(user.id);}
  if(folio){filters.push('i.folio=?');params.push(folio);}
+ if(folio){filters.push('i.folio=?');params.push(folio);}
  const [count]=await pool.execute(`SELECT COUNT(*) AS n
  FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
  JOIN areas a ON a.id=i.area_id WHERE ${filters.join(' AND ')}`,params);
  if(Number(count[0].n)>limitRows)throw fail('Exportación demasiado grande; reduce los filtros',413);
  return readRecords(pool,'WHERE '+filters.join(' AND '),params);
 }
-async function relationRows(user){
+async function relationRows(user,folio=null){
  const scope=exportScope(user,'transferencia');
  if(!scope)throw fail('No tienes permiso para exportar la relación de transferencia',403);
  const filters=["i.estado='TRAMITE'"];
@@ -165,7 +166,13 @@ exportsRouter.get('/transferencia.xlsx',async(req,res,next)=>{
 exportsRouter.get('/:type/:folio.xlsx',async(req,res,next)=>{
  try{
   const type=oneType(req.params.type);
-  if(type==='transferencia')throw fail('Utiliza la relación consolidada /transferencia.xlsx');
+  if(type==='transferencia'){
+   const folio=String(req.params.folio||'');
+   if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
+   const rows=await relationRows(req.auth.user,folio);
+   if(!rows.length)throw fail('Inventario no encontrado o no elegible',404);
+   return await sendXlsx(makeTransferWorkbook(rows),res,`relacion_transferencia_${folio}.xlsx`);
+  }
   const folio=String(req.params.folio||'');
   if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
   const records=await scopedRows(req.auth.user,type,folio);
