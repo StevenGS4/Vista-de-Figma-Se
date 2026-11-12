@@ -1,4 +1,4 @@
-import type { UserRecord } from './data';
+import type { UserRecord, Area } from './data';
 const API_BASE=(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
 type JsonObject=Record<string,unknown>;
 async function request<T>(path:string,options:RequestInit={}):Promise<T>{
@@ -116,4 +116,8 @@ export const inventoriesApi={
   anchor.remove();
   window.setTimeout(()=>URL.revokeObjectURL(downloadUrl),30000);
  }
+};
+
+export const areasApi={
+ list:async()=>((await request<{areas:Area[]}>('/api/catalogos/areas')).areas),
 };
