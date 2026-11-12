@@ -13,6 +13,8 @@ jobs:
           node-version: '22'
       - name: Instalar frontend
         run: npm install
+      - name: Comprobar tipos TypeScript
+        run: npx tsc --noEmit
       - name: Construir interfaz React
         run: npm run build
       - name: Instalar backend
