@@ -1638,6 +1638,7 @@ function InventoryDetail({
 }
 
 export default function RecordsPanel({
+  loadError,
   onRecordsChange,
   permissions,
   protectedRecordIds,
@@ -1645,6 +1646,7 @@ export default function RecordsPanel({
   role,
   user,
 }: {
+  loadError?: string;
   onRecordsChange: (records: ArchivalRecord[]) => void;
   permissions: string[];
   protectedRecordIds: Set<string>;
@@ -1714,6 +1716,9 @@ export default function RecordsPanel({
     );
   return (
     <>
+      {loadError && <div className="validation-summary" role="alert">
+        No fue posible cargar inventarios desde MySQL: {loadError}
+      </div>}
       {message && (
         <div className="toast record-toast" role="status">
           <Check size={18} />
@@ -1721,7 +1726,7 @@ export default function RecordsPanel({
         </div>
       )}
       <InventoryList
-        canCreate={permissions.includes("register-records")}
+        canCreate={!loadError && permissions.includes("register-records")}
         canDelete={role === "Encargado de área" || isAdmin}
         canEdit={permissions.includes("edit-records")}
         onCreate={() => {
