@@ -1153,13 +1153,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser?.roles.includes("Administrador / Coordinador")) return;
+    if (!currentUser?.roles.includes("Administrador / Coordinador") || currentUser.mustChangePassword) return;
     let active = true;
     usersApi.list().then((list) => { if (active) setUsers(list); }).catch((err) => {
       console.error("No se pudieron cargar los usuarios:",err);
     });
     return () => {active=false;};
-  }, [currentUser?.id, currentUser?.roles.join(",")]);
+  }, [currentUser?.id, currentUser?.roles.join(","), currentUser?.mustChangePassword]);
 
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
