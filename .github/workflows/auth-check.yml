@@ -29,6 +29,8 @@ jobs:
           node --check src/seed-admin.js
           node --check src/seed-cadido.js
           node --check src/tramite.js
+          node --check src/transfers.js
+          node --check src/transfer-policy.js
       - name: Pruebas unitarias
         working-directory: Backend
         run: npm test
