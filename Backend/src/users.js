@@ -11,7 +11,7 @@ const isValidEmail=e=>typeof e==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)&
 const validate=data=>{
  if(typeof data.firstName!=='string'||!data.firstName.trim()||typeof data.paternalName!=='string'||!data.paternalName.trim()) return 'Nombre y apellido paterno son obligatorios';
  if(!isValidEmail(data.email)) return 'Correo inválido';
- if(!typeof data.areaId!=='string'||!data.areaId.trim()) return 'Área inválida';
+ if(typeof data.areaId!=='string'||!data.areaId.trim()) return 'Área inválida';
  if(!Array.isArray(data.roles)||!data.roles.length||data.roles.some(r=>!allowedRoles.has(r))) return 'Roles inválidos';
  if(!['Activo','Inactivo'].includes(data.status)) return 'Estado inválido';
  return null;
