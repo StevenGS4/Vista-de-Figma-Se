@@ -248,6 +248,8 @@ async function save(req,res,next,editing=false){
    }
    await replaceValues(conn,expId,r.documentaryValues);
   }
+  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+    [user.id,'inventarios',inventoryId,editing?'ACTUALIZAR':'CREAR',JSON.stringify({folio,expedientes:rows.length})]);
   await conn.commit();
   const saved=await readRecords(pool,'WHERE i.id=?',[inventoryId]);
   res.status(editing?200:201).json({folio,records:saved});
@@ -287,6 +289,8 @@ tramiteRouter.delete('/inventarios/:folio',async(req,res,next)=>{
    await conn.execute('DELETE FROM expedientes WHERE id=?',[row.id]);
   }
   await conn.execute('DELETE FROM inventarios WHERE id=?',[inv.id]);
+  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+    [user.id,'inventarios',inv.id,'ELIMINAR',JSON.stringify({folio:inv.folio,expedientes:ids.length})]);
   await conn.commit();res.json({ok:true});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
