@@ -122,9 +122,10 @@ function groupRecords(
   type: InventoryType,
 ): InventoryGroup[] {
   if (type === "transferencia") {
+    const linkedRecordIds=new Set(transfers.flatMap(transfer=>transfer.recordIds));
     const map = new Map<string, ArchivalRecord[]>();
     records
-      .filter((record) => record.stage === "Archivo de trámite")
+      .filter((record) => record.stage === "Archivo de trámite" && !linkedRecordIds.has(record.id))
       .forEach((record) =>
         map.set(record.inventoryId, [...(map.get(record.inventoryId) ?? []), record]),
       );
