@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { Role, UserRecord, areaName, fullName } from "./data";
-import { transferApi, tramiteApi } from "./api";
+import { transferApi, tramiteApi, concentrationApi } from "./api";
 import { ArchivalRecord } from "./records";
 import {
   DocumentaryTransfer,
@@ -1418,8 +1418,11 @@ export default function TransfersPanel({
     if(!selected)return;
     try{
       const updated=await transferApi.accept(selected.id);
-      const nextRecords=await tramiteApi.list();
-      onRecordsChange(nextRecords);
+      const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
+      onRecordsChange([
+        ...tramite.filter(record=>record.stage!=="Archivo de concentración"),
+        ...concentracion,
+      ]);
       saveTransferState(updated);
       setAcceptOpen(false);
       setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
