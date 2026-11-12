@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
+import { loanApi, concentrationApi } from "./api";
 import { ArchivalLoan, effectiveLoanStatus, todayIso } from "./loans";
 import { ArchivalRecord, locationSummary } from "./records";
 
@@ -335,7 +336,7 @@ function RecordSelector({
 }: {
   loans: ArchivalLoan[];
   onBack: () => void;
-  onSelect: (records: ArchivalRecord[]) => void;
+  onSelect: (records: ArchivalRecord[], mode: "INDIVIDUAL" | "INVENTARIO_COMPLETO") => void;
   records: ArchivalRecord[];
 }) {
   const [search, setSearch] = useState("");
@@ -441,7 +442,7 @@ function RecordSelector({
                         className={available ? "button--secondary" : "button--disabled"}
                         disabled={!available}
                         onClick={() => {
-                          if (mode === "individual") return onSelect([record]);
+                          if (mode === "individual") return onSelect([record], "INDIVIDUAL");
                           const inventory = concentration.filter(
                             (item) => item.inventoryId === record.inventoryId,
                           );
@@ -452,7 +453,7 @@ function RecordSelector({
                             )
                           )
                             return;
-                          onSelect(inventory);
+                          onSelect(inventory, "INVENTARIO_COMPLETO");
                         }}
                       >
                         <Check size={15} />
@@ -1143,110 +1144,62 @@ export default function LoansPanel({
 }) {
   const [view, setView] = useState<PanelView>("list");
   const [selectedRecords, setSelectedRecords] = useState<ArchivalRecord[]>([]);
+  const [selectedMode, setSelectedMode] = useState<"INDIVIDUAL" | "INVENTARIO_COMPLETO">("INDIVIDUAL");
   const [selectedLoan, setSelectedLoan] = useState<ArchivalLoan | null>(null);
   const [message, setMessage] = useState("");
   const canCreate = permissions.includes("register-loans");
   const canReturn = permissions.includes("register-returns");
 
-  const createLoan = (data: LoanFormData) => {
-    if (!selectedRecords.length) return;
-    const selectedIds = selectedRecords.map((record) => record.id);
-    const hasActive = loans.some(
-      (loan) =>
-        loan.status === "Activo" && loanRecordIds(loan).some((id) => selectedIds.includes(id)),
-    );
-    if (hasActive || selectedRecords.some((record) => record.availability !== "En archivo")) {
-      setMessage("Uno o más expedientes ya no están disponibles para préstamo.");
-      setView("list");
-      return;
-    }
-    const nextNumber =
-      Math.max(0, ...loans.map((loan) => Number(loan.folio.split("-").at(-1)) || 0)) + 1;
-    const folio = `PRE-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`;
-    const created: ArchivalLoan = {
-      id: `LOAN-${String(loans.length + 1).padStart(3, "0")}`,
-      folio,
-      recordId: selectedRecords[0].id,
-      recordIds: selectedIds,
-      deliveredRecordIds: selectedIds,
-      mode: selectedRecords.length === 1 ? "Expediente individual" : "Inventario completo",
-      ...data,
-      status: "Activo",
-      actualReturnDate: "",
-      returnReceivedBy: "",
-      returnObservations: "",
-      history: [
-        {
-          id: `MOV-${Date.now()}`,
-          type: "Entrega",
-          date: data.loanDate,
-          responsible: data.deliveredBy,
-          detail:
-            selectedRecords.length === 1
-              ? `Expediente entregado físicamente a ${data.receivedBy}.`
-              : `Inventario completo con ${selectedRecords.length} expedientes entregado a ${data.receivedBy}.`,
-        },
-      ],
-    };
-    onLoansChange([created, ...loans]);
-    onRecordsChange(
-      records.map((record) =>
-        selectedIds.includes(record.id) ? { ...record, availability: "Prestado" } : record,
-      ),
-    );
-    setSelectedRecords([]);
-    setMessage(`${folio} fue registrado. ${selectedIds.length} expediente(s) están Prestados.`);
-    setView("list");
-    window.setTimeout(() => setMessage(""), 3000);
+  const refreshRecords=async()=>{
+    const fresh=await concentrationApi.list();
+    const freshIds=new Set(fresh.map(x=>x.id));
+    onRecordsChange([...records.filter(x=>!freshIds.has(x.id)),...fresh]);
   };
-
-  const returnLoan = (
-    date: string,
-    receivedBy: string,
-    notes: string,
-    returnedIds: string[],
-  ) => {
-    if (!selectedLoan) return;
-    const pendingIds = loanRecordIds(selectedLoan).filter((id) => !returnedIds.includes(id));
-    const complete = pendingIds.length === 0;
-    const updated: ArchivalLoan = {
-      ...selectedLoan,
-      recordIds: pendingIds,
-      status: complete ? "Devuelto" : "Activo",
-      actualReturnDate: complete ? date : "",
-      returnReceivedBy: receivedBy,
-      returnObservations: notes,
-      history: [
-        ...selectedLoan.history,
-        {
-          id: `MOV-${Date.now()}`,
-          type: "Devolución",
-          date,
-          responsible: receivedBy,
-          detail:
-            notes ||
-            (complete
-              ? "Todos los expedientes fueron recibidos y reintegrados al archivo."
-              : `${returnedIds.length} expedientes recibidos; ${pendingIds.length} continúan prestados.`),
-        },
-      ],
-    };
-    onLoansChange(loans.map((loan) => (loan.id === selectedLoan.id ? updated : loan)));
-    onRecordsChange(
-      records.map((record) =>
-        returnedIds.includes(record.id)
-          ? { ...record, availability: "En archivo" }
-          : record,
-      ),
-    );
-    setSelectedLoan(updated);
-    setMessage(
-      complete
-        ? "La devolución completa fue registrada y los expedientes están En archivo."
-        : `Devolución parcial registrada. ${pendingIds.length} expediente(s) continúan prestados.`,
-    );
-    setView("detail");
-    window.setTimeout(() => setMessage(""), 3000);
+  const createLoan=async(data:LoanFormData)=>{
+    if(!selectedRecords.length)return;
+    try{
+      const created=await loanApi.create({
+        mode:selectedMode,recordIds:selectedRecords.map(r=>r.id),
+        requestingAreaId:data.requestingAreaId,requesterName:data.requesterName,
+        loanDate:data.loanDate,expectedReturnDate:data.expectedReturnDate,
+        receivedBy:data.receivedBy,observations:data.observations,
+      });
+      onLoansChange([created,...loans]);
+      await refreshRecords();
+      setSelectedRecords([]);
+      setMessage(created.folio+" quedó registrado en MySQL.");
+      setView("list");
+    }catch(error){
+      const message=error instanceof Error?error.message:"No se pudo registrar el préstamo.";
+      setMessage(message);
+      window.alert(message);
+    }
+  };
+  const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[])=>{
+    if(!selectedLoan)return;
+    try{
+      const updated=await loanApi.returnItems(selectedLoan.id,returnedIds,date,receivedBy,notes);
+      onLoansChange(loans.map(l=>l.id===updated.id?updated:l));
+      await refreshRecords();
+      setSelectedLoan(updated);
+      setMessage(updated.status==="Devuelto"
+        ?"Todos los expedientes fueron devueltos a MySQL."
+        :"Devolución parcial registrada. El préstamo permanece activo.");
+      setView("detail");
+    }catch(error){
+      const message=error instanceof Error?error.message:"No se pudo registrar la devolución.";
+      setMessage(message);
+      // Una devolución por lote puede quedar parcialmente aplicada; sincronizar.
+      try{
+        const [freshLoans,freshRecords]=await Promise.all([loanApi.list(),concentrationApi.list()]);
+        onLoansChange(freshLoans);
+        const current=freshLoans.find(l=>l.id===selectedLoan.id);
+        if(current)setSelectedLoan(current);
+        const ids=new Set(freshRecords.map(r=>r.id));
+        onRecordsChange([...records.filter(r=>!ids.has(r.id)),...freshRecords]);
+      }catch(syncError){console.error("Error sincronizando devolución:",syncError);}
+      window.alert(message);
+    }
   };
 
   if (view === "select")
@@ -1254,8 +1207,9 @@ export default function LoansPanel({
       <RecordSelector
         loans={loans}
         onBack={() => setView("list")}
-        onSelect={(selected) => {
+        onSelect={(selected,mode) => {
           setSelectedRecords(selected);
+          setSelectedMode(mode);
           setView("form");
         }}
         records={records}
