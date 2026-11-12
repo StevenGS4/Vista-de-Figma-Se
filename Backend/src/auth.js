@@ -15,12 +15,12 @@ export const authCookieName = cookieName;
 
 export async function readUser(id) {
   const [rows] = await pool.execute(
-    'SELECT id,codigo,nombres,apellido_paterno,apellido_materno,correo,area_id,estado,cambiar_password FROM usuarios WHERE id=? LIMIT 1', [id]);
+    'SELECT u.id,u.codigo,u.nombres,u.apellido_paterno,u.apellido_materno,u.correo,u.area_id,a.codigo AS area_code,u.estado,u.cambiar_password FROM usuarios u JOIN areas a ON a.id=u.area_id WHERE u.id=? LIMIT 1', [id]);
   if (!rows.length) return null;
   const [roles] = await pool.execute(
     'SELECT r.codigo,r.nombre FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id WHERE ur.usuario_id=? ORDER BY r.id', [id]);
   return { id: rows[0].id, code: rows[0].codigo, firstName: rows[0].nombres, paternalName: rows[0].apellido_paterno,
-    maternalName: rows[0].apellido_materno || '', email: rows[0].correo, areaId: rows[0].area_id,
+    maternalName: rows[0].apellido_materno || '', email: rows[0].correo, areaId: rows[0].area_code,
     roles: roles.map(r => roleNames[r.codigo] || r.nombre), status: rows[0].estado === 'ACTIVO' ? 'Activo' : 'Inactivo',
     mustChangePassword: Boolean(rows[0].cambiar_password) };
 }
