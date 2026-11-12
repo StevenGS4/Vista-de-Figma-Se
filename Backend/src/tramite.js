@@ -113,7 +113,7 @@ async function catalog(conn,user,mode){
 }
 function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
- if(rows.length>2000)throw fail('Envía inventarios grandes en operaciones por lotes; máximo 2000 filas por petición',413);
+ if(rows.length>50000)throw fail('Inventario demasiado grande para una sola operación; usa importación por lotes',413);
  const header=rows[0],unique=new Set(),numbers=new Set();
  for(const r of rows){
    if(r.areaId!==header.areaId||r.cadidoSectionId!==header.cadidoSectionId||
