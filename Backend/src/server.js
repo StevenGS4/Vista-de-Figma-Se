@@ -9,6 +9,7 @@ import { tramiteRouter } from './tramite.js';
 import { transfersRouter } from './transfers.js';
 import { concentrationRouter } from './concentration.js';
 import { loansRouter } from './loans.js';
+import { catalogsRouter } from './catalogs.js';
 import { exportsRouter } from './exports.js';
 
 const app=express();
@@ -31,6 +32,7 @@ app.use('/api/tramite',tramiteRouter);
 app.use('/api/transferencias',transfersRouter);
 app.use('/api/concentracion',concentrationRouter);
 app.use('/api/prestamos',loansRouter);
+app.use('/api/catalogos',catalogsRouter);
 app.use('/api/inventarios',exportsRouter);
 app.use((err,_req,res,_next)=>{
  console.error('Error de API:',err.code||err.message);
