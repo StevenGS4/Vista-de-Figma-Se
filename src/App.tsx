@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -39,6 +39,7 @@ import {
   Role,
   UserRecord,
   areaName,
+  setAreasCatalog,
   fullName,
   initialRolePermissions,
   initials,
@@ -1173,9 +1174,11 @@ export default function App() {
       tramiteApi.catalog(),
       canTramite ? tramiteApi.list() : Promise.resolve([] as ArchivalRecord[]),
       concentrationApi.list(),
-    ]).then(([catalog, tramite, concentracion]) => {
+      areasApi.list(),
+    ]).then(([catalog, tramite, concentracion, activeAreas]) => {
       if (!alive) return;
       setCadidoCatalog(catalog.sections, catalog.series);
+      setAreasCatalog(activeAreas);
       setArchivalRecords([
         ...tramite.filter(record => record.stage !== "Archivo de concentración"),
         ...concentracion,
