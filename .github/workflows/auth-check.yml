@@ -35,6 +35,9 @@ jobs:
           node --check src/concentration-policy.js
           node --check src/loans.js
           node --check src/loan-policy.js
+          node --check src/exports.js
+          node --check src/export-policy.js
+          node --check src/export-workbooks.js
       - name: Pruebas unitarias
         working-directory: Backend
         run: npm test

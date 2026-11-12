@@ -89,3 +89,31 @@ export const loanApi={
     method:'POST',body:JSON.stringify({recordIds,date,receivedBy,notes})
   })).loan,
 };
+
+export type ExportType='tramite'|'concentracion'|'transferencia';
+export const inventoriesApi={
+ async download(type:ExportType,folio?:string){
+  const suffix=folio?'/'+encodeURIComponent(type)+'/'+encodeURIComponent(folio)+'.xlsx'
+    :'/'+encodeURIComponent(type)+'.xlsx';
+  const url=API_BASE+'/api/inventarios'+suffix;
+  let response:Response;
+  try{response=await fetch(url,{credentials:'include'});}
+  catch{throw new Error('No se pudo conectar con Node.js para generar Excel.');}
+  if(!response.ok){
+   const payload=await response.json().catch(()=>({})) as {error?:string};
+   throw new Error(payload.error||'No se pudo generar el archivo Excel.');
+  }
+  const blob=await response.blob();
+  if(!blob.size)throw new Error('El servidor devolvió un archivo vacío.');
+  const nameFromHeader=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1];
+  const name=nameFromHeader||'inventarios_'+type+'.xlsx';
+  const downloadUrl=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');
+  anchor.href=downloadUrl;
+  anchor.download=name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(downloadUrl),30000);
+ }
+};
