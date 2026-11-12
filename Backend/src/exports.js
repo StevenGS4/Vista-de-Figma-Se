@@ -3,6 +3,8 @@ import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { readRecords } from './tramite.js';
 import { exportTypes, exportScope, stageForType } from './export-policy.js';
+import { makeInventoryWorkbook, makeTransferWorkbook } from './export-workbooks.js';
+const limitRows=15000;
 
 export const exportsRouter=express.Router();
 exportsRouter.use(requireAuth);
@@ -11,7 +13,6 @@ const oneType=(value)=>{
  if(!Object.hasOwn(exportTypes,value))throw fail('Tipo de inventario inválido');
  return value;
 };
-import { makeInventoryWorkbook, makeTransferWorkbook } from './export-workbooks.js';
 async function scopedRows(user,type,folio){
  const scope=exportScope(user,type);
  if(!scope)throw fail('No tienes permiso para exportar este inventario',403);
@@ -19,7 +20,6 @@ async function scopedRows(user,type,folio){
  const params=[stageForType(type)];
  if(scope!=='GLOBAL'){filters.push('a.codigo=?');params.push(user.areaId);}
  if(scope==='PROPIO'){filters.push('i.creado_por=?');params.push(user.id);}
- if(folio){filters.push('i.folio=?');params.push(folio);}
  if(folio){filters.push('i.folio=?');params.push(folio);}
  if(type==='transferencia')filters.push("i.estado='TRAMITE'");
  const [count]=await pool.execute(`SELECT COUNT(*) AS n
