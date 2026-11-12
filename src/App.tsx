@@ -1193,6 +1193,7 @@ export default function App() {
 
   useEffect(()=>{
     if(!currentUser||currentUser.mustChangePassword)return;
+    if(!currentUser.roles.some(r=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador"))return;
     let active=true;
     transferApi.list().then((list)=>{if(active)setTransfers(list);})
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
