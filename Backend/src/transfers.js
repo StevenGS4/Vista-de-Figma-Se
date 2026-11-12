@@ -112,7 +112,6 @@ async function chooseInventories(conn,ids,user){
   const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
   SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed
   FROM expedientes WHERE inventario_id=?`,[i.id]);
-  const countSelected=ids.filter(id=>false).length; // Se compara globalmente más abajo.
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
@@ -257,6 +256,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   const t=await rawTransfer(conn,id,true);
   if(!t)throw problem('Transferencia no encontrada',404);
   if(!canReceiveTransfer(user,t))throw problem('Solo el administrador puede recibir una transferencia aceptada',403);
+  if(date<isoDate(t.aceptada_en))throw problem('La recepción no puede ser anterior a la aceptación');
   const [latest]=await conn.execute('SELECT estado FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1',[id]);
   if(latest[0]?.estado==='RECIBIDA')throw problem('La recepción física ya está registrada',409);
   await conn.execute('INSERT INTO recepciones(transferencia_id,fecha,responsable_id,estado,observaciones) VALUES (?,?,?,?,?)',
