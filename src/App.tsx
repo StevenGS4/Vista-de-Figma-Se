@@ -961,7 +961,6 @@ function Application({
   onUsersChange: (users: UserRecord[]) => void;
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
-  recordsLoadError: string;
   rolePermissions: Record<Role, string[]>;
 }) {
   const [active, setActive] = useState<ModuleId>("inicio");
