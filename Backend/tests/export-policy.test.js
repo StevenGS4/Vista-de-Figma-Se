@@ -28,6 +28,7 @@ test('no convierte datos externos en fórmulas de Excel',()=>{
  assert.equal(safeCell('-HYPERLINK(...)'),"'-HYPERLINK(...)");
  assert.equal(safeCell('Nombre institucional'),'Nombre institucional');
  assert.equal(safeCell(null),'');
+ assert.equal(safeCell(12),12);
 });
 test('clasificación básica por etapa archivística',()=>{
  const list=[{stage:'Archivo de trámite'},{stage:'Archivo de concentración'}];
