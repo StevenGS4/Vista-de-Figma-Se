@@ -57,7 +57,7 @@ test('filas en misma posición que el formato, X de valores y fórmulas neutrali
 test('transferencia primaria tiene la misma tabla documental, no una fila-resumen',async()=>{
  const wb=await reload(makeTransferWorkbook([sample,{...sample,id:'REG-2',recordNumber:'EXP-0002',consecutive:'2'}]));
  const sh=wb.worksheets[0];
- assert.equal(sh.getCell('G3').value,'RELACIÓN DOCUMENTAL PARA TRANSFERENCIA PRIMARIA');
+ assert.equal(sh.getCell('G3').value,'INVENTARIO DOCUMENTAL TRANSFERENCIA PRIMARIA');
  assert.equal(sh.getCell('D23').value,'EXP-0001');
  assert.equal(sh.getCell('D24').value,'EXP-0002');
  assert.match(String(sh.getCell('B35').value),/2 EXPEDIENTES/);
