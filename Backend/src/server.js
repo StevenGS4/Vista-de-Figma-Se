@@ -13,7 +13,7 @@ const origin=process.env.FRONTEND_ORIGIN||'http://localhost:8443';
 
 app.disable('x-powered-by');
 app.use(cors({origin,credentials:true}));
-app.use(express.json({limit:'100kb'}));
+app.use(express.json({limit:'50mb'}));
 app.use(parseCookies);
 app.use('/api',rejectCrossOriginWrites);
 app.get('/api/health',(_req,res)=>res.json({ok:true,service:'semarnat-backend',database:'no verificada en esta ruta'}));
