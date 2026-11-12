@@ -8,6 +8,7 @@ import { usersRouter } from './users.js';
 import { tramiteRouter } from './tramite.js';
 import { transfersRouter } from './transfers.js';
 import { concentrationRouter } from './concentration.js';
+import { loansRouter } from './loans.js';
 
 const app=express();
 const port=Number(process.env.PORT||3001);
@@ -28,6 +29,7 @@ app.use('/api/users',usersRouter);
 app.use('/api/tramite',tramiteRouter);
 app.use('/api/transferencias',transfersRouter);
 app.use('/api/concentracion',concentrationRouter);
+app.use('/api/prestamos',loansRouter);
 app.use((err,_req,res,_next)=>{
  console.error('Error de API:',err.code||err.message);
  res.status(err.status||500).json({error:err.status?err.message:'Error interno del servidor'});
