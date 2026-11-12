@@ -27,7 +27,7 @@ test('inventario genera un archivo XLSX válido con hoja de detalle y resumen',a
  assert.equal(detail.getCell('B6').value,'EXP-0001');
  assert.equal(detail.getCell('E6').value,"'=SUM(1,2)");
  assert.equal(detail.getCell('E6').type,ExcelJS.ValueType.String);
- assert.equal(reloaded.getWorksheet('Resumen')?.getCell('E3').value,1);
+ assert.equal(reloaded.getWorksheet('Resumen')?.getCell('E3').value,'1');
 });
 test('relación primaria genera una fila por inventario sin ejecutar movimientos',async()=>{
  const workbook=makeTransferWorkbook([{
