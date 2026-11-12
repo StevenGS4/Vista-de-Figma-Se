@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -1163,24 +1163,33 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
-    if (!currentUser.roles.some((r)=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador")) return;
     let alive = true;
     setRecordsLoadError("");
-    Promise.all([tramiteApi.catalog(), tramiteApi.list()])
-      .then(([catalog, records]) => {
-        if (!alive) return;
-        setCadidoCatalog(catalog.sections, catalog.series);
-        setArchivalRecords(records);
-        setRecordsLoadError("");
-      }).catch((error) => {
-        if (alive) {
-          setArchivalRecords([]);
-          setRecordsLoadError(error instanceof Error ? error.message : "Error consultando MySQL");
-          console.error("No fue posible consultar Archivo de Trámite en MySQL:", error);
-        }
-      });
+    // Trámite solo está disponible para sus roles. Concentración es visible
+    // también para control archivístico. Ambas consultas llegan desde MySQL.
+    const canTramite = currentUser.roles.some(r=>
+      r==="Personal de área" || r==="Encargado de área" || r==="Administrador / Coordinador");
+    Promise.all([
+      tramiteApi.catalog(),
+      canTramite ? tramiteApi.list() : Promise.resolve([] as ArchivalRecord[]),
+      concentrationApi.list(),
+    ]).then(([catalog, tramite, concentracion]) => {
+      if (!alive) return;
+      setCadidoCatalog(catalog.sections, catalog.series);
+      setArchivalRecords([
+        ...tramite.filter(record => record.stage !== "Archivo de concentración"),
+        ...concentracion,
+      ]);
+      setRecordsLoadError("");
+    }).catch(error => {
+      if (!alive) return;
+      setArchivalRecords([]);
+      setRecordsLoadError(error instanceof Error ? error.message : "Error consultando archivos en MySQL");
+      console.error("Error cargando Trámite o Concentración desde MySQL:",error);
+    });
     return () => { alive = false; };
   }, [currentUser?.id, currentUser?.mustChangePassword]);
+
 
   useEffect(()=>{
     if(!currentUser||currentUser.mustChangePassword)return;

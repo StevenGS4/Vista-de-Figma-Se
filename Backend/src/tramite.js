@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { inventoryScope,hasInventoryAccess,hasCommonHeader,validSupport } from './inventory-policy.js';
+import { roleNames } from './auth-policy.js';
 
 export const tramiteRouter = express.Router();
 tramiteRouter.use(requireAuth);
@@ -39,7 +40,7 @@ async function getInventory(conn,folio,locked=false){
  WHERE i.folio=?${locked?' FOR UPDATE':''}`,[folio]);
  return rows[0]||null;
 }
-async function readRecords(conn,where='',params=[]){
+export async function readRecords(conn,where='',params=[]){
  const [rows]=await conn.execute(`SELECT
  i.folio AS inventoryId,DATE_FORMAT(i.fecha_elaboracion,'%Y-%m-%d') AS inventoryDate,
  i.responsable_cargo AS responsiblePosition,i.hoja_inicial AS initialSheetNumber,
@@ -260,7 +261,11 @@ async function save(req,res,next,editing=false){
  }finally{conn?.release();}
 }
 tramiteRouter.get('/catalogo',async(req,res,next)=>{
- try{const mode=access(req.auth.user);res.json(await catalog(pool,req.auth.user,mode));}catch(e){next(e);}
+ try {
+  const user=req.auth.user;
+  const mode=user.roles.includes(roleNames.PRESTAMOS) && !user.mustChangePassword?'GLOBAL':access(user);
+  res.json(await catalog(pool,user,mode));
+ }catch(e){next(e);}
 });
 tramiteRouter.get('/inventarios',async(req,res,next)=>{
  try{

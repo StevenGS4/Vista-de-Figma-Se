@@ -52,3 +52,18 @@ export const transferApi={
  accept:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/accept',{method:'POST',body:'{}'})).transfer,
  receive:async(id:string,status:ReceptionStatus,date:string,notes:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/reception',{method:'POST',body:JSON.stringify({status,date,notes})})).transfer,
 };
+
+export const concentrationApi={
+ list:async()=>((await request<{records:ArchivalRecord[]}>('/api/concentracion/expedientes')).records),
+ saveLocation:async(record:ArchivalRecord)=>{
+  const body={
+   archiveZone:record.archiveZone,room:record.room,shelf:record.shelf,level:record.level,
+   physicalSection:record.physicalSection,position:record.position,
+   locationBox:record.locationBox,locationNotes:record.locationNotes
+  };
+  return (await request<{record:ArchivalRecord}>(
+    '/api/concentracion/expedientes/'+encodeURIComponent(record.id)+'/ubicacion',
+    {method:'PUT',body:JSON.stringify(body)}
+  )).record;
+ },
+};
