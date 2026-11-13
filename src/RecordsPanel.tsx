@@ -635,7 +635,7 @@ function RowPicker({
                   <td>{record.boxNumber || "—"}</td>
                   <td>{record.recordNumber || "Nueva fila"}</td>
                   <td>
-                    <span className="cadido-code">{record.cadidoCode || "Pendiente"}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode || "Pendiente"}</span>
                   </td>
                   <td>{record.title || "Sin capturar"}</td>
                   <td>
