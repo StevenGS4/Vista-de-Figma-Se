@@ -104,9 +104,7 @@ function layout(book,records,kind,index,total,pageNo=1,pages=1,fullRecords=recor
    N:vals.has('administrativo')?'X':'',O:vals.has('legal')?'X':'',
    P:vals.has('fiscal')?'X':'',Q:vals.has('contable')?'X':'',
    R:rec.currentValidity,S:rec.concentrationValidity,T:rec.totalValidity,
-   U:kind==='concentracion'?
-     [rec.archiveZone,rec.room,rec.shelf&&'Estante '+rec.shelf,rec.level&&'Nivel '+rec.level,rec.archiveAddress].filter(Boolean).join(' · '):
-     [rec.archiveAddress,rec.archiveZone,rec.room].filter(Boolean).join(' · '),
+   U:String(rec.archiveAddress||'').trim(),
    V:rec.observations
   };
   for(const [c,v] of Object.entries(data))put(sheet,c+r,v||'');
