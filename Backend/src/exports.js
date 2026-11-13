@@ -4,6 +4,7 @@ import { requireAuth } from './auth.js';
 import { readRecords } from './tramite.js';
 import { exportTypes, exportScope, stageForType } from './export-policy.js';
 import { makeInventoryWorkbook, makeTransferWorkbook } from './export-workbooks.js';
+import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
 const limitRows=15000;
 
 export const exportsRouter=express.Router();
@@ -45,7 +46,7 @@ async function sendXlsx(book,res,filename,actorId,detail){
 exportsRouter.get('/transferencia.xlsx',async(req,res,next)=>{
  try{
   const records=await scopedRows(req.auth.user,'transferencia');
-  await sendXlsx(makeTransferWorkbook(records),res,'relacion_transferencia_primaria.xlsx',req.auth.user.id,{type:'transferencia'});
+  await sendXlsx(await makeOfficialTemplateWorkbook(records,'transferencia'),res,'relacion_transferencia_primaria.xlsx',req.auth.user.id,{type:'transferencia'});
  }catch(e){next(e);}
 });
 exportsRouter.get('/:type/:folio.xlsx',async(req,res,next)=>{
@@ -56,13 +57,13 @@ exportsRouter.get('/:type/:folio.xlsx',async(req,res,next)=>{
    if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
    const records=await scopedRows(req.auth.user,'transferencia',folio);
    if(!records.length)throw fail('Inventario no encontrado o no elegible',404);
-   return await sendXlsx(makeTransferWorkbook(records),res,`relacion_transferencia_${folio}.xlsx`,req.auth.user.id,{type:'transferencia',folio});
+   return await sendXlsx(await makeOfficialTemplateWorkbook(records,'transferencia'),res,`relacion_transferencia_${folio}.xlsx`,req.auth.user.id,{type:'transferencia',folio});
   }
   const folio=String(req.params.folio||'');
   if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
   const records=await scopedRows(req.auth.user,type,folio);
   if(!records.length)throw fail('Inventario no encontrado o fuera de tu alcance',404);
-  await sendXlsx(makeInventoryWorkbook(records,type),res,
+  await sendXlsx(type==='tramite' ? await makeOfficialTemplateWorkbook(records,type) : makeInventoryWorkbook(records,type),res,
    `inventario_${type}_${folio}.xlsx`,req.auth.user.id,{type,folio});
  }catch(e){next(e);}
 });
@@ -71,6 +72,6 @@ exportsRouter.get('/:type.xlsx',async(req,res,next)=>{
   const type=oneType(req.params.type);
   if(type==='transferencia')throw fail('Utiliza /transferencia.xlsx');
   const records=await scopedRows(req.auth.user,type);
-  await sendXlsx(makeInventoryWorkbook(records,type),res,`inventarios_${type}.xlsx`,req.auth.user.id,{type});
+  await sendXlsx(type==='tramite' ? await makeOfficialTemplateWorkbook(records,type) : makeInventoryWorkbook(records,type),res,`inventarios_${type}.xlsx`,req.auth.user.id,{type});
  }catch(e){next(e);}
 });
