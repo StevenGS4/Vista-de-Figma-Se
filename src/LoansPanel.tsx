@@ -166,9 +166,9 @@ function LoanTray({
         <div className="records-filter-head">
           <div>
             <h3>Bandeja de préstamos</h3>
-            <p>{loans.length} movimientos registrados en el prototipo</p>
+            <p>{loans.length} préstamos registrados</p>
           </div>
-          <span className="demo-label">Datos de demostración</span>
+          <span className="demo-label">Préstamos registrados</span>
         </div>
         <div className="loan-filterbar">
           <div className="transfer-tabs">
