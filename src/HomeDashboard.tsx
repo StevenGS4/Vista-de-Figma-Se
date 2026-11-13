@@ -51,8 +51,10 @@ function when(date:string|null) {
   return Number.isNaN(d.getTime())?String(date).slice(0,16):d.toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"});
 }
 
-export default function HomeDashboard({user,role,allowedModules,onNavigate,transfers,loans,records}:{
+export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpenFolio,onOpenRecord,transfers,loans,records}:{
   user:UserRecord;role:Role;allowedModules:HomeModule[];onNavigate:(module:HomeModule)=>void;
+  onOpenFolio:(module:"transferencias"|"prestamos",folio:string)=>void;
+  onOpenRecord:(record:ArchivalRecord)=>void;
   transfers:DocumentaryTransfer[];loans:ArchivalLoan[];records:ArchivalRecord[];
 }) {
   const [activity,setActivity]=useState<HomeActivity[]>([]);
@@ -99,8 +101,13 @@ export default function HomeDashboard({user,role,allowedModules,onNavigate,trans
         <div className="section-heading"><div><h2>Pendientes operativos</h2><p>Acciones reales según tu rol y los registros disponibles.</p></div></div>
         <div className="pending-list">
           {pending.length===0 && !lastInventory && <div className="empty-state compact-empty"><Check size={25}/><strong>Sin pendientes detectados</strong><p>No hay acciones vencidas o esperando revisión en los datos consultados.</p></div>}
-          {pending.slice(0,4).map(n=><button key={n.id} onClick={()=>allowedModules.includes(n.module)&&onNavigate(n.module)}><span><AlertTriangle size={16}/></span><div><strong>{n.title}</strong><small>{n.detail}</small></div><ChevronRight size={15}/></button>)}
-          {lastInventory && allowedModules.includes("tramite") && <button onClick={()=>onNavigate("tramite")}><span><Archive size={16}/></span><div><strong>Consultar último inventario en trámite</strong><small>{lastInventory.inventoryId}</small></div><ChevronRight size={15}/></button>}
+          {pending.slice(0,4).map(n=><button key={n.id} onClick={()=>{
+            if(!allowedModules.includes(n.module))return;
+            if(n.module==="transferencias" || n.module==="prestamos")
+              onOpenFolio(n.module,n.detail.split(" · ")[0]);
+            else onNavigate(n.module);
+          }}><span><AlertTriangle size={16}/></span><div><strong>{n.title}</strong><small>{n.detail}</small></div><ChevronRight size={15}/></button>)}
+          {lastInventory && allowedModules.includes("tramite") && <button onClick={()=>onOpenRecord(lastInventory)}><span><Archive size={16}/></span><div><strong>Consultar último inventario en trámite</strong><small>{lastInventory.inventoryId}</small></div><ChevronRight size={15}/></button>}
         </div>
       </aside>
     </div>
