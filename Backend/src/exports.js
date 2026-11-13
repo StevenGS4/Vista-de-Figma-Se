@@ -28,8 +28,15 @@ async function scopedRows(user,type,folio){
  if(Number(count[0].n)>limitRows)throw fail('Exportación demasiado grande; reduce los filtros',413);
  return readRecords(pool,'WHERE '+filters.join(' AND '),params);
 }
-async function sendXlsx(book,res,filename){
+async function sendXlsx(book,res,filename,actorId,detail){
  const bytes=await book.xlsx.writeBuffer();
+ // La descarga no debe fallar si la bitácora experimenta un error aislado.
+ try {
+  await pool.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+   [actorId,'exportaciones',0,'DESCARGAR',JSON.stringify(detail)]);
+ } catch(error) {
+  console.error('No se pudo auditar la descarga Excel:',error.code||error.message);
+ }
  res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
  res.set('Content-Disposition',`attachment; filename="${filename}"`);
  res.set('Cache-Control','private, no-store');
@@ -38,7 +45,7 @@ async function sendXlsx(book,res,filename){
 exportsRouter.get('/transferencia.xlsx',async(req,res,next)=>{
  try{
   const records=await scopedRows(req.auth.user,'transferencia');
-  await sendXlsx(makeTransferWorkbook(records),res,'relacion_transferencia_primaria.xlsx');
+  await sendXlsx(makeTransferWorkbook(records),res,'relacion_transferencia_primaria.xlsx',req.auth.user.id,{type:'transferencia'});
  }catch(e){next(e);}
 });
 exportsRouter.get('/:type/:folio.xlsx',async(req,res,next)=>{
@@ -49,14 +56,14 @@ exportsRouter.get('/:type/:folio.xlsx',async(req,res,next)=>{
    if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
    const records=await scopedRows(req.auth.user,'transferencia',folio);
    if(!records.length)throw fail('Inventario no encontrado o no elegible',404);
-   return await sendXlsx(makeTransferWorkbook(records),res,`relacion_transferencia_${folio}.xlsx`);
+   return await sendXlsx(makeTransferWorkbook(records),res,`relacion_transferencia_${folio}.xlsx`,req.auth.user.id,{type:'transferencia',folio});
   }
   const folio=String(req.params.folio||'');
   if(!/^[a-zA-Z0-9_-]{1,65}$/.test(folio))throw fail('Folio inválido');
   const records=await scopedRows(req.auth.user,type,folio);
   if(!records.length)throw fail('Inventario no encontrado o fuera de tu alcance',404);
   await sendXlsx(makeInventoryWorkbook(records,type),res,
-   `inventario_${type}_${folio}.xlsx`);
+   `inventario_${type}_${folio}.xlsx`,req.auth.user.id,{type,folio});
  }catch(e){next(e);}
 });
 exportsRouter.get('/:type.xlsx',async(req,res,next)=>{
@@ -64,6 +71,6 @@ exportsRouter.get('/:type.xlsx',async(req,res,next)=>{
   const type=oneType(req.params.type);
   if(type==='transferencia')throw fail('Utiliza /transferencia.xlsx');
   const records=await scopedRows(req.auth.user,type);
-  await sendXlsx(makeInventoryWorkbook(records,type),res,`inventarios_${type}.xlsx`);
+  await sendXlsx(makeInventoryWorkbook(records,type),res,`inventarios_${type}.xlsx`,req.auth.user.id,{type});
  }catch(e){next(e);}
 });

@@ -13,10 +13,28 @@ const mysqlToday=async()=>{
  return row.today;
 };
 const shortDate=value=>value?String(value).slice(0,10):'';
+const userNumber=value=>/^\d+$/.test(String(value??'')) && Number.isSafeInteger(Number(value)) && Number(value)>0
+ ? Number(value) : null;
+const personName=row=>[row.nombres,row.apellido_paterno,row.apellido_materno].filter(Boolean).join(' ');
+const findActiveUser=async(id,areaCode)=>{
+ const [rows]=await pool.execute(`SELECT u.id,u.nombres,u.apellido_paterno,u.apellido_materno,
+   a.codigo AS areaCode FROM usuarios u JOIN areas a ON a.id=u.area_id
+   WHERE u.id=? AND u.estado='ACTIVO' AND a.activo=1 LIMIT 1`,[id]);
+ return rows[0] && (!areaCode || rows[0].areaCode===areaCode) ? rows[0] : null;
+};
+const isLoanStaff=async(id)=>{
+ const [rows]=await pool.execute(`SELECT 1 AS valid FROM usuarios u JOIN areas a ON a.id=u.area_id
+ WHERE u.id=? AND u.estado='ACTIVO' AND a.activo=1 AND
+ (LOWER(a.nombre) LIKE '%concentraci%' OR EXISTS(
+   SELECT 1 FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id
+   WHERE ur.usuario_id=u.id AND r.codigo IN ('PRESTAMOS','ADMIN')))
+ LIMIT 1`,[id]);
+ return rows.length>0;
+};
 
 async function oneLoan(id) {
  const [rows]=await pool.execute(`SELECT p.id,p.folio,p.modalidad,a.codigo AS areaCode,
-  p.solicitante_nombre,p.fecha_prestamo,p.fecha_prevista,p.cerrado_en,p.estado,p.observaciones,
+  p.solicitante_nombre,p.solicitante_usuario_id,p.fecha_prestamo,p.fecha_prevista,p.cerrado_en,p.estado,p.observaciones,
   p.recibido_por_nombre,
   CONCAT_WS(' ',ua.nombres,ua.apellido_paterno,ua.apellido_materno) AS autorizado_nombre,
   CONCAT_WS(' ',ue.nombres,ue.apellido_paterno,ue.apellido_materno) AS entregado_nombre
@@ -45,6 +63,7 @@ async function oneLoan(id) {
   deliveredRecordIds:items.map(x=>'REG-'+x.expediente_id),
   mode:p.modalidad==='INVENTARIO_COMPLETO'?'Inventario completo':'Expediente individual',
   requestingAreaId:p.areaCode,requesterName:p.solicitante_nombre,
+  requesterUserId:p.solicitante_usuario_id?String(p.solicitante_usuario_id):'',
   loanDate:shortDate(p.fecha_prestamo),expectedReturnDate:shortDate(p.fecha_prevista),
   authorizedBy:p.autorizado_nombre,deliveredBy:p.entregado_nombre,
   receivedBy:p.recibido_por_nombre,observations:p.observaciones||'',
@@ -71,9 +90,30 @@ loansRouter.get('/',async(req,res,next)=>{
   res.json({loans});
  }catch(e){next(e);}
 });
+loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
+ try{
+  guard(req.auth.user);
+  const [rows]=await pool.query(`SELECT u.id, CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS name,
+  a.codigo AS areaId,
+  (LOWER(a.nombre) LIKE '%concentraci%' OR EXISTS(
+   SELECT 1 FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id
+   WHERE ur.usuario_id=u.id AND r.codigo IN ('PRESTAMOS','ADMIN'))) AS canDeliver
+  FROM usuarios u JOIN areas a ON a.id=u.area_id
+  WHERE u.estado='ACTIVO' AND a.activo=1 ORDER BY a.nombre,u.nombres,u.apellido_paterno`);
+  res.set('Cache-Control','private, no-store');
+  res.json({users:rows.map(row=>({
+   id:String(row.id),name:row.name,areaId:row.areaId,canDeliver:Boolean(row.canDeliver)
+  }))});
+ }catch(e){next(e);}
+});
 loansRouter.post('/',async(req,res,next)=>{
  try{
   const user=req.auth.user;guard(user);
+  // El SP confirma el préstamo; verificar la migración ANTES de invocarlo.
+  const [migration]=await pool.execute(`SELECT 1 AS ready FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='prestamos'
+      AND COLUMN_NAME='solicitante_usuario_id'`);
+  if(!migration.length)throw fail('Ejecuta Backend/sql/010_prestamos_usuarios.sql antes de registrar préstamos',409);
   let selected;
   try{selected=parseLoanSelection(req.body);}catch(e){throw fail(e.message);}
   const {mode,ids}=selected;
@@ -83,11 +123,19 @@ loansRouter.post('/',async(req,res,next)=>{
    throw fail('La fecha del préstamo debe ser la fecha actual de registro');
   if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<currentDate)
    throw fail('Fecha prevista de devolución inválida');
-  const requester=name(data.requesterName),recipient=name(data.receivedBy),notes=name(data.observations,2000);
-  if(!requester||!recipient)throw fail('Nombre de solicitante y receptor son obligatorios');
+  const recipient=name(data.receivedBy),notes=name(data.observations,2000);
+  if(!recipient)throw fail('Nombre de la persona que recibe obligatorio');
   if(typeof data.requestingAreaId!=='string'||!data.requestingAreaId.trim())throw fail('Área solicitante obligatoria');
   const [areas]=await pool.execute('SELECT id FROM areas WHERE codigo=? AND activo=1',[data.requestingAreaId]);
   if(!areas.length)throw fail('Área solicitante no encontrada');
+  const requesterId=userNumber(data.requesterUserId);
+  const delivererId=userNumber(data.delivererUserId);
+  if(!requesterId||!delivererId)throw fail('Selecciona usuarios válidos para solicitante y entrega');
+  const requester=await findActiveUser(requesterId,data.requestingAreaId);
+  if(!requester)throw fail('El solicitante no está activo o no pertenece al área seleccionada',400);
+  const deliverer=await findActiveUser(delivererId);
+  if(!deliverer || !await isLoanStaff(delivererId))
+   throw fail('La persona que entrega debe ser personal autorizado del archivo de concentración',400);
   const placeholders=ids.map(()=>'?').join(',');
   const [found]=await pool.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
   i.estado AS inventoryState
@@ -120,17 +168,18 @@ loansRouter.post('/',async(req,res,next)=>{
   // de forma atómica; también preserva el bloqueo contra préstamos simultáneos.
   const result=await pool.query('CALL sp_registrar_prestamo(?,?,?,?,?,?,?,?)',[
    folio,mode,inventoryId,mode==='INDIVIDUAL'?ids[0]:null,
-   areas[0].id,requester,user.id,data.expectedReturnDate
+   areas[0].id,personName(requester),user.id,data.expectedReturnDate
   ]);
   const [rows]=await pool.execute('SELECT id FROM prestamos WHERE folio=?',[folio]);
   if(!rows.length)throw fail('No se encontró el préstamo recién creado',500);
   const id=rows[0].id;
-  // Datos de entrega capturados en Figma. El actor autorizado/entregador es
-  // el usuario autenticado y no una identidad proporcionada por el navegador.
-  await pool.execute('UPDATE prestamos SET recibido_por_nombre=?,observaciones=? WHERE id=?',
-    [recipient,notes||null,id]);
+  // El SP conserva autorizador = usuario autenticado; asociamos solicitante y
+  // entregador elegidos, ambos validados contra cuentas activas y roles de MySQL.
+  await pool.execute(`UPDATE prestamos SET solicitante_usuario_id=?,entregado_por=?,
+    recibido_por_nombre=?,observaciones=? WHERE id=?`,
+    [requesterId,delivererId,recipient,notes||null,id]);
   await pool.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length})]);
+    [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),delivererUserId:String(delivererId)})]);
   res.status(201).json({loan:await oneLoan(id)});
  }catch(e){
   if(e.sqlState==='45000'||e.code==='ER_DUP_ENTRY'||e.code==='ER_SIGNAL_EXCEPTION')

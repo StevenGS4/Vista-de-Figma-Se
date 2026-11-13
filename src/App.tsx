@@ -46,6 +46,8 @@ import {
 } from "./data";
 import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan } from "./loans";
+import HomeDashboard from "./HomeDashboard";
+import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
@@ -165,20 +167,25 @@ function hasModulePermission(id: ModuleId, role: Role, permissions: string[]) {
 }
 
 function InstitutionalMarks({ inverse = false }: { inverse?: boolean }) {
+  if (inverse) return (
+    <div className="institutional-marks institutional-marks--inverse" aria-label="Logotipos institucionales">
+      <img className="institutional-logo institutional-logo--gobierno"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/blpronyvdxik5tlnlups.png"
+        alt="Gobierno de México" loading="lazy" />
+      <img className="institutional-logo institutional-logo--semarnat"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/vl2lpdq6r8yhsfksdvif.webp"
+        alt="SEMARNAT" loading="lazy" />
+    </div>
+  );
   return (
-    <div className={`institutional-marks ${inverse ? "institutional-marks--inverse" : ""}`}>
-      <div
-        aria-label="Espacio reservado para logotipo oficial del Gobierno de México"
-        className="mark-slot"
-      >
-        <span>LOGOTIPO OFICIAL</span>
-        <small>GOBIERNO DE MÉXICO</small>
-      </div>
-      <span className="mark-divider" />
-      <div aria-label="Espacio reservado para logotipo oficial de SEMARNAT" className="mark-slot">
-        <span>LOGOTIPO OFICIAL</span>
-        <small>SEMARNAT</small>
-      </div>
+    <div className="institutional-marks institutional-marks--login" aria-label="Logotipos institucionales">
+      <img className="institutional-logo institutional-logo--gobierno"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/blpronyvdxik5tlnlups.png"
+        alt="Gobierno de México" />
+      <span className="mark-divider" aria-hidden="true" />
+      <img className="institutional-logo institutional-logo--semarnat"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/vl2lpdq6r8yhsfksdvif.webp"
+        alt="SEMARNAT" />
     </div>
   );
 }
@@ -219,13 +226,18 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
         <InstitutionalMarks />
         <div className="login__header-meta">
           <ShieldCheck size={17} />
-          Sistema institucional de demostración
+          Acceso institucional seguro
         </div>
       </header>
 
       <div className="login__main">
         <section className="login__identity">
           <div className="login__identity-inner">
+            <img
+              className="login__environment-logo"
+              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/cc5uyodeqcodgmdjuxpc.png"
+              alt="Medio Ambiente — Gobierno de México"
+            />
             <span className="section-kicker">Gestión documental institucional</span>
             <h1>Sistema de Control Archivístico</h1>
             <p className="login__office">Oficina de Representación de SEMARNAT en Nayarit</p>
@@ -331,8 +343,8 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
       </div>
 
       <footer className="login__footer">
-        <span>SEMARNAT Nayarit · Versión académica</span>
-        <span>La información mostrada es ficticia y de uso demostrativo.</span>
+        <span>Control Archivístico · SEMARNAT Nayarit</span>
+        <span>Acceso exclusivo para personal autorizado.</span>
       </footer>
     </main>
   );
@@ -526,7 +538,10 @@ function Sidebar({
         className={`sidebar ${collapsed ? "sidebar--collapsed" : ""} ${mobileOpen ? "is-open" : ""}`}
       >
         <div className="sidebar__top">
-          <div className="sidebar__monogram">SCA</div>
+          <div className="sidebar__monogram">
+            <img src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570907/wunnlrrfjovxbqopkewo.jpg"
+              alt="Identidad del Sistema de Control Archivístico" />
+          </div>
           {!collapsed && (
             <div className="sidebar__title">
               <strong>Control Archivístico</strong>
@@ -597,8 +612,24 @@ function Header({
   onRoleChange,
   role,
   user,
+  records,
+  transfers,
+  loans,
+  allowed,
+  onNavigate,
+  onSearchRecord,
+  onSearchFolio,
+  onRefresh,
 }: {
   active: ModuleId;
+  records: ArchivalRecord[];
+  transfers: DocumentaryTransfer[];
+  loans: ArchivalLoan[];
+  allowed: ModuleId[];
+  onNavigate: (id: ModuleId) => void;
+  onSearchRecord: (record: ArchivalRecord) => void;
+  onSearchFolio: (module: "transferencias" | "prestamos", folio: string) => void;
+  onRefresh: () => Promise<void>;
   onChangePassword: () => void;
   onLogout: () => void;
   onMenu: () => void;
@@ -607,8 +638,6 @@ function Header({
   user: UserRecord;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
     <header className="app-header">
       <button aria-label="Abrir navegación" className="mobile-menu" onClick={onMenu}>
@@ -623,54 +652,8 @@ function Header({
         </div>
       </div>
       <div className="app-header__actions">
-        <button
-          aria-expanded={searchOpen}
-          aria-label="Buscar"
-          className="header-icon"
-          onClick={() => {
-            setSearchOpen((current) => !current);
-            setNotificationsOpen(false);
-          }}
-        >
-          <Search size={19} />
-        </button>
-        <button
-          aria-expanded={notificationsOpen}
-          aria-label="Notificaciones"
-          className="header-icon"
-          onClick={() => {
-            setNotificationsOpen((current) => !current);
-            setSearchOpen(false);
-          }}
-        >
-          <Bell size={19} />
-          <i />
-        </button>
-        {searchOpen && (
-          <div className="header-popover header-popover--search">
-            <strong>Búsqueda rápida</strong>
-            <label>
-              <Search size={16} />
-              <input autoFocus placeholder="Buscar expediente o folio…" />
-            </label>
-            <small>La búsqueda global se habilitará en una siguiente etapa.</small>
-          </div>
-        )}
-        {notificationsOpen && (
-          <div className="header-popover header-popover--notifications">
-            <strong>Notificaciones</strong>
-            <div>
-              <span>
-                <FileCheck2 size={16} />
-              </span>
-              <p>
-                <b>Transferencia en revisión</b>
-                La solicitud TP-2025-008 tiene actividad reciente.
-              </p>
-            </div>
-            <small>Información de demostración</small>
-          </div>
-        )}
+        <HomeHeaderTools user={user} role={role} records={records} transfers={transfers} loans={loans}
+          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onSearchFolio={onSearchFolio} onRefresh={onRefresh} />
         <span className="header-divider" />
         <div className="profile-menu">
           <button className="profile-trigger" onClick={() => setProfileOpen((current) => !current)}>
@@ -728,125 +711,6 @@ function Header({
   );
 }
 
-const activity = [
-  {
-    icon: FileCheck2,
-    title: "Expediente actualizado",
-    detail: "SEMARNAT-NAY/UJ/2025/0042",
-    meta: "Hace 18 minutos",
-    color: "green",
-  },
-  {
-    icon: FolderArchive,
-    title: "Transferencia enviada a revisión",
-    detail: "Solicitud TP-2025-008 · Unidad Jurídica",
-    meta: "Hoy, 10:24",
-    color: "wine",
-  },
-  {
-    icon: BriefcaseBusiness,
-    title: "Devolución registrada",
-    detail: "SEMARNAT-NAY/DA/2021/0189",
-    meta: "Ayer, 16:42",
-    color: "gold",
-  },
-];
-
-function Dashboard({
-  allowedModules,
-  onNavigate,
-  role,
-}: {
-  allowedModules: ModuleId[];
-  onNavigate: (id: ModuleId) => void;
-  role: Role;
-}) {
-  const pendingTarget =
-    role === "Administrador / Coordinador" && allowedModules.includes("administracion")
-      ? "administracion"
-      : allowedModules.includes("tramite")
-        ? "tramite"
-        : allowedModules.includes("transferencias")
-          ? "transferencias"
-          : null;
-  return (
-    <div className="dashboard">
-      <div className="dashboard-grid dashboard-grid--focused">
-        <section className="surface activity-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Actividad reciente</h2>
-              <p>Movimientos relacionados con tus permisos.</p>
-            </div>
-            <span className="demo-label">Datos de demostración</span>
-          </div>
-          <div className="activity-list">
-            {activity.map((item) => {
-              const ItemIcon = item.icon;
-              return (
-                <div className="activity-item" key={item.title}>
-                  <span className={`activity-item__icon activity-item__icon--${item.color}`}>
-                    <ItemIcon size={17} />
-                  </span>
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                  <time>
-                    <Clock3 size={14} />
-                    {item.meta}
-                  </time>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <aside className="surface pending-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Pendientes operativos</h2>
-              <p>Atención sugerida para hoy.</p>
-            </div>
-          </div>
-          <div className="pending-list">
-            {!pendingTarget ? (
-              <div className="empty-state compact-empty">
-                <Check size={26} />
-                <strong>Sin pendientes operativos</strong>
-                <p>No hay acciones disponibles para este perfil.</p>
-              </div>
-            ) : (
-              <>
-                <button onClick={() => onNavigate(pendingTarget)}>
-                  <span>03</span>
-                  <div>
-                    <strong>
-                      {role === "Administrador / Coordinador"
-                        ? "Cuentas por revisar"
-                        : "Expedientes incompletos"}
-                    </strong>
-                    <small>Requieren validación</small>
-                  </div>
-                  <ChevronRight size={15} />
-                </button>
-                <button onClick={() => onNavigate("transferencias")}>
-                  <span>02</span>
-                  <div>
-                    <strong>Transferencias pendientes</strong>
-                    <small>En proceso de seguimiento</small>
-                  </div>
-                  <ChevronRight size={15} />
-                </button>
-              </>
-            )}
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
 const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion">, string[][]> = {
   tramite: [
     ["SEMARNAT-NAY/UJ/2025/0042", "Unidad Jurídica", "4C.3 — Asuntos jurídicos", "En trámite"],
@@ -891,10 +755,10 @@ function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracio
           </span>
           <div>
             <h2>Registros recientes</h2>
-            <p>Vista preliminar con información ficticia.</p>
+            <p>Vista ilustrativa del formato de registros.</p>
           </div>
         </div>
-        <span className="demo-label">Datos de demostración</span>
+        <span className="demo-label">Vista ilustrativa</span>
       </div>
       <div className="table-scroll">
         <table className="data-table">
@@ -968,6 +832,7 @@ function Application({
   const [role, setRole] = useState<Role>(currentUser.roles[0]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
   const currentPermissions = rolePermissions[role];
   const allowed = useMemo(
     () =>
@@ -986,10 +851,35 @@ function Application({
     if (!allowed.includes(active)) setActive("inicio");
   }, [active, allowed, currentUser.roles, role]);
 
+  const refreshHomeEvents = async () => {
+    if (currentUser.mustChangePassword) return;
+    const operations: Promise<unknown>[] = [];
+    if (currentUser.roles.some(r => r === "Personal de área" || r === "Encargado de área" || r === "Administrador / Coordinador"))
+      operations.push(transferApi.list().then(onTransfersChange));
+    if (currentUser.roles.some(r => r === "Encargado de préstamos / Control archivístico" || r === "Administrador / Coordinador"))
+      operations.push(loanApi.list().then(onLoansChange));
+    const results = await Promise.allSettled(operations);
+    results.forEach(result => { if (result.status === "rejected") console.error("No fue posible actualizar avisos:", result.reason); });
+  };
   const navigate = (id: ModuleId) => {
-    if (allowed.includes(id)) setActive(id);
+    if (allowed.includes(id)) {
+      setGlobalQuery("");
+      setActive(id);
+      if (id === "inicio") void refreshHomeEvents();
+    }
+  };
+  const openSearchResult = (record: ArchivalRecord) => {
+    const target: ModuleId = record.stage === "Archivo de concentración" ? "concentracion" : "tramite";
+    if (!allowed.includes(target)) return;
+    setGlobalQuery(record.recordNumber);
+    setActive(target);
   };
 
+  const openFolio = (module: "transferencias" | "prestamos", folio: string) => {
+    if (!allowed.includes(module)) return;
+    setGlobalQuery(folio);
+    setActive(module);
+  };
   const changeRole = (next: Role) => {
     setRole(next);
     if (!roleAccess[active].includes(next)) setActive("inicio");
@@ -1026,6 +916,14 @@ function Application({
           onRoleChange={changeRole}
           role={role}
           user={currentUser}
+          records={archivalRecords}
+          transfers={transfers}
+          loans={loans}
+          allowed={allowed}
+          onNavigate={navigate}
+          onSearchRecord={openSearchResult}
+          onSearchFolio={openFolio}
+          onRefresh={refreshHomeEvents}
         />
         <main className="workspace">
           {active !== "tramite" &&
@@ -1047,10 +945,14 @@ function Application({
               </div>
             )}
           {active === "inicio" ? (
-            <Dashboard allowedModules={allowed} onNavigate={navigate} role={role} />
+            <HomeDashboard user={currentUser} role={role} allowedModules={allowed} onNavigate={navigate}
+                onOpenFolio={openFolio} onOpenRecord={openSearchResult}
+                transfers={transfers} loans={loans} records={archivalRecords} />
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
               <RecordsPanel
+                key={"tramite-"+globalQuery}
+                initialSearch={globalQuery}
                 loadError={recordsLoadError}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
@@ -1069,6 +971,8 @@ function Application({
           ) : active === "concentracion" ? (
             <Suspense fallback={moduleFallback}>
               <ConcentrationPanel
+                key={"concentracion-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
@@ -1079,6 +983,8 @@ function Application({
           ) : active === "transferencias" ? (
             <Suspense fallback={moduleFallback}>
               <TransfersPanel
+                key={"transferencias-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 onRecordsChange={onRecordsChange}
                 onTransfersChange={onTransfersChange}
@@ -1092,6 +998,8 @@ function Application({
           ) : active === "prestamos" ? (
             <Suspense fallback={moduleFallback}>
               <LoansPanel
+                key={"prestamos-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 loans={loans}
                 onLoansChange={onLoansChange}

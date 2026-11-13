@@ -71,24 +71,26 @@ function AvailabilityBadge({ value }: { value: RecordAvailability }) {
 }
 
 function ConcentrationList({
+  initialSearch = "",
   canEditLocation,
   canViewDetail,
   onEditLocation,
   onView,
   records,
 }: {
+  initialSearch?: string;
   canEditLocation: boolean;
   canViewDetail: boolean;
   onEditLocation: (record: ArchivalRecord) => void;
   onView: (record: ArchivalRecord) => void;
   records: ArchivalRecord[];
 }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [area, setArea] = useState("");
   const [cadido, setCadido] = useState("");
   const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
-  const [searched, setSearched] = useState(false);
+  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [activeActions, setActiveActions] = useState<string | null>(null);
@@ -759,12 +761,14 @@ function EditLocation({
 }
 
 export default function ConcentrationPanel({
+  initialSearch = "",
   currentUser,
   onRecordsChange,
   permissions,
   records,
   role,
 }: {
+  initialSearch?: string;
   currentUser: UserRecord;
   onRecordsChange: (records: ArchivalRecord[]) => void;
   permissions: string[];
@@ -832,6 +836,7 @@ export default function ConcentrationPanel({
 
   return (
     <ConcentrationList
+      initialSearch={initialSearch}
       canEditLocation={canEditLocation}
       canViewDetail={canViewDetail}
       onEditLocation={(record) => {

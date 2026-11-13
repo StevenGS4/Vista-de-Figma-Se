@@ -69,17 +69,20 @@ export const concentrationApi={
 };
 
 import type { ArchivalLoan } from './loans';
+export type LoanEligibleUser={id:string;name:string;areaId:string;canDeliver:boolean};
 export type NewLoanPayload={
  mode:'INDIVIDUAL'|'INVENTARIO_COMPLETO';
  recordIds:string[];
  requestingAreaId:string;
- requesterName:string;
+ requesterUserId:string;
+ delivererUserId:string;
  loanDate:string;
  expectedReturnDate:string;
  receivedBy:string;
  observations:string;
 };
 export const loanApi={
+ eligibleUsers:async()=>((await request<{users:LoanEligibleUser[]}>('/api/prestamos/usuarios-elegibles')).users),
  list:async()=>((await request<{loans:ArchivalLoan[]}>('/api/prestamos')).loans),
  create:async(payload:NewLoanPayload)=>(await request<{loan:ArchivalLoan}>('/api/prestamos',{
   method:'POST',body:JSON.stringify(payload)
@@ -116,6 +119,13 @@ export const inventoriesApi={
   anchor.remove();
   window.setTimeout(()=>URL.revokeObjectURL(downloadUrl),30000);
  }
+};
+
+export type HomeActivity = { id:string; title:string; detail:string; module:string; action:string; date:string|null };
+export type LoanNotice = {id:string;title:string;detail:string;module:'inicio';date:string;color:'green'|'wine'|'gold'};
+export const homeApi={
+ activity:async()=>((await request<{activities:HomeActivity[]}>('/api/inicio/actividad')).activities),
+ loanNotices:async()=>((await request<{notices:LoanNotice[]}>('/api/inicio/avisos-prestamos')).notices),
 };
 
 export const areasApi={

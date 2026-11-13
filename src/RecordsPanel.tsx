@@ -178,6 +178,7 @@ function groupInventories(records: ArchivalRecord[]) {
 }
 
 function InventoryList({
+  initialSearch = "",
   canCreate,
   canDelete,
   canEdit,
@@ -188,6 +189,7 @@ function InventoryList({
   protectedRecordIds,
   records,
 }: {
+  initialSearch?: string;
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
@@ -198,13 +200,13 @@ function InventoryList({
   protectedRecordIds: Set<string>;
   records: ArchivalRecord[];
 }) {
-  const [search, setSearch] = useState("");
-  const [searched, setSearched] = useState(false);
+  const [search, setSearch] = useState(initialSearch);
+  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [cadidoYear, setCadidoYear] = useState("");
   const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
     "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos los autorizados"
-  >("Recientes activos");
+  >(initialSearch ? "Todos los autorizados" : "Recientes activos");
   const inventories = useMemo(
     () =>
       groupInventories(records).filter(({ header, id, records: rows }, index) => {
@@ -254,7 +256,7 @@ function InventoryList({
             <h3>Listado de inventarios</h3>
             <p>{inventories.length} inventarios autorizados en esta sesión</p>
           </div>
-          <span className="demo-label">Datos de demostración</span>
+          <span className="demo-label">Archivos activos</span>
         </div>
         <div className="records-filters inventory-list-filters">
           <label className="search-box records-search">
@@ -1505,6 +1507,7 @@ function InventoryDetail({
 }
 
 export default function RecordsPanel({
+  initialSearch = "",
   loadError,
   onRecordsChange,
   permissions,
@@ -1513,6 +1516,7 @@ export default function RecordsPanel({
   role,
   user,
 }: {
+  initialSearch?: string;
   loadError?: string;
   onRecordsChange: (records: ArchivalRecord[]) => void;
   permissions: string[];
@@ -1594,6 +1598,7 @@ export default function RecordsPanel({
         </div>
       )}
       <InventoryList
+        initialSearch={initialSearch}
         canCreate={!loadError && permissions.includes("register-records")}
         canDelete={role === "Encargado de área" || isAdmin}
         canEdit={permissions.includes("edit-records")}

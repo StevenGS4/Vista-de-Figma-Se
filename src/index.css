@@ -192,6 +192,21 @@
   max-width: 590px;
 }
 
+.login__environment-logo {
+  display: block;
+  width: min(100%, 530px);
+  height: auto;
+  margin: 0 0 34px;
+  object-fit: contain;
+}
+
+@media (max-width: 620px) {
+  .login__environment-logo {
+    width: min(100%, 330px);
+    margin-bottom: 26px;
+  }
+}
+
 .section-kicker {
   display: inline-flex;
   align-items: center;
@@ -4143,8 +4158,8 @@
 
 .concentration-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(150px, 0.9fr)) minmax(145px, 0.8fr) max-content max-content;
-  gap: 10px;
+  grid-template-columns: minmax(210px, 1.45fr) minmax(125px, 0.85fr) minmax(150px, 1fr) minmax(155px, 1fr) minmax(118px, 0.75fr) max-content max-content;
+  gap: 9px;
   align-items: center;
   padding: 14px 20px;
   border-bottom: 1px solid var(--gray-200);
@@ -6161,6 +6176,7 @@
   top: 0;
   padding: 9px 12px;
   border-right: 1px solid rgb(255 255 255 / 30%);
+  background: var(--green-950);
   color: var(--white);
   text-align: left;
   font-size: 8px;
@@ -6622,7 +6638,7 @@
 }
 
 .concentration-quick-access {
-  padding: 0 18px 14px;
+  padding: 12px 18px 14px;
 }
 
 .concentration-search-empty {
@@ -6937,4 +6953,178 @@
   .concentration-inventory-table > tbody > tr.concentration-inventory-row > td {
     white-space: nowrap;
   }
+}
+
+/* Inventarios Excel (trámite, concentración y transferencia primaria):
+   alinear todos los controles por su borde inferior sin alterar sus filtros. */
+.inventory-config-page .records-filters {
+  align-items: end;
+}
+
+.inventory-config-page .records-filters > .search-box,
+.inventory-config-page .records-filters > .filter-select {
+  height: 42px;
+  align-self: end;
+}
+
+/* Inicio: saludo y actividad verificada; mantiene la apariencia institucional. */
+.home-greeting { margin: 0 0 18px; padding: 4px 1px; }
+.home-greeting h3 { color: var(--green-950); font-size: clamp(38px,4vw,50px); font-weight: 700; line-height: 1.15; letter-spacing: -0.035em; }
+.home-greeting p { margin-top: 4px; color: var(--gray-600); font-size: 12px; }
+.home-activity-button { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.home-activity-button:hover:not(:disabled) { background: var(--gray-50); }
+.home-activity-button:disabled { cursor: default; }
+.home-empty-line { padding: 20px 4px; font-size: 11px; color: var(--gray-600); }
+.home-header-popover { width: min(390px, calc(100vw - 28px)); z-index: 30; }
+.home-search-results, .home-notice-items { display: grid; max-height: 340px; overflow-y: auto; margin-top: 10px; gap: 5px; }
+.home-search-results > button, .home-notice-items > button { display: flex; width: 100%; align-items: flex-start; gap: 9px; padding: 10px; text-align: left; border: 1px solid var(--gray-200); border-radius: 7px; background: var(--white); color: var(--green-950); cursor: pointer; }
+.home-search-results > button:hover, .home-notice-items > button:hover { background: var(--green-50); }
+.home-search-results > button > span, .home-notice-items > button > span:last-child { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.home-search-results b, .home-notice-items b { font-size: 10px; }
+.home-search-results small, .home-notice-items small, .home-no-notices { display: block; color: var(--gray-600); font-size: 10px; line-height: 1.5; }
+.home-notice-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.home-notice-heading strong { font-size: 12px; }
+.home-notice-heading small { color: var(--gray-600); font-size: 10px; }
+.home-notice-items > button.is-seen { opacity: 0.68; }
+.home-no-notices { margin: 10px 0; }
+@media (max-width: 680px) {
+  .app-header .home-header-popover { display: block; position: fixed; top: 65px; right: 12px; left: 12px; width: auto; }
+  .home-activity-button { grid-template-columns: 34px minmax(0,1fr); }
+}
+
+/* La campana utiliza contenido real en varias filas; no heredar el bloque demo. */
+.header-popover--notifications.home-header-popover > .home-notice-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+.header-popover--notifications.home-header-popover > .home-notice-items {
+  display: grid;
+  padding: 0;
+  margin-top: 10px;
+  gap: 6px;
+  background: transparent;
+}
+.header-popover--notifications.home-header-popover > .home-notice-items > button {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+.header-popover--notifications.home-header-popover > small { line-height: 1.45; }
+
+/* Préstamos: filtros adaptables en selección A (inventarios) y B (expedientes). */
+.loan-selection-filters {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.6fr) minmax(170px, 0.8fr) minmax(210px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.loan-selection-filters .search-box,
+.loan-selection-filters > select,
+.loan-selection-filters .loan-date-filter > input {
+  min-width: 0;
+  width: 100%;
+  height: 40px;
+}
+.loan-selection-filters > select,
+.loan-selection-filters .loan-date-filter > input {
+  border: 1px solid var(--gray-300);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: var(--white);
+  color: var(--ink);
+}
+.loan-date-filter { display: flex; flex-direction: column; gap: 5px; }
+.loan-date-filter > span { font-size: 10px; color: var(--gray-600); }
+.loan-selection-filters .button { min-height: 40px; }
+@media (max-width: 1050px) {
+  .loan-selection-filters { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .loan-selection-filters { grid-template-columns: minmax(0,1fr); padding: 12px 15px; }
+}
+
+/* Identidad gráfica del menú lateral; sin cuadros ni líneas punteadas. */
+.sidebar__monogram {
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+}
+.sidebar__monogram img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sidebar__institution .institutional-marks--inverse {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.sidebar__institution .institutional-marks--inverse::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1;
+  width: 1px;
+  height: 27px;
+  background: rgb(255 255 255 / 36%);
+}
+.sidebar__institution .institutional-logo {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: 30px;
+  object-fit: contain;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+.sidebar__institution .institutional-logo--gobierno {
+  grid-column: 1;
+  grid-row: 1;
+}
+.sidebar__institution .institutional-logo--semarnat {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* Login: logotipos institucionales sin marcos, con división vertical. */
+.login__header .institutional-marks--login {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.login__header .institutional-marks--login .institutional-logo {
+  display: block;
+  width: auto;
+  height: 36px;
+  max-width: min(35vw, 160px);
+  object-fit: contain;
+  border: 0;
+  background: transparent;
+}
+.login__header .institutional-marks--login .mark-divider {
+  display: block;
+  flex: 0 0 1px;
+  width: 1px;
+  height: 30px;
+  background: var(--gray-300);
+}
+@media (max-width: 620px) {
+  .login__header .institutional-marks--login { gap: 8px; }
+  .login__header .institutional-marks--login .institutional-logo {
+    height: 25px;
+    max-width: min(30vw, 110px);
+  }
+  .login__header .institutional-marks--login .mark-divider { height: 23px; }
 }
