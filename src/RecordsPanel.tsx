@@ -977,12 +977,16 @@ function ControlStep({
   );
 }
 
-function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
+function ReviewStep({ drafts, isAdmin }: { drafts: ArchivalRecord[]; isAdmin: boolean }) {
+  const displayNumber = (record: ArchivalRecord) =>
+    (isAdmin || /^REG-\d+$/.test(record.id))
+      ? record.recordNumber
+      : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear()));
   const header = drafts[0];
   const incomplete = drafts.filter(
     (record) =>
       !(
-        record.recordNumber &&
+        (isAdmin ? record.recordNumber : record.cadidoCode) &&
         record.title &&
         record.openDate &&
         record.foliosCount
@@ -991,7 +995,7 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
   return (
     <>
       <StepHeading
-        description="Verifica el encabezado común y todas las filas antes del guardado atómico."
+        description="Vista previa antes de registrar en MySQL. Puedes regresar a corregir cualquier dato sin perder la captura."
         icon={<CheckCircle2 size={21} />}
         title="Revisión y guardado"
       />
@@ -1060,15 +1064,20 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
                   <th>Caja</th>
                   <th>Expediente</th>
                   <th>CADIDO</th>
-                  <th>Asunto</th>
-                  <th>Etapa</th>
+                  <th>Asunto / descripción</th>
+                  <th>Fechas apertura / cierre</th>
+                  <th>Legajos / folios</th>
+                  <th>Soporte</th>
+                  <th>Valor documental</th>
+                  <th>Vigencia T / C / Total</th>
+                  <th>Observaciones</th>
                   <th>Validación</th>
                 </tr>
               </thead>
               <tbody>
                 {drafts.map((record) => {
                   const errors = [
-                    !record.recordNumber && "número",
+                    !(isAdmin ? record.recordNumber : record.cadidoCode) && "número",
                     !record.title && "asunto",
                     !record.openDate && "apertura",
                     !record.foliosCount && "folios",
@@ -1077,10 +1086,15 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
                     <tr key={record.id}>
                       <td>{record.consecutive}</td>
                       <td>{record.boxNumber || "—"}</td>
-                      <td>{record.recordNumber}</td>
-                      <td>{record.cadidoCode}</td>
-                      <td>{record.title}</td>
-                      <td>{record.stage}</td>
+                      <td>{displayNumber(record)}</td>
+                      <td>{record.cadidoCode} · {record.cadidoYear || "Edición vigente"}</td>
+                      <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
+                      <td>{record.openDate || "—"} / {record.closeDate || "Abierto"}</td>
+                      <td>{record.filesCount} / {record.foliosCount || "—"}</td>
+                      <td>{record.supportType}</td>
+                      <td>{record.documentaryValues.join(", ") || "—"}</td>
+                      <td>{record.currentValidity} / {record.concentrationValidity} / {Number(record.currentValidity)+Number(record.concentrationValidity)} años</td>
+                      <td>{record.observations || "—"}</td>
                       <td>
                         {errors.length ? (
                           <span className="field-error">Falta: {errors.join(", ")}</span>
@@ -1303,6 +1317,8 @@ function InventoryForm({
   };
   const save = (event: FormEvent) => {
     event.preventDefault();
+    // Nunca guardar por Enter en los pasos de captura: únicamente desde revisión.
+    if (currentStep !== 3) return;
     const invalidStep = [0, 1, 2].find((step) => !validateStep(step));
     if (invalidStep !== undefined) {
       setCurrentStep(invalidStep);
@@ -1343,7 +1359,11 @@ function InventoryForm({
         </span>
       </div>
       <Progress current={currentStep} maxVisited={maxVisited} onStep={setCurrentStep} />
-      <form className="surface record-wizard" onSubmit={save}>
+      <form className="surface record-wizard" onSubmit={save}
+        onKeyDown={event => {
+          if (currentStep !== 3 && event.key === "Enter" &&
+              event.target instanceof HTMLInputElement) event.preventDefault();
+        }}>
         <div className="record-wizard__content">
           {currentStep === 0 && (
             <HeaderStep
@@ -1376,7 +1396,7 @@ function InventoryForm({
               update={updateAll}
             />
           )}
-          {currentStep === 3 && <ReviewStep drafts={drafts} />}
+          {currentStep === 3 && <ReviewStep drafts={drafts} isAdmin={isAdmin} />}
 
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
@@ -1387,7 +1407,7 @@ function InventoryForm({
         </div>
         <div className="record-wizard__footer">
           <Button className="button--ghost" onClick={onCancel}>
-            Cancelar
+            Salir sin guardar
           </Button>
           <div>
             {currentStep > 0 && (
@@ -1396,7 +1416,7 @@ function InventoryForm({
                 onClick={() => setCurrentStep((value) => value - 1)}
               >
                 <ChevronLeft size={17} />
-                Anterior
+                {currentStep === 3 ? "Volver a editar" : "Anterior"}
               </Button>
             )}
             {currentStep < 3 ? (
@@ -1407,7 +1427,7 @@ function InventoryForm({
             ) : (
               <Button className="button--primary" type="submit">
                 <Check size={17} />
-                Guardar inventario y expedientes
+                Confirmar y guardar en MySQL
               </Button>
             )}
           </div>
