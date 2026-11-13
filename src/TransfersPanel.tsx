@@ -108,6 +108,7 @@ function userName(users: UserRecord[], id: string) {
 }
 
 function TransferTray({
+  initialSearch = "",
   canCreate,
   currentUser,
   onCreate,
@@ -116,6 +117,7 @@ function TransferTray({
   transfers,
   users,
 }: {
+  initialSearch?: string;
   canCreate: boolean;
   currentUser: UserRecord;
   onCreate: () => void;
@@ -125,8 +127,8 @@ function TransferTray({
   users: UserRecord[];
 }) {
   const [status, setStatus] = useState<TransferStatus | "Todas">("Todas");
-  const [search, setSearch] = useState("");
-  const [searched, setSearched] = useState(false);
+  const [search, setSearch] = useState(initialSearch);
+  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
   const [activeActions, setActiveActions] = useState<string | null>(null);
   const pageSize = 5;
@@ -1404,6 +1406,7 @@ function TransferHistory({
 }
 
 export default function TransfersPanel({
+  initialSearch = "",
   currentUser,
   onRecordsChange,
   onTransfersChange,
@@ -1413,6 +1416,7 @@ export default function TransfersPanel({
   transfers,
   users,
 }: {
+  initialSearch?: string;
   currentUser: UserRecord;
   onRecordsChange: (records: ArchivalRecord[]) => void;
   onTransfersChange: (transfers: DocumentaryTransfer[]) => void;
@@ -1584,6 +1588,7 @@ export default function TransfersPanel({
         </div>
       )}
       <TransferTray
+        initialSearch={initialSearch}
         canCreate={canCreate}
         currentUser={currentUser}
         onCreate={() => {
