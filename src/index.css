@@ -192,6 +192,21 @@
   max-width: 590px;
 }
 
+.login__environment-logo {
+  display: block;
+  width: min(100%, 450px);
+  height: auto;
+  margin: 0 0 34px;
+  object-fit: contain;
+}
+
+@media (max-width: 620px) {
+  .login__environment-logo {
+    width: min(100%, 330px);
+    margin-bottom: 26px;
+  }
+}
+
 .section-kicker {
   display: inline-flex;
   align-items: center;
