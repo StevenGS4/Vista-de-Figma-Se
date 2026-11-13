@@ -7049,19 +7049,35 @@
 }
 .sidebar__institution .institutional-marks--inverse {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
   align-items: center;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
+}
+.sidebar__institution .institutional-marks--inverse::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1;
+  width: 1px;
+  height: 27px;
+  background: rgb(255 255 255 / 36%);
 }
 .sidebar__institution .institutional-logo {
   display: block;
   max-width: 100%;
   width: 100%;
-  height: 42px;
+  height: 30px;
   object-fit: contain;
   border: 0;
   outline: 0;
   background: transparent;
+}
+.sidebar__institution .institutional-logo--gobierno {
+  grid-column: 1;
+  grid-row: 1;
+}
+.sidebar__institution .institutional-logo--semarnat {
+  grid-column: 3;
+  grid-row: 1;
 }
