@@ -243,7 +243,9 @@ async function save(req,res,next,editing=false){
     r.administrativeUnit='Oficina de Representación de SEMARNAT en Nayarit';
     r.responsible=areaRows[0].encargado;
     r.responsiblePosition='Encargado del área de '+areaRows[0].nombre;
-    r.fund='SEMARNAT Nayarit';
+    r.fund='Secretaría de Medio Ambiente y Recursos Naturales';
+    if(r.boxNumber && !/^\d{1,6}$/.test(String(r.boxNumber)))throw fail('El número de caja debe tener de 1 a 6 dígitos');
+    r.room=String(r.room||'').trim()||'Sótano';
     r.initialSheetNumber='1';
     r.archiveAddress=archiveAddress;
     if(!editing)r.inventoryDate=today;
