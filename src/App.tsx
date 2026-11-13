@@ -178,19 +178,14 @@ function InstitutionalMarks({ inverse = false }: { inverse?: boolean }) {
     </div>
   );
   return (
-    <div className="institutional-marks">
-      <div
-        aria-label="Espacio reservado para logotipo oficial del Gobierno de México"
-        className="mark-slot"
-      >
-        <span>LOGOTIPO OFICIAL</span>
-        <small>GOBIERNO DE MÉXICO</small>
-      </div>
-      <span className="mark-divider" />
-      <div aria-label="Espacio reservado para logotipo oficial de SEMARNAT" className="mark-slot">
-        <span>LOGOTIPO OFICIAL</span>
-        <small>SEMARNAT</small>
-      </div>
+    <div className="institutional-marks institutional-marks--login" aria-label="Logotipos institucionales">
+      <img className="institutional-logo institutional-logo--gobierno"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/blpronyvdxik5tlnlups.png"
+        alt="Gobierno de México" />
+      <span className="mark-divider" aria-hidden="true" />
+      <img className="institutional-logo institutional-logo--semarnat"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/vl2lpdq6r8yhsfksdvif.webp"
+        alt="SEMARNAT" />
     </div>
   );
 }
