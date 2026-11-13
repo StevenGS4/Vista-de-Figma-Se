@@ -733,7 +733,7 @@ function ExpedientsStep({
         </Field>}
         {!isAdmin && <div className="form-field"><span>Consecutivo del inventario</span><strong>{active.consecutive}</strong></div>}
         <Field label="Número de caja">
-          <input inputMode="numeric" maxLength={6} pattern="[0-9]{1,6}" style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
+          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -743,7 +743,8 @@ function ExpedientsStep({
         </Field>
         {!isAdmin && <Field error={errors.recordYear} label="Año del expediente" required>
           <input type="number" min="1900" max="2100" style={{maxWidth:145}}
-            value={active.recordYear || String(new Date().getFullYear())}
+            value={active.recordYear || active.recordNumber.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
+            disabled={/^REG-\d+$/.test(active.id)}
             onChange={event=>{
               const year=event.target.value;
               update("recordYear",year);
@@ -758,7 +759,7 @@ function ExpedientsStep({
         </Field>}
         <Field className="record-field--wide" label="Código de clasificación archivística">
           <div className="read-only-code"><ShieldCheck size={16}/><strong>
-            {isAdmin ? (active.recordNumber || "Número de expediente") :
+            {isAdmin || /^REG-\d+$/.test(active.id) ? (active.recordNumber || "Número de expediente") :
               previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
           </strong></div>
           {!isAdmin && <small className="field-hint">Vista preliminar; MySQL asigna el siguiente número disponible al guardar para evitar duplicados.</small>}
@@ -1030,13 +1031,13 @@ function LocationStep({
             <input disabled value={`Archivo de trámite — ${areaName(active.areaId)}`} />
           </Field>
           <Field error={errors.room} label="Lugar de resguardo" required>
-            {!isAdmin && <label style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <input type="checkbox" checked={otherRoom} onChange={event=>{
+            {!isAdmin && <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <input type="checkbox" aria-label="Otro lugar de resguardo" checked={otherRoom} onChange={event=>{
                 setOtherRoom(event.target.checked);
                 if(!event.target.checked)update("room","Sótano");
                 else if(active.room==="Sótano")update("room","");
               }}/> Otro lugar de resguardo
-            </label>}
+            </div>}
             <input disabled={!isAdmin&&!otherRoom} onChange={(event) => update("room", event.target.value)}
               value={!isAdmin&&!otherRoom?"Sótano":active.room} />
           </Field>
@@ -1263,7 +1264,10 @@ function InventoryForm({
   const isAdmin = role === "Administrador / Coordinador";
   const editing = existing.length > 0;
   const makeInitial = () => {
-    if (editing) return existing.map((item) => ({ ...item }));
+    if (editing) return existing.map(item => ({
+      ...item,
+      recordYear:item.recordNumber.match(/\.(\d{4})$/)?.[1] || item.openDate?.slice(0,4) || String(new Date().getFullYear())
+    }));
     const base = emptyRecord();
     const inventoryId = `INV-TR-${String(groupInventories(records).length + 1).padStart(3, "0")}`;
     const area = areas.find((item) => item.id === user.areaId);
@@ -1354,6 +1358,8 @@ function InventoryForm({
     const next: Errors = {};
     if (record.stage === "Archivo de concentración" || record.transferReference) return next;
     if (step === 1) {
+      if (!isAdmin && record.boxNumber && !/^\d{1,6}$/.test(record.boxNumber))
+        next.boxNumber = "Captura un número de caja de máximo seis dígitos.";
       if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
       if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
