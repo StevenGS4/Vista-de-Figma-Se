@@ -256,7 +256,7 @@ function InventoryList({
             <h3>Listado de inventarios</h3>
             <p>{inventories.length} inventarios autorizados en esta sesión</p>
           </div>
-          <span className="demo-label">Datos de demostración</span>
+          <span className="demo-label">Archivos activos</span>
         </div>
         <div className="records-filters inventory-list-filters">
           <label className="search-box records-search">
