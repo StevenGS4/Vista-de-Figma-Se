@@ -6161,6 +6161,7 @@
   top: 0;
   padding: 9px 12px;
   border-right: 1px solid rgb(255 255 255 / 30%);
+  background: var(--green-950);
   color: var(--white);
   text-align: left;
   font-size: 8px;
