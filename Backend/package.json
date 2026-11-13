@@ -7,6 +7,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test:db": "node src/test-db.js",
+    "test:template": "node src/check-template-export.js",
     "seed:admin": "node src/seed-admin.js",
     "test": "node --test tests/*.test.js",
     "seed:cadido": "node src/seed-cadido.js",
