@@ -185,9 +185,30 @@ function fillRecords(sheet,records,location){
       if(cell.type===ExcelJS.ValueType.Formula)
         throw new Error('No se puede sobreescribir fórmula de la plantilla en '+cell.address);
       cell.value=safeCell(val==null?'':val);
-      cell.alignment={...cell.alignment,wrapText:true,vertical:'center'};
+      cell.alignment={...cell.alignment,wrapText:true,vertical:'middle'};
     }
   }
+}
+function fillSummary(sheet,records,location){
+  const extra=Math.max(0,records.length-(location.summaryRow-location.start));
+  const summary=sheet.getRow(location.summaryRow+extra);
+  const root=summary.getCell(2);
+  // Respeta la leyenda y su estilo en la plantilla: cambia únicamente los
+  // números que el instructivo marca como campos de cálculo.
+  const original=visible(root.value);
+  if(!normalize(original).includes('EL PRESENTE INVENTARIO CONSTA'))return;
+  const years=records.flatMap(r=>[r.openDate,r.closeDate])
+    .map(d=>Number(String(d||'').slice(0,4))).filter(y=>y>=1900&&y<=2200);
+  const boxes=new Set(records.map(r=>String(r.boxNumber||'').trim()).filter(Boolean));
+  const electronic=records.filter(r=>['ELECTRONICO','MIXTO'].includes(normalize(r.supportType))).length;
+  const replacements=new Map([
+    ['22','1'],['23',String(records.length)],
+    ['24',years.length?String(Math.min(...years)):'SIN DATO'],
+    ['25',years.length?String(Math.max(...years)):'SIN DATO'],
+    ['26',String(boxes.size)],['29',String(electronic)],
+  ]);
+  // Peso, metros lineales y medios de almacenamiento no se inventan.
+  root.value=original.replace(/\\?\((22|23|24|25|26|29)\)/g,(full,n)=>replacements.get(n)||full);
 }
 function cloneSheet(book,source,name) {
   const copy=book.addWorksheet(name.slice(0,31));
@@ -233,7 +254,11 @@ export async function makeOfficialTemplateWorkbook(records,kind){
     const rows=entries[i];
     fillHeader(sheet,rows[0],layout);
     fillRecords(sheet,rows,layout);
-    sheet.pageSetup={...sheet.pageSetup,fitToPage:true,fitToWidth:1,fitToHeight:0};
+    fillSummary(sheet,rows,layout);
+    const extra=Math.max(0,rows.length-(layout.summaryRow-layout.start));
+    const oldPrint=String(sheet.pageSetup?.printArea||'');
+    const print=oldPrint.replace(/(:[A-Z]+)(\d+)$/,(_,a,b)=>a+(Number(b)+extra));
+    sheet.pageSetup={...sheet.pageSetup,printArea:print||undefined,fitToPage:true,fitToWidth:1,fitToHeight:0};
   }
   return book;
 }
