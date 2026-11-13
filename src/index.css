@@ -6999,3 +6999,38 @@
   width: 100%;
 }
 .header-popover--notifications.home-header-popover > small { line-height: 1.45; }
+
+/* Préstamos: filtros adaptables en selección A (inventarios) y B (expedientes). */
+.loan-selection-filters {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.6fr) minmax(170px, 0.8fr) minmax(210px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.loan-selection-filters .search-box,
+.loan-selection-filters > select,
+.loan-selection-filters .loan-date-filter > input {
+  min-width: 0;
+  width: 100%;
+  height: 40px;
+}
+.loan-selection-filters > select,
+.loan-selection-filters .loan-date-filter > input {
+  border: 1px solid var(--gray-300);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: var(--white);
+  color: var(--ink);
+}
+.loan-date-filter { display: flex; flex-direction: column; gap: 5px; }
+.loan-date-filter > span { font-size: 10px; color: var(--gray-600); }
+.loan-selection-filters .button { min-height: 40px; }
+@media (max-width: 1050px) {
+  .loan-selection-filters { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .loan-selection-filters { grid-template-columns: minmax(0,1fr); padding: 12px 15px; }
+}
