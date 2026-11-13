@@ -38,125 +38,15 @@ export const roles: Role[] = [
   "Administrador / Coordinador",
 ];
 
-export const areas: Area[] = [
-  {
-    id: "AR-001",
-    name: "Coordinación Administrativa",
-    parent: "Oficina de Representación",
-    manager: "Ana Sofía Martínez Ruiz",
-  },
-  {
-    id: "AR-002",
-    name: "Unidad Jurídica",
-    parent: "Oficina de Representación",
-    manager: "Mariana López Rivera",
-  },
-  {
-    id: "AR-003",
-    name: "Archivo de Concentración",
-    parent: "Coordinación Administrativa",
-    manager: "Carlos Hernández Soto",
-  },
-  {
-    id: "AR-004",
-    name: "Recursos Materiales",
-    parent: "Coordinación Administrativa",
-    manager: "Patricia Gómez Medina",
-  },
-  {
-    id: "AR-005",
-    name: "Recursos Humanos",
-    parent: "Coordinación Administrativa",
-    manager: "Luis Alberto Ramos",
-  },
-];
+// Se rellena desde GET /api/catalogos/areas después de autenticar.
+export const areas: Area[] = [];
+export function setAreasCatalog(next:Area[]) {
+ areas.splice(0,areas.length,...next);
+}
 
-export const initialUsers: UserRecord[] = [
-  {
-    id: "USR-001",
-    firstName: "Ana Sofía",
-    paternalName: "Martínez",
-    maternalName: "Ruiz",
-    email: "admin@semarnat.demo",
-    areaId: "AR-001",
-    roles: ["Administrador / Coordinador", "Personal de área"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-002",
-    firstName: "Mariana",
-    paternalName: "López",
-    maternalName: "Rivera",
-    email: "personal@semarnat.demo",
-    areaId: "AR-002",
-    roles: ["Personal de área"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-003",
-    firstName: "Carlos",
-    paternalName: "Hernández",
-    maternalName: "Soto",
-    email: "archivo@semarnat.demo",
-    areaId: "AR-003",
-    roles: ["Encargado de préstamos / Control archivístico"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-004",
-    firstName: "Patricia",
-    paternalName: "Gómez",
-    maternalName: "Medina",
-    email: "patricia.gomez@semarnat.demo",
-    areaId: "AR-004",
-    roles: ["Personal de área"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-005",
-    firstName: "Luis Alberto",
-    paternalName: "Ramos",
-    maternalName: "Vega",
-    email: "luis.ramos@semarnat.demo",
-    areaId: "AR-005",
-    roles: ["Personal de área"],
-    status: "Inactivo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-006",
-    firstName: "Daniela",
-    paternalName: "Ortiz",
-    maternalName: "Núñez",
-    email: "daniela.ortiz@semarnat.demo",
-    areaId: "AR-002",
-    roles: ["Personal de área"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-  {
-    id: "USR-007",
-    firstName: "Roberto",
-    paternalName: "Salazar",
-    maternalName: "Mora",
-    email: "encargado.area@semarnat.demo",
-    areaId: "AR-002",
-    roles: ["Encargado de área"],
-    status: "Activo",
-    password: "Demo2025",
-    mustChangePassword: false,
-  },
-];
+
+// Las cuentas reales se consultan desde MySQL; no publicar contraseñas demo.
+export const initialUsers: UserRecord[] = [];
 
 export const permissions: Permission[] = [
   { id: "register-records", label: "Registrar expedientes" },
@@ -207,4 +97,4 @@ export const initials = (user: UserRecord) =>
   `${user.firstName.charAt(0)}${user.paternalName.charAt(0)}`.toUpperCase();
 
 export const areaName = (areaId: string) =>
-  areas.find((area) => area.id === areaId)?.name ?? "Área no asignada";
+  areas.find((area) => area.id === areaId)?.name ?? areaId;

@@ -1,9 +1,10 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -20,6 +21,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas } from "./data";
+import { concentrationApi } from "./api";
 import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
@@ -84,39 +86,66 @@ function ConcentrationList({
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("");
   const [cadido, setCadido] = useState("");
+  const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
   const [searched, setSearched] = useState(false);
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [activeActions, setActiveActions] = useState<string | null>(null);
+  const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
   const pageSize = 5;
-  const filtered = useMemo(
-    () =>
-      records.filter((record, index) => {
-        const query = search.trim().toLowerCase();
-        return (
-          (!query ||
-            record.recordNumber.toLowerCase().includes(query) ||
-            record.title.toLowerCase().includes(query)) &&
-          (!area || record.areaId === area) &&
-          (!cadido || record.cadidoSeriesId === cadido) &&
-          (!availability || record.availability === availability) &&
-          (!recentOnly || index < 5)
-        );
-      }),
-    [area, availability, cadido, recentOnly, records, search],
-  );
+
+  // Las filas de concentración se agrupan por el ID del inventario original.
+  // No mezclamos expedientes de inventarios diferentes aunque compartan CADIDO.
+  const inventories = useMemo(() => {
+    const grouped = new Map<string, ArchivalRecord[]>();
+    for (const record of records) {
+      const key = record.inventoryId;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(record);
+    }
+    return [...grouped.entries()].map(([id, items]) => ({
+      id,
+      header: items[0],
+      records: [...items].sort((a, b) => Number(a.consecutive) - Number(b.consecutive)),
+    }));
+  }, [records]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const matching = inventories.filter((inventory) => {
+      const { id, header, records: items } = inventory;
+      return (
+        (!query ||
+          id.toLowerCase().includes(query) ||
+          areaName(header.areaId).toLowerCase().includes(query) ||
+          items.some((record) =>
+            [record.recordNumber, record.archiveClassificationCode, record.cadidoCode, record.title]
+              .some((field) => (field || "").toLowerCase().includes(query))
+          )) &&
+        (!area || header.areaId === area) &&
+        (!cadido || items.some((record) => record.cadidoCode === cadido)) &&
+        (!cadidoYear || items.some((record) => record.cadidoYear === cadidoYear)) &&
+        (!availability || items.some((record) => record.availability === availability))
+      );
+    });
+    return recentOnly ? matching.slice(0, 5) : matching;
+  }, [area, availability, cadido, cadidoYear, recentOnly, inventories, search]);
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const hasFilters = Boolean(search || area || cadido || availability || recentOnly);
+  const hasFilters = Boolean(search || area || cadido || cadidoYear || availability || recentOnly);
 
   const clear = () => {
     setSearch("");
     setArea("");
     setCadido("");
+    setCadidoYear("");
     setAvailability("");
     setRecentOnly(false);
     setSearched(false);
+    setExpandedInventory(null);
+    setActiveActions(null);
     setPage(1);
   };
 
@@ -125,17 +154,17 @@ function ConcentrationList({
       <div className="records-page-heading">
         <div>
           <h2>Archivo de concentración</h2>
-          <p>Consulta y localiza los expedientes transferidos administrativamente.</p>
+          <p>Consulta inventarios transferidos y despliega sus expedientes sin mezclar documentos de otros archivos.</p>
         </div>
         <span className="access-chip">
           <Archive size={15} />
-          Expedientes transferidos
+          Inventarios transferidos
         </span>
       </div>
       <section className="surface records-table-card concentration-table-card">
         <div className="records-filter-head">
           <div>
-            <h3>Búsqueda de expedientes</h3>
+            <h3>Búsqueda de inventarios de concentración</h3>
             <p>Define criterios antes de consultar los registros autorizados.</p>
           </div>
           <div className="availability-key">
@@ -152,7 +181,7 @@ function ConcentrationList({
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Buscar expediente o asunto..."
+              placeholder="Buscar inventario, expediente o asunto..."
               value={search}
             />
           </label>
@@ -183,13 +212,15 @@ function ConcentrationList({
               value={cadido}
             >
               <option value="">Todos los códigos CADIDO</option>
-              {cadidoSeries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.code} · {item.name}
-                </option>
+              {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </label>
+          <label className="filter-select"><select aria-label="Filtrar por edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);setCadido("");setPage(1);}}>
+            <option value="">Todas las ediciones CADIDO</option>
+            {[...new Set(records.map(r=>r.cadidoYear).filter(Boolean))].sort().map(v=><option key={v} value={v}>{v}</option>)}
+          </select></label>
           <label className="filter-select">
             <select
               aria-label="Filtrar por disponibilidad"
@@ -222,122 +253,155 @@ function ConcentrationList({
             }}
           >
             <Clock3 size={16} />
-            Expedientes recientes autorizados
+            Inventarios recientes autorizados
           </button>
         </div>
         {!searched ? (
           <div className="empty-state concentration-search-empty">
             <Search size={30} />
-            <strong>Utiliza la búsqueda para consultar expedientes</strong>
+            <strong>Utiliza la búsqueda para consultar inventarios</strong>
             <p>No se muestran registros automáticamente para reducir la saturación informativa.</p>
           </div>
         ) : (
           <>
             <div className="table-scroll">
-              <table className="data-table concentration-table">
+              <table className="data-table concentration-table concentration-inventory-table">
                 <thead>
                   <tr>
-                    <th>Número de expediente</th>
-                    <th>Título o asunto</th>
+                    <th>Inventario de concentración</th>
                     <th>Área generadora</th>
                     <th>Código CADIDO</th>
                     <th>Fecha de transferencia</th>
-                    <th>Estante</th>
-                    <th>Nivel</th>
-                    <th>Sección física</th>
+                    <th>Expedientes</th>
                     <th>Disponibilidad</th>
-                    <th className="align-right">Acciones</th>
+                    <th className="align-right">Ver expedientes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visible.map((record) => (
-                    <tr key={record.id}>
-                      <td>
-                        {canViewDetail ? (
-                          <button className="record-number-link" onClick={() => onView(record)}>
-                            {record.recordNumber}
-                          </button>
-                        ) : (
-                          <strong>{record.inventoryId}</strong>
+                  {visible.map(({ id, header, records: items }) => {
+                    const expanded = expandedInventory === id;
+                    const onLoan = items.filter((record) => record.availability === "Prestado").length;
+                    const availabilityLabel = onLoan === 0
+                      ? "Todos en archivo"
+                      : onLoan === items.length ? "Todos prestados" : `${onLoan} prestados de ${items.length}`;
+                    return (
+                      <Fragment key={id}>
+                        <tr className={expanded ? "concentration-inventory-row is-expanded" : "concentration-inventory-row"}>
+                          <td>
+                            <button
+                              type="button"
+                              className="record-number-link concentration-inventory-toggle"
+                              aria-expanded={expanded}
+                              aria-controls={`concentration-inventory-${id}`}
+                              onClick={() => {
+                                setExpandedInventory(expanded ? null : id);
+                                setActiveActions(null);
+                              }}
+                            >
+                              <FolderTree size={17} />
+                              <strong>{id}</strong>
+                              <ChevronDown size={16} className={expanded ? "is-expanded" : ""} />
+                            </button>
+                          </td>
+                          <td>{areaName(header.areaId)}</td>
+                          <td><span className="cadido-code">{header.cadidoCode}</span></td>
+                          <td>{formatDate(header.transferDate)}</td>
+                          <td>{items.length}</td>
+                          <td>{availabilityLabel}</td>
+                          <td className="align-right">
+                            <button type="button" className="button button--secondary concentration-expand-button"
+                              aria-expanded={expanded}
+                              onClick={() => {
+                                setExpandedInventory(expanded ? null : id);
+                                setActiveActions(null);
+                              }}>
+                              {expanded ? "Ocultar expedientes" : "Mostrar expedientes"}
+                              <ChevronDown size={16} className={expanded ? "is-expanded" : ""}/>
+                            </button>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="concentration-inventory-detail-row">
+                            <td colSpan={7} id={`concentration-inventory-${id}`}>
+                              <div className="concentration-inventory-contents">
+                                <div className="concentration-inventory-contents-heading">
+                                  <strong>Expedientes del inventario {id}</strong>
+                                  <span>{items.length} expediente{items.length===1?"":"s"} en concentración</span>
+                                </div>
+                                <div className="table-scroll">
+                                  <table className="data-table concentration-table concentration-expedient-table">
+                                    <thead><tr>
+                                      <th>Número de expediente</th>
+                                      <th>Título o asunto</th>
+                                      <th>Código de clasificación</th>
+                                      <th>Estante</th>
+                                      <th>Nivel</th>
+                                      <th>Sección física</th>
+                                      <th>Disponibilidad</th>
+                                      <th className="align-right">Acciones</th>
+                                    </tr></thead>
+                                    <tbody>{items.map((record) => (
+                                      <tr key={record.id}>
+                                        <td>
+                                          {canViewDetail ? (
+                                            <button type="button" className="record-number-link" onClick={() => onView(record)}>
+                                              {record.recordNumber}
+                                            </button>
+                                          ) : <strong>{record.recordNumber}</strong>}
+                                        </td>
+                                        <td><span className="record-subject" title={record.title}>{record.title}</span></td>
+                                        <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
+                                        <td>{record.shelf ? `Estante ${record.shelf}` : "Pendiente"}</td>
+                                        <td>{record.level ? `Nivel ${record.level}` : "Pendiente"}</td>
+                                        <td>{record.physicalSection ? `Sección ${record.physicalSection}` : "Pendiente"}</td>
+                                        <td><AvailabilityBadge value={record.availability}/></td>
+                                        <td>
+                                          <div className="record-actions">
+                                            <button type="button"
+                                              aria-expanded={activeActions === record.id}
+                                              aria-label={`Acciones para ${record.recordNumber}`}
+                                              onClick={() => setActiveActions(current => current === record.id ? null : record.id)}>
+                                              <MoreHorizontal size={18}/>
+                                            </button>
+                                            {activeActions === record.id && (
+                                              <div className="record-actions__menu concentration-actions-menu">
+                                                {canViewDetail && <button type="button" onClick={() => {
+                                                  setActiveActions(null);
+                                                  onView(record);
+                                                }}><Files size={16}/> Ver detalle</button>}
+                                                {canEditLocation && <button type="button" onClick={() => {
+                                                  setActiveActions(null);
+                                                  onEditLocation(record);
+                                                }}><MapPin size={15}/> Editar ubicación</button>}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}</tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td>
-                        <span className="record-subject" title={record.title}>
-                          {record.title}
-                        </span>
-                      </td>
-                      <td>{areaName(record.areaId)}</td>
-                      <td>
-                        <span className="cadido-code">{record.cadidoCode}</span>
-                      </td>
-                      <td>{formatDate(record.transferDate)}</td>
-                      <td>Estante {record.shelf}</td>
-                      <td>Nivel {record.level}</td>
-                      <td>Sección {record.physicalSection}</td>
-                      <td>
-                        <AvailabilityBadge value={record.availability} />
-                      </td>
-                      <td>
-                        <div className="record-actions">
-                          <button
-                            aria-expanded={activeActions === record.id}
-                            aria-label={`Acciones para ${record.recordNumber}`}
-                            onClick={() =>
-                              setActiveActions((current) =>
-                                current === record.id ? null : record.id,
-                              )
-                            }
-                          >
-                            <MoreHorizontal size={18} />
-                          </button>
-                          {activeActions === record.id && (
-                            <div className="record-actions__menu concentration-actions-menu">
-                              {canViewDetail && (
-                                <button
-                                  onClick={() => {
-                                    setActiveActions(null);
-                                    onView(record);
-                                  }}
-                                >
-                                  <Files size={16} />
-                                  Ver detalle
-                                </button>
-                              )}
-                              {canEditLocation && (
-                                <button
-                                  onClick={() => {
-                                    setActiveActions(null);
-                                    onEditLocation(record);
-                                  }}
-                                >
-                                  <MapPin size={15} />
-                                  Editar ubicación
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
               {!visible.length && (
                 <div className="empty-state">
-                  <Archive size={30} />
-                  <strong>No encontramos expedientes</strong>
+                  <Archive size={30}/>
+                  <strong>No encontramos inventarios de concentración</strong>
                   <p>Ajusta la búsqueda o limpia los filtros seleccionados.</p>
-                  {hasFilters && (
-                    <button className="text-button" onClick={clear}>
-                      Limpiar filtros
-                    </button>
-                  )}
+                  {hasFilters && <button className="text-button" onClick={clear}>Limpiar filtros</button>}
                 </div>
               )}
             </div>
             <div className="pagination">
               <span>
-                Mostrando {visible.length ? (page - 1) * pageSize + 1 : 0}–
+                Mostrando inventarios {visible.length ? (page - 1) * pageSize + 1 : 0}–
                 {Math.min(page * pageSize, filtered.length)} de {filtered.length}
               </span>
               <div>
@@ -453,7 +517,7 @@ function ConcentrationDetail({
         <DetailSection icon={<FolderTree size={17} />} title="Clasificación CADIDO">
           <DetailField label="Sección documental" value={sectionName(record.cadidoSectionId)} />
           <DetailField label="Serie documental" value={seriesName(record.cadidoSeriesId)} />
-          <DetailField label="Código CADIDO ficticio" value={record.cadidoCode} />
+          <DetailField label="Código de clasificación archivística" value={record.archiveClassificationCode || record.cadidoCode} />
           <DetailField label="Soporte documental" value={record.supportType} />
           <DetailField label="Valor documental" value={record.documentaryValues.join(", ")} />
         </DetailSection>
@@ -721,17 +785,23 @@ export default function ConcentrationPanel({
     return record.areaId === currentUser.areaId && record.createdBy === currentUser.id;
   });
   const canEditLocation =
-    (role === "Encargado de préstamos / Control archivístico" ||
-      role === "Administrador / Coordinador") &&
+    role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
   const canViewDetail = role !== "Encargado de área";
 
-  const saveLocation = (record: ArchivalRecord) => {
-    onRecordsChange(records.map((item) => (item.id === record.id ? record : item)));
-    setSelected(record);
-    setView("detail");
-    setMessage("La ubicación física se actualizó correctamente.");
-    window.setTimeout(() => setMessage(""), 3000);
+  const saveLocation = async (record: ArchivalRecord) => {
+    try {
+      const saved=await concentrationApi.saveLocation(record);
+      onRecordsChange(records.map(item=>item.id===saved.id?saved:item));
+      setSelected(saved);
+      setView("detail");
+      setMessage("La ubicación física se actualizó correctamente en MySQL.");
+      window.setTimeout(()=>setMessage(""),3000);
+    } catch(error) {
+      const message=error instanceof Error?error.message:"Error al guardar la ubicación en MySQL.";
+      setMessage(message);
+      window.alert(message);
+    }
   };
 
   if (view === "location" && selected)

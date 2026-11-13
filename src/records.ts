@@ -13,6 +13,8 @@ export type ArchivalRecord = {
   fund: string;
   consecutive: string;
   recordNumber: string;
+  archiveClassificationCode?: string;
+  recordYear?: string;
   boxNumber: string;
   title: string;
   description: string;
@@ -21,6 +23,7 @@ export type ArchivalRecord = {
   cadidoSectionId: string;
   cadidoSeriesId: string;
   cadidoCode: string;
+  cadidoYear?: string;
   openDate: string;
   closeDate: string;
   filesCount: string;
@@ -60,6 +63,7 @@ export type CadidoSeries = {
   sectionId: string;
   name: string;
   code: string;
+  year?: string;
   detail: string;
   enabledAreaIds: string[];
 };
@@ -429,6 +433,7 @@ export const emptyRecord = (): ArchivalRecord => ({
   fund: "SEMARNAT Nayarit",
   consecutive: "",
   recordNumber: "",
+  recordYear: String(new Date().getFullYear()),
   boxNumber: "",
   title: "",
   description: "",

@@ -27,7 +27,7 @@ usersRouter.get('/',async(_req,res,next)=>{
 });
 usersRouter.post('/',async(req,res,next)=>{
  const data=req.body||{};const issue=validate(data);
- if(issue||!passwordValid(data.password)) return res.status(400).json({error:issue||'Contraseña temporal inválida'});
+ if(issue||!passwordValid(data.password)) return res.status(400).json({error:issue||'La contraseña debe tener entre 8 y 128 caracteres, al menos una mayúscula, una minúscula y un número.'});
  const conn=await pool.getConnection();
  try {
    await conn.beginTransaction();
@@ -56,7 +56,7 @@ usersRouter.put('/:id',async(req,res,next)=>{
    await conn.beginTransaction();
    const [existing]=await conn.execute('SELECT id FROM usuarios WHERE id=? FOR UPDATE',[id]);
    if(!existing.length)throw Object.assign(new Error('Usuario no encontrado'),{status:404});
-   const [area]=await conn.execute('SELECT id FROM areas WHERE id=? AND activo=1',[data.areaId]);
+   const [area]=await conn.execute('SELECT id FROM areas WHERE codigo=? AND activo=1',[data.areaId]);
    if(!area.length)throw Object.assign(new Error('Área inválida'),{status:400});
    const [known]=await conn.query('SELECT id,nombre FROM roles');
    for(const r of data.roles)if(!known.some(x=>x.nombre===r))throw Object.assign(new Error('Rol inválido'),{status:400});

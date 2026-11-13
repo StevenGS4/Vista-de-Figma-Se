@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -39,12 +39,13 @@ import {
   Role,
   UserRecord,
   areaName,
+  setAreasCatalog,
   fullName,
   initialRolePermissions,
   initials,
 } from "./data";
 import { ArchivalRecord, setCadidoCatalog } from "./records";
-import { ArchivalLoan, initialLoans } from "./loans";
+import { ArchivalLoan } from "./loans";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
@@ -1133,7 +1134,7 @@ export default function App() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [archivalRecords, setArchivalRecords] = useState<ArchivalRecord[]>([]);
   const [recordsLoadError, setRecordsLoadError] = useState("");
-  const [loans, setLoans] = useState(initialLoans);
+  const [loans, setLoans] = useState<ArchivalLoan[]>([]);
   const [transfers, setTransfers] = useState<DocumentaryTransfer[]>([]);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
@@ -1153,41 +1154,62 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser?.roles.includes("Administrador / Coordinador")) return;
+    if (!currentUser?.roles.includes("Administrador / Coordinador") || currentUser.mustChangePassword) return;
     let active = true;
     usersApi.list().then((list) => { if (active) setUsers(list); }).catch((err) => {
       console.error("No se pudieron cargar los usuarios:",err);
     });
     return () => {active=false;};
-  }, [currentUser?.id, currentUser?.roles.join(",")]);
+  }, [currentUser?.id, currentUser?.roles.join(","), currentUser?.mustChangePassword]);
 
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
-    if (!currentUser.roles.some((r)=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador")) return;
     let alive = true;
     setRecordsLoadError("");
-    Promise.all([tramiteApi.catalog(), tramiteApi.list()])
-      .then(([catalog, records]) => {
-        if (!alive) return;
-        setCadidoCatalog(catalog.sections, catalog.series);
-        setArchivalRecords(records);
-        setRecordsLoadError("");
-      }).catch((error) => {
-        if (alive) {
-          setArchivalRecords([]);
-          setRecordsLoadError(error instanceof Error ? error.message : "Error consultando MySQL");
-          console.error("No fue posible consultar Archivo de Trámite en MySQL:", error);
-        }
-      });
+    // Trámite solo está disponible para sus roles. Concentración es visible
+    // también para control archivístico. Ambas consultas llegan desde MySQL.
+    const canTramite = currentUser.roles.some(r=>
+      r==="Personal de área" || r==="Encargado de área" || r==="Administrador / Coordinador");
+    Promise.all([
+      tramiteApi.catalog(),
+      canTramite ? tramiteApi.list() : Promise.resolve([] as ArchivalRecord[]),
+      concentrationApi.list(),
+      areasApi.list(),
+    ]).then(([catalog, tramite, concentracion, activeAreas]) => {
+      if (!alive) return;
+      setCadidoCatalog(catalog.sections, catalog.series);
+      setAreasCatalog(activeAreas);
+      setArchivalRecords([
+        ...tramite.filter(record => record.stage !== "Archivo de concentración"),
+        ...concentracion,
+      ]);
+      setRecordsLoadError("");
+    }).catch(error => {
+      if (!alive) return;
+      setArchivalRecords([]);
+      setRecordsLoadError(error instanceof Error ? error.message : "Error consultando archivos en MySQL");
+      console.error("Error cargando Trámite o Concentración desde MySQL:",error);
+    });
     return () => { alive = false; };
   }, [currentUser?.id, currentUser?.mustChangePassword]);
 
+
   useEffect(()=>{
     if(!currentUser||currentUser.mustChangePassword)return;
+    if(!currentUser.roles.some(r=>r==="Personal de área"||r==="Encargado de área"||r==="Administrador / Coordinador"))return;
     let active=true;
     transferApi.list().then((list)=>{if(active)setTransfers(list);})
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
     return ()=>{active=false;};
+  },[currentUser?.id,currentUser?.mustChangePassword]);
+
+  useEffect(()=>{
+    if(!currentUser||currentUser.mustChangePassword)return;
+    if(!currentUser.roles.some(r=>r==="Encargado de préstamos / Control archivístico"||r==="Administrador / Coordinador"))return;
+    let alive=true;
+    loanApi.list().then(list=>{if(alive)setLoans(list);})
+      .catch(error=>{if(alive){setLoans([]);console.error("No se pudieron cargar préstamos en MySQL:",error);}});
+    return ()=>{alive=false;};
   },[currentUser?.id,currentUser?.mustChangePassword]);
 
   const logout = async () => {
@@ -1195,6 +1217,10 @@ export default function App() {
     catch (error) { console.error("Error de cierre de sesión:",error); }
     setCurrentUser(null);
     setUsers([]);
+    setArchivalRecords([]);
+    setLoans([]);
+    setTransfers([]);
+    setRecordsLoadError("");
     setVoluntaryPasswordOpen(false);
   };
 
@@ -1241,6 +1267,13 @@ export default function App() {
       )}
     </>
   ) : (
-    <Login onLogin={(user) => { setCurrentUser(user);setUsers([user]); }} />
+    <Login onLogin={(user) => {
+      setArchivalRecords([]);
+      setLoans([]);
+      setTransfers([]);
+      setRecordsLoadError("");
+      setUsers([user]);
+      setCurrentUser(user);
+    }} />
   );
 }

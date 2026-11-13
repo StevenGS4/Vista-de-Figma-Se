@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { Role, UserRecord, areaName, fullName } from "./data";
-import { transferApi, tramiteApi } from "./api";
+import { transferApi, tramiteApi, concentrationApi, ReceptionLocation } from "./api";
 import { ArchivalRecord } from "./records";
 import {
   DocumentaryTransfer,
@@ -398,7 +398,7 @@ function InventoryTable({ records }: { records: ArchivalRecord[] }) {
               </td>
               <td>{areaName(record.areaId)}</td>
               <td>
-                <span className="cadido-code">{record.cadidoCode}</span>
+                <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
               </td>
               <td>
                 <span className="inventory-title">{record.title}</span>
@@ -670,7 +670,7 @@ function TransferWizard({
                               <strong>{record.recordNumber}</strong>
                               <small>{record.title}</small>
                             </span>
-                            <span className="cadido-code">{record.cadidoCode}</span>
+                            <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                             <span className="eligible-meta">
                               {record.filesCount} legajos · {record.foliosCount} folios
                             </span>
@@ -754,7 +754,7 @@ function TransferWizard({
                     <strong>{record.recordNumber}</strong>
                     <small>{record.title}</small>
                   </span>
-                  <span className="cadido-code">{record.cadidoCode}</span>
+                  <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                 </div>
               ))}
             </div>
@@ -1179,7 +1179,7 @@ function ReceptionForm({
 }: {
   currentUser: UserRecord;
   onBack: () => void;
-  onSave: (status: ReceptionStatus, date: string, notes: string) => void;
+  onSave: (status: ReceptionStatus, date: string, notes: string, location: ReceptionLocation | null) => void;
   transfer: DocumentaryTransfer;
 }) {
   const [status, setStatus] = useState<ReceptionStatus>(
@@ -1188,6 +1188,15 @@ function ReceptionForm({
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
+  const [location,setLocation]=useState<ReceptionLocation>(()=>({
+    archiveZone:"Archivo de concentración",
+    room:"Sótano",shelf:"",level:"",physicalSection:"",
+    position:"",locationBox:"",locationNotes:"",
+  }));
+  const updateLocation=(key:keyof ReceptionLocation,value:string)=>{
+    setLocation(current=>({...current,[key]:value}));
+    setError("");
+  };
   return (
     <div className="reception-page">
       <div className="record-form-top">
@@ -1212,7 +1221,14 @@ function ReceptionForm({
             setError("Describe las diferencias encontradas.");
             return;
           }
-          onSave(status, date, notes.trim());
+          if(status==="Recibida" && (
+            !location.archiveZone.trim() || !location.room.trim() ||
+            !location.shelf || !location.level || !location.physicalSection
+          )){
+            setError("Completa zona, sala, estante, nivel y sección física. Esta ubicación se asignará a todos los expedientes de la transferencia.");
+            return;
+          }
+          onSave(status,date,notes.trim(),status==="Recibida"?location:null);
         }}
       >
         <div className="step-heading">
@@ -1276,9 +1292,49 @@ function ReceptionForm({
             {error && <small className="field-error">{error}</small>}
           </label>
         </div>
+        {status==="Recibida" && <section className="surface" style={{padding:16,margin:"16px 0"}}>
+          <div className="step-heading"><span><FolderArchive size={21}/></span><div>
+            <h3>Ubicación física del inventario recibido</h3>
+            <p>Captura la ubicación una sola vez. Se aplicará automáticamente a los {transfer.recordIds.length} expedientes de esta transferencia, sin repetir el formulario.</p>
+          </div></div>
+          <div className="record-form-grid" style={{marginTop:16}}>
+            <label className="form-field"><span>Archivo o zona *</span>
+              <input required maxLength={160} value={location.archiveZone} onChange={e=>updateLocation("archiveZone",e.target.value)}/>
+            </label>
+            <label className="form-field"><span>Lugar / sala *</span>
+              <input required maxLength={150} value={location.room} onChange={e=>updateLocation("room",e.target.value)}/>
+            </label>
+            <label className="form-field"><span>Estante *</span>
+              <select required value={location.shelf} onChange={e=>updateLocation("shelf",e.target.value)}>
+                <option value="">Seleccionar</option>{Array.from({length:25},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="form-field"><span>Nivel *</span>
+              <select required value={location.level} onChange={e=>updateLocation("level",e.target.value)}>
+                <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="form-field"><span>Sección física *</span>
+              <select required value={location.physicalSection} onChange={e=>updateLocation("physicalSection",e.target.value)}>
+                <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="form-field"><span>Caja o referencia</span>
+              <input maxLength={60} value={location.locationBox} onChange={e=>updateLocation("locationBox",e.target.value)}/>
+            </label>
+            <label className="form-field"><span>Posición</span>
+              <input maxLength={45} value={location.position} onChange={e=>updateLocation("position",e.target.value.toUpperCase())}/>
+            </label>
+            <label className="form-field record-field--wide"><span>Observaciones de ubicación</span>
+              <textarea rows={2} value={location.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
+            </label>
+          </div>
+          <p className="catalog-note">La recepción y la ubicación compartida se guardarán juntas en MySQL. Ningún expediente requiere captura individual.</p>
+        </section>}
+        {error && <div role="alert" className="validation-summary">{error}</div>}
         <div className="reception-rule">
           <ShieldCheck size={17} />
-          La etapa permanece en Archivo de concentración.
+          La ubicación se guarda en MySQL junto con la recepción física. La aceptación administrativa ya se realizó.
         </div>
         <div className="concentration-location-form__footer">
           <Button className="button--secondary" onClick={onBack}>
@@ -1418,19 +1474,35 @@ export default function TransfersPanel({
     if(!selected)return;
     try{
       const updated=await transferApi.accept(selected.id);
-      const nextRecords=await tramiteApi.list();
-      onRecordsChange(nextRecords);
+      // La aceptación ya fue confirmada por MySQL. Fallos posteriores al
+      // refrescar la pantalla no deben confundirse con un fallo de aceptación.
       saveTransferState(updated);
       setAcceptOpen(false);
-      setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
+      try{
+        const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
+        onRecordsChange([
+          ...tramite.filter(record=>record.stage!=="Archivo de concentración"),
+          ...concentracion,
+        ]);
+        setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
+      }catch(refreshError){
+        console.error("Transferencia aceptada; error al actualizar la vista:",refreshError);
+        setMessage("Transferencia aceptada en MySQL. Recarga la página para actualizar los expedientes.");
+      }
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
   };
-  const saveReception=async(status:ReceptionStatus,date:string,notes:string)=>{
+  const saveReception=async(status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>{
     if(!selected)return;
     try{
-      const updated=await transferApi.receive(selected.id,status,date,notes);
+      const updated=await transferApi.receive(selected.id,status,date,notes,location);
       saveTransferState(updated);
-      setMessage("La recepción física quedó registrada en MySQL.");
+      try{
+        if(status==="Recibida"){
+          const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
+          onRecordsChange([...tramite.filter(r=>r.stage!=="Archivo de concentración"),...concentracion]);
+        }
+      }catch(e){console.error("Recepción confirmada, pero falló actualizar pantalla:",e);}
+      setMessage("La recepción y, cuando corresponde, la ubicación física quedaron registradas en MySQL.");
       setView("detail");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo registrar recepción");}
   };

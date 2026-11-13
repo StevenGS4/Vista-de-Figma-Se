@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { usersApi } from "./api";
+import AdminAreasPanel from "./AdminAreasPanel";
 import {
   ArrowLeft,
   Check,
@@ -20,7 +21,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  Area,
   Role,
   UserRecord,
   UserStatus,
@@ -90,11 +90,17 @@ function UserForm({
   editing,
   onCancel,
   onSave,
+  saveError,
+  isSaving,
+  onErrorClear,
   users,
 }: {
   editing: UserRecord | null;
   onCancel: () => void;
   onSave: (user: UserRecord) => void;
+  saveError: string;
+  isSaving: boolean;
+  onErrorClear: () => void;
   users: UserRecord[];
 }) {
   const [form, setForm] = useState<UserFormState>(
@@ -117,6 +123,7 @@ function UserForm({
   const update = <K extends keyof UserFormState>(field: K, value: UserFormState[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
+    onErrorClear();
   };
 
   const toggleRole = (role: Role) => {
@@ -146,7 +153,9 @@ function UserForm({
     if (!form.areaId) next.areaId = "Selecciona un área administrativa.";
     if (!form.roles.length) next.roles = "Selecciona al menos un rol.";
     if (!editing) {
-      if (form.password.length < 8) next.password = "Utiliza al menos 8 caracteres.";
+      if (form.password.length < 8 || form.password.length > 128 || !/[A-Z]/.test(form.password) ||
+          !/[a-z]/.test(form.password) || !/[0-9]/.test(form.password))
+        next.password = "La contraseña debe tener entre 8 y 128 caracteres, mayúscula, minúscula y número.";
       if (form.password !== form.confirmPassword)
         next.confirmPassword = "Las contraseñas no coinciden.";
     }
@@ -156,7 +165,7 @@ function UserForm({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!validate()) return;
+    if (isSaving || !validate()) return;
     onSave({
       id: editing?.id ?? `USR-${String(users.length + 1).padStart(3, "0")}`,
       firstName: form.firstName.trim(),
@@ -193,6 +202,11 @@ function UserForm({
         </div>
 
         <form onSubmit={submit}>
+          {saveError && (
+            <div className="inline-notice" role="alert" aria-live="assertive" style={{marginBottom: 20}}>
+              <span><strong>No se pudo guardar el usuario.</strong> {saveError}</span>
+            </div>
+          )}
           <div className="form-section">
             <div className="form-section__title">
               <span>01</span>
@@ -270,7 +284,7 @@ function UserForm({
                   <FormField label="Contraseña" error={errors.password} required>
                     <input
                       onChange={(event) => update("password", event.target.value)}
-                      placeholder="Mínimo 8 caracteres"
+                      placeholder="8 caracteres, mayúscula, minúscula y número"
                       type="password"
                       value={form.password}
                     />
@@ -338,10 +352,10 @@ function UserForm({
             <Button className="button--secondary" onClick={onCancel}>
               Cancelar
             </Button>
-            <Button className="button--primary" type="submit">
+            <button className="button button--primary" type="submit" disabled={isSaving} aria-busy={isSaving}>
               <Check size={17} />
-              {editing ? "Guardar cambios" : "Registrar usuario"}
-            </Button>
+              {isSaving ? "Guardando en MySQL..." : editing ? "Guardar cambios" : "Registrar usuario"}
+            </button>
           </div>
         </form>
       </div>
@@ -437,8 +451,8 @@ function UserDetail({
         <div className="detail-note">
           <ShieldCheck size={20} />
           <div>
-            <strong>Cuenta de demostración</strong>
-            <p>La información se conserva únicamente durante la sesión actual del prototipo.</p>
+            <strong>Cuenta registrada en MySQL</strong>
+            <p>Los cambios confirmados se conservan en la base de datos y pueden consultarse al iniciar sesión nuevamente.</p>
           </div>
         </div>
       </div>
@@ -746,49 +760,6 @@ function UsersList({
   );
 }
 
-function AreasCatalog({ items }: { items: Area[] }) {
-  return (
-    <div className="surface table-surface">
-      <div className="table-titlebar">
-        <div>
-          <h2>Catálogo de áreas</h2>
-          <p>Estructura administrativa utilizada para clasificar el acceso.</p>
-        </div>
-        <span className="demo-label">Datos de demostración</span>
-      </div>
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Identificador</th>
-              <th>Nombre del área</th>
-              <th>Área superior</th>
-              <th>Responsable</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((area) => (
-              <tr key={area.id}>
-                <td>
-                  <span className="record-id">{area.id}</span>
-                </td>
-                <td>
-                  <strong className="cell-primary">{area.name}</strong>
-                </td>
-                <td>{area.parent}</td>
-                <td>{area.manager}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="catalog-note">
-        Este catálogo utiliza información ficticia y no modifica la estructura institucional real.
-      </div>
-    </div>
-  );
-}
-
 function PermissionMatrix({
   onChange,
   rolePermissions,
@@ -894,8 +865,14 @@ export default function AdminPanel({
   const [selected, setSelected] = useState<UserRecord | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const saveUser = async (user: UserRecord) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError("");
+    setToast("");
     const exists = users.some((item) => item.id === user.id);
     try {
       const saved = await usersApi.save(user);
@@ -904,7 +881,9 @@ export default function AdminPanel({
       setView("list");
       setSelected(null);
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+      setSaveError(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -930,6 +909,9 @@ export default function AdminPanel({
           setSelected(null);
         }}
         onSave={saveUser}
+        saveError={saveError}
+        isSaving={isSaving}
+        onErrorClear={() => setSaveError("")}
         users={users}
       />
     );
@@ -999,10 +981,14 @@ export default function AdminPanel({
       {tab === "users" && (
         <UsersList
           onCreate={() => {
+            setSaveError("");
+            setToast("");
             setSelected(null);
             setView("form");
           }}
           onEdit={(user) => {
+            setSaveError("");
+            setToast("");
             setSelected(user);
             setView("form");
           }}
@@ -1014,7 +1000,7 @@ export default function AdminPanel({
           users={users}
         />
       )}
-      {tab === "areas" && <AreasCatalog items={areas} />}
+      {tab === "areas" && <AdminAreasPanel />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />
       )}

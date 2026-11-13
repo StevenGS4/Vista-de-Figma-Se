@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,17 +13,14 @@ import {
   FilePlus2,
   Files,
   FolderTree,
-  MapPin,
   Pencil,
   Plus,
   Search,
   ShieldCheck,
   Trash2,
-  Warehouse,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
-import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -34,12 +31,19 @@ import {
 
 type View = "list" | "form" | "detail";
 type Errors = Partial<Record<keyof ArchivalRecord, string>>;
+const TRAMITE_ADDRESS = "Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit";
+const localDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime()-offset).toISOString().slice(0,10);
+};
+const previewNumber=(code:string,consecutive:string,year:string) =>
+  code && consecutive && year ? `SEMARNAT.${code}.${consecutive.padStart(3,"0")}.${year}` : "Se generará al guardar";
 
 const steps = [
   { label: "Datos generales del inventario", icon: Files },
   { label: "Expedientes y clasificación archivística", icon: FolderTree },
   { label: "Control documental", icon: ClipboardCheck },
-  { label: "Ubicación física", icon: Warehouse },
   { label: "Revisión y guardado", icon: CheckCircle2 },
 ];
 
@@ -139,7 +143,7 @@ function Progress({
   return (
     <div className="wizard-progress">
       <div className="wizard-progress__bar">
-        <span style={{ width: `${(current / 4) * 100}%` }} />
+        <span style={{ width: `${(current / 3) * 100}%` }} />
       </div>
       {steps.map((step, index) => {
         const Icon = step.icon;
@@ -196,6 +200,8 @@ function InventoryList({
 }) {
   const [search, setSearch] = useState("");
   const [searched, setSearched] = useState(false);
+  const [cadidoYear, setCadidoYear] = useState("");
+  const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
     "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos los autorizados"
   >("Recientes activos");
@@ -211,6 +217,8 @@ function InventoryList({
           (quickView === "Recientes activos" && !transferred && index < 5);
         return (
           matchesView &&
+          (!cadidoYear || header.cadidoYear === cadidoYear) &&
+          (!cadidoCodeFilter || header.cadidoCode === cadidoCodeFilter) &&
           (!query ||
             id.toLowerCase().includes(query) ||
             areaName(header.areaId).toLowerCase().includes(query) ||
@@ -224,7 +232,7 @@ function InventoryList({
             ))
         );
       }),
-    [quickView, records, search],
+    [quickView, records, search, cadidoYear, cadidoCodeFilter],
   );
   return (
     <>
@@ -275,6 +283,14 @@ function InventoryList({
               <option>Todos los autorizados</option>
             </select>
           </label>
+          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);setSearched(true);}}>
+            <option value="">Todas las ediciones CADIDO</option>
+            {[...new Set(records.map(r=>r.cadidoYear||"Sin versión"))].sort().map(v=><option key={v} value={v==="Sin versión"?"":v}>{v}</option>)}
+          </select></label>
+          <label className="filter-select"><select aria-label="Filtrar código CADIDO histórico" value={cadidoCodeFilter} onChange={e=>{setCadidoCodeFilter(e.target.value);setSearched(true);}}>
+            <option value="">Todos los códigos</option>
+            {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(code=><option key={code} value={code}>{code}</option>)}
+          </select></label>
           <Button className="button--primary" onClick={() => setSearched(true)}>
             <Search size={16} /> Buscar
           </Button>
@@ -389,9 +405,11 @@ function HeaderStep({
   locked: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
-  const enabledSeries = cadidoSeries.filter((series) =>
-    series.enabledAreaIds.includes(form.areaId),
-  );
+  const areaSeries = cadidoSeries.filter(series => series.enabledAreaIds.includes(form.areaId));
+  const years = [...new Set(areaSeries.map(series=>series.year).filter((year):year is string=>Boolean(year)))].sort((a,b)=>Number(b)-Number(a));
+  const selectedYear = isAdmin ? (form.cadidoYear || years[0] || "") : (years[0] || "");
+  const compact = !isAdmin;
+  const enabledSeries = areaSeries.filter(series=>!selectedYear||series.year===selectedYear);
   const sectionIds = new Set(enabledSeries.map((series) => series.sectionId));
   return (
     <>
@@ -409,8 +427,27 @@ function HeaderStep({
           </span>
         </div>
       )}
+      {compact && (
+        <div className="surface" style={{padding:16,marginBottom:18}}>
+          <div className="section-heading"><div>
+            <span className="section-kicker">Datos automáticos del área</span>
+            <h3>{areaName(form.areaId)}</h3>
+            <p>Los siguientes datos se obtienen del catálogo institucional y no requieren captura.</p>
+          </div></div>
+          <div className="transfer-summary-grid" style={{marginTop:12}}>
+            <div><span>Fecha de elaboración</span><strong>{formatDate(form.inventoryDate)}</strong></div>
+            <div><span>Unidad administrativa</span><strong>{form.administrativeUnit}</strong></div>
+            <div><span>Responsable</span><strong>{form.responsible && form.responsible!=="Sin asignar" ? form.responsible : "Pendiente: asignar encargado en Administración"}</strong></div>
+            <div><span>Cargo</span><strong>{form.responsiblePosition}</strong></div>
+            <div><span>Fondo</span><strong>{form.fund}</strong></div>
+            <div><span>Edición vigente</span><strong>{selectedYear || "Sin CADIDO autorizado"}</strong></div>
+          </div>
+          {!years.length && <p role="alert" className="field-error">El administrador debe asignar códigos de una edición CADIDO a esta área.</p>}
+          {(!form.responsible || form.responsible==="Sin asignar") && <p role="alert" className="field-error">El administrador debe asignar un encargado de área antes de continuar.</p>}
+        </div>
+      )}
       <fieldset className="record-form-grid" disabled={locked}>
-        <Field
+        {isAdmin && <Field
           error={errors.administrativeUnit}
           label="Nombre de la unidad administrativa"
           required
@@ -419,8 +456,8 @@ function HeaderStep({
             onChange={(event) => update("administrativeUnit", event.target.value)}
             value={form.administrativeUnit}
           />
-        </Field>
-        <Field error={errors.areaId} label="Nombre del área generadora" required>
+        </Field>}
+        {isAdmin && <Field error={errors.areaId} label="Nombre del área generadora" required>
           <select
             disabled={!isAdmin || locked}
             onChange={(event) => {
@@ -437,21 +474,21 @@ function HeaderStep({
               </option>
             ))}
           </select>
-        </Field>
-        <Field error={errors.inventoryDate} label="Fecha de elaboración" required>
+        </Field>}
+        {isAdmin && <Field error={errors.inventoryDate} label="Fecha de elaboración" required>
           <input
             onChange={(event) => update("inventoryDate", event.target.value)}
             type="date"
             value={form.inventoryDate}
           />
-        </Field>
-        <Field error={errors.responsible} label="Responsable del área generadora" required>
+        </Field>}
+        {isAdmin && <Field error={errors.responsible} label="Responsable del área generadora" required>
           <input
             onChange={(event) => update("responsible", event.target.value)}
             value={form.responsible}
           />
-        </Field>
-        <Field
+        </Field>}
+        {isAdmin && <Field
           error={errors.responsiblePosition}
           label="Cargo del responsable del área generadora"
           required
@@ -460,10 +497,19 @@ function HeaderStep({
             onChange={(event) => update("responsiblePosition", event.target.value)}
             value={form.responsiblePosition}
           />
-        </Field>
-        <Field error={errors.fund} label="Fondo documental" required>
+        </Field>}
+        {isAdmin && <Field error={errors.fund} label="Fondo documental" required>
           <input onChange={(event) => update("fund", event.target.value)} value={form.fund} />
-        </Field>
+        </Field>}
+        {isAdmin && <Field label="Edición CADIDO" required>
+          <select value={selectedYear} disabled={locked} onChange={event=>{
+            update("cadidoYear",event.target.value);
+            update("cadidoSectionId","");update("cadidoSeriesId","");update("cadidoCode","");
+          }}>
+            <option value="">Selecciona una edición</option>
+            {years.map(y=><option key={y} value={y}>CADIDO {y}</option>)}
+          </select>
+        </Field>}
         <Field error={errors.cadidoSectionId} label="Sección documental" required>
           <select
             onChange={(event) => {
@@ -490,6 +536,7 @@ function HeaderStep({
               const series = cadidoSeries.find((item) => item.id === event.target.value);
               update("cadidoSeriesId", event.target.value);
               update("cadidoCode", series?.code ?? "");
+              update("cadidoYear",series?.year ?? selectedYear);
             }}
             value={form.cadidoSeriesId}
           >
@@ -503,7 +550,7 @@ function HeaderStep({
               ))}
           </select>
         </Field>
-        <Field
+        {isAdmin && <Field
           hint="El total se calculará en la exportación según la cantidad de filas."
           label="Número inicial de hoja"
           required
@@ -518,7 +565,7 @@ function HeaderStep({
             />
             <strong>de N</strong>
           </div>
-        </Field>
+        </Field>}
       </fieldset>
     </>
   );
@@ -588,7 +635,7 @@ function RowPicker({
                   <td>{record.boxNumber || "—"}</td>
                   <td>{record.recordNumber || "Nueva fila"}</td>
                   <td>
-                    <span className="cadido-code">{record.cadidoCode || "Pendiente"}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode || "Pendiente"}</span>
                   </td>
                   <td>{record.title || "Sin capturar"}</td>
                   <td>
@@ -641,6 +688,7 @@ function ExpedientsStep({
   active,
   drafts,
   errors,
+  isAdmin,
   onAdd,
   onRemove,
   onSelect,
@@ -649,6 +697,7 @@ function ExpedientsStep({
   active: ArchivalRecord;
   drafts: ArchivalRecord[];
   errors: Errors;
+  isAdmin: boolean;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
@@ -671,15 +720,16 @@ function ExpedientsStep({
         onSelect={onSelect}
       />
       <fieldset className="record-form-grid row-detail-editor" disabled={protectedRow}>
-        <Field error={errors.consecutive} label="Número consecutivo" required>
+        {isAdmin && <Field error={errors.consecutive} label="Número consecutivo" required>
           <input
             inputMode="numeric"
             onChange={(event) => update("consecutive", event.target.value)}
             value={active.consecutive}
           />
-        </Field>
+        </Field>}
+        {!isAdmin && <div className="form-field"><span>Consecutivo del inventario</span><strong>{active.consecutive}</strong></div>}
         <Field label="Número de caja">
-          <input
+          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -687,21 +737,38 @@ function ExpedientsStep({
             value={active.boxNumber}
           />
         </Field>
+        <Field error={errors.recordYear} label="Año del código archivístico" required>
+          <input type="number" min="1900" max="2100" style={{maxWidth:145}}
+            value={active.recordYear || active.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
+            disabled={/^REG-\d+$/.test(active.id)}
+            onChange={event=>{
+              const year=event.target.value;
+              update("recordYear",year);
+            }} />
+        </Field>
         <Field error={errors.recordNumber} label="Número de expediente" required>
           <input
-            onChange={(event) => update("recordNumber", event.target.value.toUpperCase())}
+            maxLength={110}
+            placeholder="Captura el número propio del expediente"
+            onChange={(event) => update("recordNumber", event.target.value)}
             value={active.recordNumber}
           />
         </Field>
-        <Field label="Código de clasificación archivística CADIDO">
-          <div className="read-only-code">
-            <ShieldCheck size={16} />
-            <strong>{active.cadidoCode || "Definido por la serie del encabezado"}</strong>
-          </div>
+        <Field className="record-field--wide" label="Código de clasificación archivística">
+          <div className="read-only-code"><ShieldCheck size={16}/><strong>
+            {/^REG-\d+$/.test(active.id) ?
+              (active.archiveClassificationCode || "Clasificación histórica pendiente de revisión") :
+              previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
+          </strong></div>
+          <small className="field-hint">Clave CADIDO preliminar. MySQL asigna el consecutivo definitivo al guardar. Es independiente del número de expediente.</small>
         </Field>
+
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
           <input onChange={(event) => update("title", event.target.value)} value={active.title} />
         </Field>
+        {!isAdmin && <Field className="record-field--wide" label="Descripción del asunto">
+          <textarea rows={2} onChange={event=>update("description",event.target.value)} value={active.description}/>
+        </Field>}
       </fieldset>
     </>
   );
@@ -711,12 +778,14 @@ function ControlStep({
   active,
   drafts,
   errors,
+  isAdmin,
   onSelect,
   update,
 }: {
   active: ArchivalRecord;
   drafts: ArchivalRecord[];
   errors: Errors;
+  isAdmin: boolean;
   onSelect: (id: string) => void;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
@@ -757,8 +826,12 @@ function ControlStep({
           </button>
         ))}
       </div>
+      {!isAdmin && <div className="catalog-note" style={{marginBottom:16}}>
+        <strong>{active.title || "Expediente sin título"}</strong>
+        <div>{active.description || "Sin descripción complementaria"}</div>
+      </div>}
       <fieldset className="record-form-grid" disabled={locked}>
-        <Field className="record-field--wide" label="Título o descripción del asunto" required>
+        {isAdmin && <Field className="record-field--wide" label="Título o descripción del asunto" required>
           <textarea
             onChange={(event) => {
               update("title", event.target.value);
@@ -767,11 +840,12 @@ function ControlStep({
             rows={3}
             value={active.title}
           />
-        </Field>
+        </Field>}
         <Field error={errors.openDate} label="Inicio / Apertura" required>
           <input
             onChange={(event) => update("openDate", event.target.value)}
             type="date"
+            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.openDate}
           />
         </Field>
@@ -784,6 +858,7 @@ function ControlStep({
             min={active.openDate}
             onChange={(event) => update("closeDate", event.target.value)}
             type="date"
+            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.closeDate}
           />
         </Field>
@@ -792,6 +867,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("filesCount", event.target.value)}
             type="number"
+            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.filesCount}
           />
         </Field>
@@ -800,6 +876,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("foliosCount", event.target.value)}
             type="number"
+            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.foliosCount}
           />
         </Field>
@@ -853,6 +930,7 @@ function ControlStep({
               );
             }}
             type="number"
+            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.currentValidity}
           />
         </Field>
@@ -872,13 +950,14 @@ function ControlStep({
               );
             }}
             type="number"
+            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.concentrationValidity}
           />
         </Field>
-        <Field hint="Suma coherente de ambos periodos." label="Vigencia documental total">
+        {isAdmin ? <Field hint="Suma coherente de ambos periodos." label="Vigencia documental total">
           <input disabled value={total || active.totalValidity} />
-        </Field>
-        <Field
+        </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong>{total || active.totalValidity || "Pendiente"} años</strong></div>}
+        {isAdmin && <Field
           className="record-field--wide"
           label="Domicilio y referencia general de resguardo"
         >
@@ -887,7 +966,7 @@ function ControlStep({
             placeholder="Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit"
             value={active.archiveAddress ?? ""}
           />
-        </Field>
+        </Field>}
         <Field className="record-field--wide" label="Observaciones del expediente">
           <textarea
             onChange={(event) => update("observations", event.target.value)}
@@ -896,260 +975,6 @@ function ControlStep({
           />
         </Field>
       </fieldset>
-    </>
-  );
-}
-
-function LocationStep({
-  active,
-  drafts,
-  errors,
-  onCopy,
-  onSelect,
-  update,
-}: {
-  active: ArchivalRecord;
-  drafts: ArchivalRecord[];
-  errors: Errors;
-  onCopy: () => void;
-  onSelect: (id: string) => void;
-  update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
-}) {
-  const locked = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
-  return (
-    <>
-      <StepHeading
-        description="Cada expediente conserva su propia ubicación; puedes reutilizar la anterior."
-        icon={<MapPin size={21} />}
-        title="Ubicación física"
-      />
-      <div className="record-selector-strip">
-        {drafts.map((record) => (
-          <button
-            className={record.id === active.id ? "is-selected" : ""}
-            key={record.id}
-            onClick={() => onSelect(record.id)}
-            type="button"
-          >
-            <span>{record.consecutive || "—"}</span>
-            <strong>{record.recordNumber || "Nueva fila"}</strong>
-            {record.shelf ? <Check size={14} /> : <AlertCircle size={14} />}
-          </button>
-        ))}
-      </div>
-      <div className="location-layout">
-        <fieldset className="record-form-grid" disabled={locked}>
-          <Field
-            className="record-field--wide"
-            label="Procedencia: Archivo de trámite del área"
-            required
-          >
-            <input disabled value={`Archivo de trámite — ${areaName(active.areaId)}`} />
-          </Field>
-          <Field error={errors.room} label="Lugar de resguardo" required>
-            <input onChange={(event) => update("room", event.target.value)} value={active.room} />
-          </Field>
-          <Field error={errors.shelf} label="Estante" required>
-            <select onChange={(event) => update("shelf", event.target.value)} value={active.shelf}>
-              <option value="">Selecciona</option>
-              {Array.from({ length: 25 }, (_, index) => String(index + 1)).map((item) => (
-                <option key={item} value={item}>
-                  Estante {item}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            error={errors.level}
-            hint="Los niveles se cuentan de abajo hacia arriba."
-            label="Nivel"
-            required
-          >
-            <select onChange={(event) => update("level", event.target.value)} value={active.level}>
-              <option value="">Selecciona</option>
-              {[1, 2, 3, 4].map((item) => (
-                <option key={item}> {item}</option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            error={errors.physicalSection}
-            hint="De izquierda a derecha; no es la sección CADIDO."
-            label="Sección física"
-            required
-          >
-            <select
-              onChange={(event) => update("physicalSection", event.target.value)}
-              value={active.physicalSection}
-            >
-              <option value="">Selecciona</option>
-              {[1, 2, 3, 4].map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Caja">
-            <input
-              onChange={(event) => update("locationBox", event.target.value)}
-              value={active.locationBox}
-            />
-          </Field>
-          <Field label="Posición alfanumérica">
-            <input
-              onChange={(event) => update("position", event.target.value.toUpperCase())}
-              value={active.position}
-            />
-          </Field>
-          <Field className="record-field--wide" label="Observaciones de ubicación">
-            <textarea
-              onChange={(event) => update("locationNotes", event.target.value)}
-              rows={3}
-              value={active.locationNotes}
-            />
-          </Field>
-          {drafts.indexOf(active) > 0 && (
-            <Button className="button--secondary" onClick={onCopy}>
-              <MapPin size={16} /> Reutilizar ubicación anterior
-            </Button>
-          )}
-        </fieldset>
-        <LocationShelf level={active.level} section={active.physicalSection} />
-      </div>
-      <div className="location-summary">
-        <MapPin size={18} />
-        <span>
-          <small>Indicador visual de ubicación</small>
-          <strong>{locationSummary(active)}</strong>
-        </span>
-      </div>
-    </>
-  );
-}
-
-function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
-  const header = drafts[0];
-  const incomplete = drafts.filter(
-    (record) =>
-      !(
-        record.recordNumber &&
-        record.title &&
-        record.openDate &&
-        record.foliosCount &&
-        record.shelf
-      ),
-  );
-  return (
-    <>
-      <StepHeading
-        description="Verifica el encabezado común y todas las filas antes del guardado atómico."
-        icon={<CheckCircle2 size={21} />}
-        title="Revisión y guardado"
-      />
-      <div className="inventory-review-summary">
-        <section className="review-header-block">
-          <h4>A. Encabezado del inventario</h4>
-          <div className="transfer-summary-grid">
-            <div>
-              <span>Identificador</span>
-              <strong>{header.inventoryId}</strong>
-            </div>
-            <div>
-              <span>Unidad administrativa</span>
-              <strong>{header.administrativeUnit}</strong>
-            </div>
-            <div>
-              <span>Área generadora</span>
-              <strong>{areaName(header.areaId)}</strong>
-            </div>
-            <div>
-              <span>Responsable</span>
-              <strong>{header.responsible}</strong>
-            </div>
-            <div>
-              <span>Cargo</span>
-              <strong>{header.responsiblePosition}</strong>
-            </div>
-            <div>
-              <span>Fondo</span>
-              <strong>{header.fund}</strong>
-            </div>
-            <div>
-              <span>Sección</span>
-              <strong>{sectionName(header.cadidoSectionId)}</strong>
-            </div>
-            <div>
-              <span>Serie</span>
-              <strong>{seriesName(header.cadidoSeriesId)}</strong>
-            </div>
-            <div>
-              <span>Número de hoja</span>
-              <strong>Hoja {header.initialSheetNumber} de N</strong>
-            </div>
-          </div>
-        </section>
-        <section className="review-records-block">
-          <div className="section-heading">
-            <div>
-              <h2>B. Expedientes registrados</h2>
-              <p>Una fila por expediente individual.</p>
-            </div>
-            <div className="review-counts">
-              <span>
-                <strong>{drafts.length}</strong> total
-              </span>
-              <span>
-                <strong>{drafts.length - incomplete.length}</strong> completas
-              </span>
-              <span>
-                <strong>{incomplete.length}</strong> pendientes
-              </span>
-            </div>
-          </div>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Consecutivo</th>
-                  <th>Caja</th>
-                  <th>Expediente</th>
-                  <th>CADIDO</th>
-                  <th>Asunto</th>
-                  <th>Etapa</th>
-                  <th>Validación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drafts.map((record) => {
-                  const errors = [
-                    !record.recordNumber && "número",
-                    !record.title && "asunto",
-                    !record.openDate && "apertura",
-                    !record.foliosCount && "folios",
-                    !record.shelf && "ubicación",
-                  ].filter(Boolean);
-                  return (
-                    <tr key={record.id}>
-                      <td>{record.consecutive}</td>
-                      <td>{record.boxNumber || "—"}</td>
-                      <td>{record.recordNumber}</td>
-                      <td>{record.cadidoCode}</td>
-                      <td>{record.title}</td>
-                      <td>{record.stage}</td>
-                      <td>
-                        {errors.length ? (
-                          <span className="field-error">Falta: {errors.join(", ")}</span>
-                        ) : (
-                          <Badge>Completa</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
     </>
   );
 }
@@ -1172,17 +997,32 @@ function InventoryForm({
   const isAdmin = role === "Administrador / Coordinador";
   const editing = existing.length > 0;
   const makeInitial = () => {
-    if (editing) return existing.map((item) => ({ ...item }));
+    if (editing) return existing.map(item => ({
+      ...item,
+      recordYear:item.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || item.openDate?.slice(0,4) || String(new Date().getFullYear())
+    }));
     const base = emptyRecord();
     const inventoryId = `INV-TR-${String(groupInventories(records).length + 1).padStart(3, "0")}`;
     const area = areas.find((item) => item.id === user.areaId);
+    const assignedYear=[...new Set(cadidoSeries.filter(x=>x.enabledAreaIds.includes(user.areaId)).map(x=>x.year).filter(Boolean))]
+      .sort((a,b)=>Number(b)-Number(a))[0] || String(new Date().getFullYear());
     return [
       {
         ...base,
         id: `DRAFT-${Date.now()}`,
         inventoryId,
         areaId: isAdmin ? "" : user.areaId,
-        responsible: isAdmin ? "" : (area?.manager ?? fullName(user)),
+        responsible: isAdmin ? "" : ((area?.manager && area.manager!=="Sin asignar") ? area.manager : ""),
+        responsiblePosition: isAdmin ? "" : `Encargado del área de ${area?.name || areaName(user.areaId)}`,
+        inventoryDate: localDate(),
+        initialSheetNumber:"1",
+        fund:"Secretaría de Medio Ambiente y Recursos Naturales",
+        administrativeUnit:"Oficina de Representación de SEMARNAT en Nayarit",
+        cadidoYear:assignedYear,
+        recordYear:String(new Date().getFullYear()),
+        recordNumber: "",
+        archiveAddress:TRAMITE_ADDRESS,
+        room:"",
         archiveZone: isAdmin ? "" : `Archivo de trámite — ${areaName(user.areaId)}`,
         supportType: "Físico",
         createdBy: user.id,
@@ -1212,6 +1052,7 @@ function InventoryForm({
       "cadidoSectionId",
       "cadidoSeriesId",
       "cadidoCode",
+      "cadidoYear",
       "initialSheetNumber",
     ];
     setDrafts((current) =>
@@ -1250,9 +1091,13 @@ function InventoryForm({
     const next: Errors = {};
     if (record.stage === "Archivo de concentración" || record.transferReference) return next;
     if (step === 1) {
-      if (!record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
-      if (drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
+      if (!isAdmin && record.boxNumber && !/^\d{1,6}$/.test(record.boxNumber))
+        next.boxNumber = "Captura un número de caja de máximo seis dígitos.";
+      if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
+      if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
+      if (!/^REG-\d+$/.test(record.id) && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
+        next.recordYear="Selecciona un año válido (1900–2100).";
       if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
       if (
         records.some(
@@ -1277,12 +1122,6 @@ function InventoryForm({
       if (record.currentValidity === "") next.currentValidity = "Captura la vigencia.";
       if (record.concentrationValidity === "") next.concentrationValidity = "Captura la vigencia.";
     }
-    if (step === 3) {
-      if (!record.room.trim()) next.room = "Captura el lugar de resguardo.";
-      if (!record.shelf) next.shelf = "Selecciona el estante.";
-      if (!record.level) next.level = "Selecciona el nivel.";
-      if (!record.physicalSection) next.physicalSection = "Selecciona la sección física.";
-    }
     return next;
   };
   const validateStep = (step: number) => {
@@ -1298,7 +1137,7 @@ function InventoryForm({
   };
   const next = () => {
     if (!validateStep(currentStep)) return;
-    const value = Math.min(4, currentStep + 1);
+    const value = Math.min(3, currentStep + 1);
     setCurrentStep(value);
     setMaxVisited((current) => Math.max(current, value));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1319,11 +1158,16 @@ function InventoryForm({
           "cadidoSectionId",
           "cadidoSeriesId",
           "cadidoCode",
+          "cadidoYear",
           "initialSheetNumber",
         ].map((key) => [key, header[key as keyof ArchivalRecord]]),
       ),
       id: `DRAFT-${Date.now()}`,
       consecutive: String(nextConsecutive),
+      recordYear:String(new Date().getFullYear()),
+      recordNumber: "",
+      room:"Sótano",
+      archiveAddress:TRAMITE_ADDRESS,
       createdBy: user.id,
       supportType: "Físico",
       archiveZone: `Archivo de trámite — ${areaName(header.areaId)}`,
@@ -1331,14 +1175,24 @@ function InventoryForm({
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
   };
+  const addRowFromPreview = () => {
+    // El encabezado y los expedientes capturados permanecen en memoria.
+    // Una fila adicional se crea en el mismo inventario sin guardar ni salir.
+    addRow();
+    setErrors({});
+    setCurrentStep(1);
+    setMaxVisited((current) => Math.max(current, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const removeRow = (id: string) => {
     if (!window.confirm("¿Quitar esta fila no transferida del inventario?")) return;
     setDrafts((current) => current.filter((item) => item.id !== id));
     if (activeId === id) setActiveId(drafts.find((item) => item.id !== id)?.id ?? drafts[0].id);
   };
-  const save = (event: FormEvent) => {
-    event.preventDefault();
-    const invalidStep = [0, 1, 2, 3].find((step) => !validateStep(step));
+  const save = () => {
+    // Solo el botón explícito de confirmación en la vista previa guarda en MySQL.
+    if (currentStep !== 3) return;
+    const invalidStep = [0, 1, 2].find((step) => !validateStep(step));
     if (invalidStep !== undefined) {
       setCurrentStep(invalidStep);
       setMaxVisited((current) => Math.max(current, invalidStep));
@@ -1347,30 +1201,13 @@ function InventoryForm({
     onSave(
       drafts.map((record) => ({
         ...record,
-        recordNumber: record.recordNumber.trim().toUpperCase(),
+        recordNumber: record.recordNumber.trim(),
+        archiveClassificationCode: /^REG-\d+$/.test(record.id) ? (record.archiveClassificationCode||"") : "",
+        room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
+        archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
+        initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
         totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
       })),
-    );
-  };
-  const copyLocation = () => {
-    const index = drafts.findIndex((item) => item.id === active.id);
-    const previous = drafts[index - 1];
-    if (!previous) return;
-    setDrafts((current) =>
-      current.map((record) =>
-        record.id === active.id
-          ? {
-              ...record,
-              room: previous.room,
-              shelf: previous.shelf,
-              level: previous.level,
-              physicalSection: previous.physicalSection,
-              position: previous.position,
-              locationBox: previous.locationBox,
-              locationNotes: previous.locationNotes,
-            }
-          : record,
-      ),
     );
   };
 
@@ -1395,7 +1232,7 @@ function InventoryForm({
         </span>
       </div>
       <Progress current={currentStep} maxVisited={maxVisited} onStep={setCurrentStep} />
-      <form className="surface record-wizard" onSubmit={save}>
+      <div className="surface record-wizard">
         <div className="record-wizard__content">
           {currentStep === 0 && (
             <HeaderStep
@@ -1411,6 +1248,7 @@ function InventoryForm({
               active={active}
               drafts={drafts}
               errors={errors}
+              isAdmin={isAdmin}
               onAdd={addRow}
               onRemove={removeRow}
               onSelect={setActiveId}
@@ -1422,21 +1260,46 @@ function InventoryForm({
               active={active}
               drafts={drafts}
               errors={errors}
+              isAdmin={isAdmin}
               onSelect={setActiveId}
               update={updateAll}
             />
           )}
           {currentStep === 3 && (
-            <LocationStep
-              active={active}
-              drafts={drafts}
-              errors={errors}
-              onCopy={copyLocation}
-              onSelect={setActiveId}
-              update={updateAll}
-            />
+            <>
+              <StepHeading
+                description="Este es el inventario completo tal como aparecerá al pulsar Ver después de registrarlo. Aún no se ha guardado."
+                icon={<CheckCircle2 size={21}/>}
+                title="Paso 4 · Vista previa del inventario"
+              />
+              <InventoryDetail
+                preview
+                inventory={drafts.map(record=>({
+                  ...record,
+                  archiveClassificationCode: /^REG-\d+$/.test(record.id)
+                    ? record.archiveClassificationCode
+                    : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
+                  totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
+                }))}
+                isAdmin={isAdmin}
+                canEdit={false}
+                onBack={()=>setCurrentStep(2)}
+                onEdit={()=>setCurrentStep(2)}
+              />
+              <div className="inventory-preview-add-row">
+                <div>
+                  <strong>¿Necesitas registrar otro expediente?</strong>
+                  <p>Conservarás todos los datos del inventario y regresarás al paso 2 con una nueva fila lista para capturar.</p>
+                </div>
+                <Button className="button--secondary" onClick={addRowFromPreview}>
+                  <Plus size={17} />
+                  Agregar otro expediente
+                </Button>
+              </div>
+              <p className="catalog-note" role="status">Vista previa sin guardar. El número archivístico definitivo lo asigna MySQL al confirmar.</p>
+            </>
           )}
-          {currentStep === 4 && <ReviewStep drafts={drafts} />}
+
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
               <AlertCircle size={17} />
@@ -1446,7 +1309,7 @@ function InventoryForm({
         </div>
         <div className="record-wizard__footer">
           <Button className="button--ghost" onClick={onCancel}>
-            Cancelar
+            Salir sin guardar
           </Button>
           <div>
             {currentStep > 0 && (
@@ -1455,37 +1318,41 @@ function InventoryForm({
                 onClick={() => setCurrentStep((value) => value - 1)}
               >
                 <ChevronLeft size={17} />
-                Anterior
+                {currentStep === 3 ? "Volver a editar" : "Anterior"}
               </Button>
             )}
-            {currentStep < 4 ? (
+            {currentStep < 3 ? (
               <Button className="button--primary" onClick={next}>
                 Continuar
                 <ArrowRight size={17} />
               </Button>
             ) : (
-              <Button className="button--primary" type="submit">
+              <Button className="button--primary" onClick={save}>
                 <Check size={17} />
-                Guardar inventario y expedientes
+                Confirmar y guardar en MySQL
               </Button>
             )}
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
 
 function InventoryDetail({
   canEdit,
+  isAdmin,
   inventory,
   onBack,
   onEdit,
+  preview = false,
 }: {
   canEdit: boolean;
+  isAdmin: boolean;
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
+  preview?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -1495,23 +1362,23 @@ function InventoryDetail({
     const query = search.toLowerCase();
     return (
       !query ||
-      record.recordNumber.toLowerCase().includes(query) ||
-      record.title.toLowerCase().includes(query)
+      String(record.recordNumber || "").toLowerCase().includes(query) ||
+      String(record.title || "").toLowerCase().includes(query)
     );
   });
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   return (
     <div className="record-detail-page">
-      <button className="text-button" onClick={onBack}>
+      {!preview && <button className="text-button" onClick={onBack}>
         <ArrowLeft size={17} />
         Volver al listado
-      </button>
+      </button>}
       <div className="surface inventory-detail-header">
         <div className="section-heading">
           <div>
             <span className="section-kicker">Encabezado del inventario</span>
-            <h2>{header.inventoryId}</h2>
+            <h2>{preview ? "Vista previa · " : ""}{header.inventoryId}</h2>
             <p>
               {areaName(header.areaId)} · {formatDate(header.inventoryDate)}
             </p>
@@ -1554,7 +1421,7 @@ function InventoryDetail({
           </div>
           <div>
             <span>Hoja</span>
-            <strong>Hoja {header.initialSheetNumber} de N</strong>
+            <strong>{isAdmin ? `Hoja ${header.initialSheetNumber} de N` : "Hojas numeradas automáticamente al exportar"}</strong>
           </div>
         </div>
       </div>
@@ -1599,15 +1466,15 @@ function InventoryDetail({
                   <td>{record.boxNumber}</td>
                   <td>{record.recordNumber}</td>
                   <td>
-                    <span className="cadido-code">{record.cadidoCode}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                   </td>
-                  <td>{record.title}</td>
+                  <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
                   <td>{record.filesCount} / {record.foliosCount}</td>
                   <td>{record.supportType}</td>
-                  <td>{record.documentaryValues.join(", ")}</td>
+                  <td>{Array.isArray(record.documentaryValues) ? record.documentaryValues.join(", ") : "—"}</td>
                   <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años</td>
-                  <td>{locationSummary(record)}</td>
+                  <td>{(preview || !isAdmin) && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
                     <Badge wine={record.stage === "Archivo de concentración"}>{record.stage}</Badge>
@@ -1697,6 +1564,7 @@ export default function RecordsPanel({
   if (view === "detail" && selected.length)
     return (
       <InventoryDetail
+        isAdmin={isAdmin}
         canEdit={
           permissions.includes("edit-records") &&
           selected.every(

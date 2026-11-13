@@ -14,6 +14,7 @@ import {
 import { Role, UserRecord, areaName, areas } from "./data";
 import { ArchivalRecord, cadidoSections, cadidoSeries, locationSummary } from "./records";
 import { DocumentaryTransfer } from "./transfers";
+import { inventoriesApi } from "./api";
 
 type InventoryType = "tramite" | "concentracion" | "transferencia";
 type View = "select" | "list" | "preview";
@@ -100,7 +101,7 @@ function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }
       <div className="inventory-info">
         <ShieldCheck size={18} />
         <span>
-          <strong>Información de demostración</strong>La descarga es local y no cambia expedientes,
+          <strong>Exportación desde MySQL</strong>La descarga XLSX no cambia expedientes,
           transferencias ni etapas.
         </span>
       </div>
@@ -121,9 +122,10 @@ function groupRecords(
   type: InventoryType,
 ): InventoryGroup[] {
   if (type === "transferencia") {
+    const linkedRecordIds=new Set(transfers.flatMap(transfer=>transfer.recordIds));
     const map = new Map<string, ArchivalRecord[]>();
     records
-      .filter((record) => record.stage === "Archivo de trámite")
+      .filter((record) => record.stage === "Archivo de trámite" && !linkedRecordIds.has(record.id))
       .forEach((record) =>
         map.set(record.inventoryId, [...(map.get(record.inventoryId) ?? []), record]),
       );
@@ -154,6 +156,15 @@ function InventoryList({
   onOpen: (id: string) => void;
   type: InventoryType;
 }) {
+  const [allExportError,setAllExportError]=useState("");
+  const [allExportLoading,setAllExportLoading]=useState(false);
+  const exportAll=async()=>{
+    if(allExportLoading)return;
+    setAllExportLoading(true);setAllExportError("");
+    try{await inventoriesApi.download(type);}
+    catch(error){setAllExportError(error instanceof Error?error.message:"No se pudo exportar.");}
+    finally{setAllExportLoading(false);}
+  };
   const [search, setSearch] = useState("");
   const [area, setArea] = useState(canAllAreas ? "" : currentUser.areaId);
   const [dateFrom, setDateFrom] = useState("");
@@ -230,6 +241,19 @@ function InventoryList({
             />
           </label>
         </div>
+        {type === "transferencia" && (
+          <div className="inventory-info">
+            <FileSpreadsheet size={18} />
+            <span>
+              <strong>Relación general de transferencia primaria</strong>
+              Una fila por inventario elegible de tus áreas autorizadas; la descarga general no aplica los filtros de la tabla.
+            </span>
+            <Button className="button--primary" disabled={allExportLoading} onClick={exportAll}>
+              <Download size={15} /> Descargar relación XLSX
+            </Button>
+          </div>
+        )}
+        {allExportError && <div className="validation-summary" role="alert">{allExportError}</div>}
         {type === "transferencia" && (
           <div className="inventory-info">
             <FileSpreadsheet size={18} />
@@ -333,46 +357,6 @@ function cells(record: ArchivalRecord) {
   ];
 }
 
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function buildExcel(group: InventoryGroup, type: InventoryType) {
-  const row = (values: string[], style = "") =>
-    `<Row>${values.map((value) => `<Cell${style ? ` ss:StyleID="${style}"` : ""}><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`).join("")}</Row>`;
-  const h = group.header;
-  const headerRows = [
-    ["SISTEMA DE CONTROL ARCHIVÍSTICO — SEMARNAT NAYARIT"],
-    [types[type].name],
-    ["Identificador", group.transfer?.folio ?? group.id],
-    ["Unidad administrativa", h.administrativeUnit],
-    ["Área generadora", areaName(h.areaId)],
-    ["Responsable", h.responsible],
-    ["Cargo", h.responsiblePosition],
-    ["Fondo", h.fund],
-    ["Sección", sectionName(h.cadidoSectionId)],
-    ["Serie", seriesName(h.cadidoSeriesId)],
-    [
-      "Hoja",
-      `Hoja ${h.initialSheetNumber} de ${Math.max(1, Math.ceil(group.records.length / 20))}`,
-    ],
-    ["Fecha de elaboración", formatDate(h.inventoryDate)],
-    [],
-  ];
-  return `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Styles><Style ss:ID="Title"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#002F2A" ss:Pattern="Solid"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#611232" ss:Pattern="Solid"/></Style></Styles>
-<Worksheet ss:Name="${escapeXml(types[type].name.slice(0, 31))}"><Table>
-${headerRows.map((values, index) => row(values, index < 2 ? "Title" : "")).join("")}
-${row([...columns], "Header")}
-${group.records.map((record) => row(cells(record))).join("")}
-</Table></Worksheet></Workbook>`;
-}
-
 function Preview({
   group,
   onBack,
@@ -384,19 +368,18 @@ function Preview({
 }) {
   const [downloaded, setDownloaded] = useState(false);
   const h = group.header;
-  const download = () => {
-    const blob = new Blob([buildExcel(group, type)], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${types[type].name.replace(/ /g, "_")}_${group.transfer?.folio ?? group.id}.xls`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    setDownloaded(true);
+  const [error,setError]=useState("");
+  const [isDownloading,setIsDownloading]=useState(false);
+  const download=async()=>{
+    if(isDownloading)return;
+    setIsDownloading(true);setError("");
+    try{
+      await inventoriesApi.download(type,group.id);
+      setDownloaded(true);
+    }catch(error){
+      setDownloaded(false);
+      setError(error instanceof Error?error.message:"Error al exportar el XLSX.");
+    }finally{setIsDownloading(false);}
   };
   return (
     <div className="inventory-preview-page">
@@ -411,15 +394,16 @@ function Preview({
             {types[type].name} · {group.transfer?.folio ?? group.id}
           </p>
         </div>
-        <Button className="button--primary" onClick={download}>
+        <Button className="button--primary" disabled={isDownloading} onClick={download}>
           <Download size={16} />
           Descargar Excel
         </Button>
       </div>
+      {error && <div className="validation-summary" role="alert">{error}</div>}
       {downloaded && (
         <div className="success-banner" role="status">
           <Check size={17} />
-          La descarga local fue generada sin modificar los registros.
+          El XLSX fue generado desde MySQL sin modificar los registros.
         </div>
       )}
       <section className="surface institutional-inventory-preview">
