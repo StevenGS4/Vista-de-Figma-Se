@@ -109,6 +109,11 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
 loansRouter.post('/',async(req,res,next)=>{
  try{
   const user=req.auth.user;guard(user);
+  // El SP confirma el préstamo; verificar la migración ANTES de invocarlo.
+  const [migration]=await pool.execute(`SELECT 1 AS ready FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='prestamos'
+      AND COLUMN_NAME='solicitante_usuario_id'`);
+  if(!migration.length)throw fail('Ejecuta Backend/sql/010_prestamos_usuarios.sql antes de registrar préstamos',409);
   let selected;
   try{selected=parseLoanSelection(req.body);}catch(e){throw fail(e.message);}
   const {mode,ids}=selected;
