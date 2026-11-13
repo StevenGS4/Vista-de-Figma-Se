@@ -30,6 +30,11 @@ BEGIN
     FOREIGN KEY (catalogo_version_id) REFERENCES catalogos_cadido_versiones(id) ON DELETE RESTRICT;
  END IF;
 
+ IF NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='series_areas' AND COLUMN_NAME='habilitado') THEN
+  ALTER TABLE series_areas ADD COLUMN habilitado TINYINT(1) NOT NULL DEFAULT 1;
+ END IF;
+
  -- El codigo se puede repetir en diferentes versiones; el ID historico de cada serie permanece fijo.
  SELECT INDEX_NAME INTO v_index FROM information_schema.STATISTICS
  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='series_cadido'
