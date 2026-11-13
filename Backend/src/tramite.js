@@ -47,7 +47,7 @@ export async function readRecords(conn,where='',params=[]){
  i.responsable_cargo AS responsiblePosition,i.hoja_inicial AS initialSheetNumber,
  i.unidad_administrativa AS administrativeUnit,a.codigo AS areaId,a.nombre AS areaName,i.responsable_nombre AS responsible,
  i.fondo AS fund,CAST(e.consecutivo AS CHAR) AS consecutive,e.id AS dbId,
- e.numero_expediente AS recordNumber,e.numero_caja AS boxNumber,e.titulo_asunto AS title,
+ e.numero_expediente AS recordNumber,e.codigo_clasificacion AS archiveClassificationCode,e.numero_caja AS boxNumber,e.titulo_asunto AS title,
  e.descripcion AS description,e.domicilio_resguardo AS archiveAddress,e.observaciones AS observations,
  sc.codigo AS cadidoSectionId,sc.nombre AS cadidoSectionName,sr.id AS dbSeriesId,sr.codigo AS cadidoCode,sr.nombre AS cadidoSeriesName,
  cv.anio AS cadidoYear,
@@ -84,7 +84,8 @@ export async function readRecords(conn,where='',params=[]){
  id:rowId(r.dbId),inventoryId:r.inventoryId,inventoryDate:r.inventoryDate,
  responsiblePosition:r.responsiblePosition,initialSheetNumber:String(r.initialSheetNumber),
  administrativeUnit:r.administrativeUnit,areaId:r.areaId,areaName:r.areaName,responsible:r.responsible,fund:r.fund,
- consecutive:r.consecutive,cadidoYear:r.cadidoYear?String(r.cadidoYear):'',recordNumber:r.recordNumber,boxNumber:r.boxNumber||'',title:r.title,
+ consecutive:r.consecutive,cadidoYear:r.cadidoYear?String(r.cadidoYear):'',recordNumber:r.recordNumber,
+ archiveClassificationCode:r.archiveClassificationCode||'',boxNumber:r.boxNumber||'',title:r.title,
  description:r.description||'',archiveAddress:r.archiveAddress||'',observations:r.observations||'',
  cadidoSectionId:r.cadidoSectionId,cadidoSectionName:r.cadidoSectionName,cadidoSeriesId:seriesId(r.dbSeriesId),cadidoCode:r.cadidoCode,cadidoSeriesName:r.cadidoSeriesName,
  openDate:r.openDate,closeDate:r.closeDate||'',filesCount:r.filesCount,foliosCount:r.foliosCount,
@@ -120,7 +121,7 @@ async function catalog(conn,user,mode){
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
       detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(',')}))};
 }
-function normalize(rows,autoNumber=false){
+function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
  if(!hasCommonHeader(rows))throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
  if(rows.length>50000)throw fail('Inventario demasiado grande para una sola operación; usa importación por lotes',413);
@@ -131,9 +132,9 @@ function normalize(rows,autoNumber=false){
      throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
    const number=text(r.recordNumber,110).toUpperCase();
-   if((!number&&!autoNumber)||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
-   if(unique.has(consecutivo)||(number&&numbers.has(number)))throw fail('Expediente o consecutivo duplicado');
-   unique.add(consecutivo);if(number)numbers.add(number);
+   if(!number||!text(r.title))throw fail('Número de expediente y asunto son obligatorios');
+   if(unique.has(consecutivo)||numbers.has(number))throw fail('Número de expediente o consecutivo duplicado');
+   unique.add(consecutivo);numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
    if(close&&close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
@@ -168,7 +169,8 @@ async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
 function rowFields(r,inventoryId,serieId,userId){
  return {
   inventario_id:inventoryId,consecutivo:num(r.consecutive,'consecutivo',1,2147483647),
-  numero_caja:text(r.boxNumber,60)||null,numero_expediente:text(r.recordNumber,110).toUpperCase(),
+  numero_caja:text(r.boxNumber,60)||null,numero_expediente:text(r.recordNumber,110),
+  codigo_clasificacion:text(r.archiveClassificationCode,110)||null,
   serie_id:serieId,titulo_asunto:text(r.title,350),descripcion:text(r.description,50000)||null,
   apertura:date(r.openDate,true),cierre:date(r.closeDate),legajos:num(r.filesCount,'legajos',0,2147483647),
   folios:num(r.foliosCount,'folios',0,2147483647),
@@ -196,11 +198,11 @@ const archiveAddress='Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 6300
 async function nextNumbers(conn,serieId,serieCode,rows){
  // El bloqueo de la serie se mantiene hasta COMMIT para serializar altas concurrentes.
  await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[serieId]);
- const [existing]=await conn.execute('SELECT numero_expediente FROM expedientes WHERE serie_id=?',[serieId]);
+ const [existing]=await conn.execute('SELECT COALESCE(codigo_clasificacion,CASE WHEN numero_expediente LIKE \'SEMARNAT.%\' THEN numero_expediente ELSE NULL END) AS archival_code FROM expedientes WHERE serie_id=?',[serieId]);
  let assigned;
- try{assigned=allocateNumbers(existing.map(r=>r.numero_expediente),rows,serieCode);}
+ try{assigned=allocateNumbers(existing.map(r=>r.archival_code).filter(Boolean),rows,serieCode);}
  catch(e){throw fail(e.message);}
- rows.forEach((r,i)=>{if(assigned[i])r.recordNumber=assigned[i];});
+ rows.forEach((r,i)=>{if(assigned[i])r.archiveClassificationCode=assigned[i];});
 }
 async function save(req,res,next,editing=false){
  let conn;
@@ -231,7 +233,7 @@ async function save(req,res,next,editing=false){
     if(!editing)r.inventoryDate=today;
    }
   }
-  const header=normalize(rows,!isAdmin);
+  const header=normalize(rows);
   if(!['GLOBAL','AREA','PROPIO'].includes(mode))throw fail('No autorizado',403);
   conn=await pool.getConnection();
   await conn.beginTransaction();
@@ -290,21 +292,35 @@ async function save(req,res,next,editing=false){
      cat.editionYear!==await latestCadidoYear(conn))
     throw fail('No puedes agregar expedientes nuevos con una edición CADIDO histórica. Crea un inventario con la edición vigente.',409);
   if(!isAdmin){
-   const [[serie]]=await conn.execute('SELECT codigo FROM series_cadido WHERE id=?',[cat.serieId]);
-   if(!serie)throw fail('La serie seleccionada no existe');
-   await nextNumbers(conn,cat.serieId,serie.codigo,rows);
    const [assigned]=await conn.execute('SELECT consecutivo FROM expedientes WHERE inventario_id=?',[inventoryId]);
    const reserved=new Set(assigned.map(x=>Number(x.consecutivo)));
    let next=0;
    for(const r of rows){
     if(editing && /^REG-\d+$/.test(r.id)){
-     const [[old]]=await conn.execute('SELECT consecutivo,numero_expediente FROM expedientes WHERE id=? AND inventario_id=?',[Number(r.id.slice(4)),inventoryId]);
+     const [[old]]=await conn.execute('SELECT consecutivo FROM expedientes WHERE id=? AND inventario_id=?',[Number(r.id.slice(4)),inventoryId]);
      if(!old)throw fail('Expediente existente no encontrado',404);
-     r.consecutive=String(old.consecutivo);r.recordNumber=old.numero_expediente;
+     r.consecutive=String(old.consecutivo);
     }else{
      while(reserved.has(++next)){}
      reserved.add(next);r.consecutive=String(next);
     }
+   }
+  }
+  // El número de expediente lo captura el usuario. La clave CADIDO se
+  // asigna aparte por serie/año y es independiente de ese número.
+  const [[serie]]=await conn.execute('SELECT codigo FROM series_cadido WHERE id=?',[cat.serieId]);
+  if(!serie)throw fail('La serie seleccionada no existe');
+  await nextNumbers(conn,cat.serieId,serie.codigo,rows);
+  if(editing){
+   for(const r of rows){
+    if(!/^REG-\d+$/.test(String(r.id)))continue;
+    const [[old]]=await conn.execute(
+      'SELECT codigo_clasificacion FROM expedientes WHERE id=? AND inventario_id=?',
+      [Number(r.id.slice(4)),inventoryId]
+    );
+    if(!old)throw fail('Expediente existente no encontrado',404);
+    // No admitir cambios de la clave histórica desde el navegador.
+    r.archiveClassificationCode=old.codigo_clasificacion||'';
    }
   }
   for(const r of rows){
