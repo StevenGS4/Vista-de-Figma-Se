@@ -42,6 +42,14 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
    return [record.recordNumber,record.archiveClassificationCode,record.inventoryId,record.title].some(value=>(value||"").toLowerCase().includes(q));
   }).slice(0,7);
  },[query,records,role,allowed,user.id,user.areaId]);
+ const transferMatches = query.trim().length>=2 && allowed.includes("transferencias")
+   ? transfers.filter(t=>{
+       if(role==="Personal de área" && t.requestedBy!==user.id)return false;
+       if(role==="Encargado de área" && t.areaId!==user.areaId)return false;
+       return t.folio.toLowerCase().includes(query.trim().toLowerCase());
+     }).slice(0,4) : [];
+ const loanMatches = query.trim().length>=2 && allowed.includes("prestamos")
+   ? loans.filter(l=>l.folio.toLowerCase().includes(query.trim().toLowerCase())).slice(0,4) : [];
  return <>
   <button aria-label="Búsqueda global" aria-expanded={searchOpen} className="header-icon" onClick={()=>{setSearchOpen(!searchOpen);setNotificationsOpen(false);}}><Search size={19}/></button>
   <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen)void onRefresh();setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
@@ -52,10 +60,12 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
     <label><Search size={16}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Folio, código CADIDO o asunto…"/></label>
     <div className="home-search-results">
       {query.trim().length<2 && <small>Escribe al menos dos caracteres.</small>}
-      {query.trim().length>=2 && results.length===0 && <small>Sin coincidencias entre tus expedientes autorizados.</small>}
+      {query.trim().length>=2 && results.length===0 && transferMatches.length===0 && loanMatches.length===0 && <small>Sin coincidencias entre tus expedientes autorizados.</small>}
       {results.map(record=><button type="button" key={record.id} onClick={()=>{onSearchRecord(record);setSearchOpen(false);setQuery("");}}>
         <FileText size={17}/><span><b>{record.recordNumber}</b><small>{record.title} · {record.stage}</small></span>
       </button>)}
+      {transferMatches.map(t=><button type="button" key={t.id} onClick={()=>{onNavigate("transferencias");setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{t.folio}</b><small>Transferencia · {t.status}</small></span></button>)}
+      {loanMatches.map(l=><button type="button" key={l.id} onClick={()=>{onNavigate("prestamos");setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{l.folio}</b><small>Préstamo · {l.status}</small></span></button>)}
     </div>
   </div>}
   {notificationsOpen && <div className="header-popover header-popover--notifications home-header-popover">
