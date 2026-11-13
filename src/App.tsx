@@ -233,6 +233,11 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
       <div className="login__main">
         <section className="login__identity">
           <div className="login__identity-inner">
+            <img
+              className="login__environment-logo"
+              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/cc5uyodeqcodgmdjuxpc.png"
+              alt="Medio Ambiente — Gobierno de México"
+            />
             <span className="section-kicker">Gestión documental institucional</span>
             <h1>Sistema de Control Archivístico</h1>
             <p className="login__office">Oficina de Representación de SEMARNAT en Nayarit</p>
