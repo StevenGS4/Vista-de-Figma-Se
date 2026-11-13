@@ -4,6 +4,8 @@ import { passwordValid,roleNames,hasRole } from '../src/auth-policy.js';
 
 test('contraseñas: longitud, mayúsculas, minúsculas y número',()=>{
  assert.equal(passwordValid('ClaveSegura2026'),true);
+ assert.equal(passwordValid('12345678'),false); // caso real: ocho dígitos no basta
+ assert.equal(passwordValid('ClavePrueba2026'),true);
  assert.equal(passwordValid('corta1A'),false);
  assert.equal(passwordValid('todosminuscula123'),false);
  assert.equal(passwordValid('TODOMAYUSCULA123'),false);
