@@ -136,7 +136,7 @@ function expandDetail(sheet,{start,summaryRow,fields},recordCount){
     for(const m of lineMerges)sheet.mergeCells(r,m.left,r,m.right);
 }
 const findLabel=(sheet,limit,pattern)=>findCell(sheet,limit,t=>pattern.test(t));
-function fillHeader(sheet,first,location){
+function fillHeader(sheet,first,location,kind){
   if(!first)return;
   const {start}=location;
   // Coordinadas establecidas por el instructivo del modelo institucional.
@@ -150,6 +150,11 @@ function fillHeader(sheet,first,location){
     [/^SERIE/,first.cadidoSeriesName||first.cadidoCode,'E18'],
     [/FECHA DE ELABORACION/,date(first.inventoryDate),'V9'],
   ];
+  if(kind==='transferencia'){
+    const title=findCell(sheet,start-1,t=>t.includes('INVENTARIO DOCUMENTAL ARCHIVO DE TRAMITE'));
+    if(title && title.cell.type!==ExcelJS.ValueType.Formula)
+      title.cell.value='INVENTARIO DOCUMENTAL TRANSFERENCIA PRIMARIA';
+  }
   for(const [pattern,val,fallback] of items){
     const anchor=findLabel(sheet,start-1,pattern);
     if(!anchor)continue;
@@ -157,7 +162,8 @@ function fillHeader(sheet,first,location){
     // Si el destino conocido contiene texto fijo, no sustituirlo.
     const target=sheet.getCell(fallback);
     if(target.row>=start)continue;
-    if(target.type===ExcelJS.ValueType.Formula || normalize(visible(target.value)))continue;
+    const existing=normalize(visible(target.value));
+    if(target.type===ExcelJS.ValueType.Formula || (existing && !/^\\(\\d+\\)$/.test(existing)))continue;
     fillCell(sheet,fallback,val);
   }
 }
@@ -252,13 +258,15 @@ export async function makeOfficialTemplateWorkbook(records,kind){
     const sheet=sheets[i];
     const layout=locate(sheet);
     const rows=entries[i];
-    fillHeader(sheet,rows[0],layout);
+    fillHeader(sheet,rows[0],layout,kind);
     fillRecords(sheet,rows,layout);
     fillSummary(sheet,rows,layout);
     const extra=Math.max(0,rows.length-(layout.summaryRow-layout.start));
     const oldPrint=String(sheet.pageSetup?.printArea||'');
     const print=oldPrint.replace(/(:[A-Z]+)(\d+)$/,(_,a,b)=>a+(Number(b)+extra));
-    sheet.pageSetup={...sheet.pageSetup,printArea:print||undefined,fitToPage:true,fitToWidth:1,fitToHeight:0};
+    sheet.pageSetup={...sheet.pageSetup,printArea:print||undefined,
+      printTitlesRow:'1:'+String(layout.start-1),
+      fitToPage:true,fitToWidth:1,fitToHeight:0};
   }
   return book;
 }
