@@ -4143,8 +4143,9 @@
 
 .concentration-filters {
   display: grid;
-  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(170px, 0.9fr)) auto;
-  gap: 8px;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(150px, 0.9fr)) minmax(145px, 0.8fr) max-content max-content;
+  gap: 10px;
+  align-items: center;
   padding: 14px 20px;
   border-bottom: 1px solid var(--gray-200);
   background: var(--gray-50);
@@ -4270,11 +4271,20 @@
 
 @media (max-width: 1120px) {
   .concentration-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .concentration-filters .search-box {
     grid-column: 1 / -1;
+  }
+
+  .concentration-filters > .clear-filters {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .concentration-filters > .button--primary {
+    justify-self: end;
   }
 }
 
@@ -4283,8 +4293,15 @@
     grid-template-columns: 1fr;
   }
 
-  .concentration-filters .search-box {
+  .concentration-filters .search-box,
+  .concentration-filters > .clear-filters {
     grid-column: auto;
+  }
+
+  .concentration-filters > .clear-filters,
+  .concentration-filters > .button--primary {
+    width: 100%;
+    justify-self: stretch;
   }
 
   .concentration-location-form {
