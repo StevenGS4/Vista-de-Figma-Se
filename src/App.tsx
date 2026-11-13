@@ -605,6 +605,7 @@ function Header({
   allowed,
   onNavigate,
   onSearchRecord,
+  onSearchFolio,
   onRefresh,
 }: {
   active: ModuleId;
@@ -614,6 +615,7 @@ function Header({
   allowed: ModuleId[];
   onNavigate: (id: ModuleId) => void;
   onSearchRecord: (record: ArchivalRecord) => void;
+  onSearchFolio: (module: "transferencias" | "prestamos", folio: string) => void;
   onRefresh: () => Promise<void>;
   onChangePassword: () => void;
   onLogout: () => void;
@@ -638,7 +640,7 @@ function Header({
       </div>
       <div className="app-header__actions">
         <HomeHeaderTools user={user} role={role} records={records} transfers={transfers} loans={loans}
-          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onRefresh={onRefresh} />
+          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onSearchFolio={onSearchFolio} onRefresh={onRefresh} />
         <span className="header-divider" />
         <div className="profile-menu">
           <button className="profile-trigger" onClick={() => setProfileOpen((current) => !current)}>
@@ -860,6 +862,11 @@ function Application({
     setActive(target);
   };
 
+  const openFolio = (module: "transferencias" | "prestamos", folio: string) => {
+    if (!allowed.includes(module)) return;
+    setGlobalQuery(folio);
+    setActive(module);
+  };
   const changeRole = (next: Role) => {
     setRole(next);
     if (!roleAccess[active].includes(next)) setActive("inicio");
@@ -902,6 +909,7 @@ function Application({
           allowed={allowed}
           onNavigate={navigate}
           onSearchRecord={openSearchResult}
+          onSearchFolio={openFolio}
           onRefresh={refreshHomeEvents}
         />
         <main className="workspace">
@@ -961,6 +969,8 @@ function Application({
           ) : active === "transferencias" ? (
             <Suspense fallback={moduleFallback}>
               <TransfersPanel
+                key={"transferencias-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 onRecordsChange={onRecordsChange}
                 onTransfersChange={onTransfersChange}
@@ -974,6 +984,8 @@ function Application({
           ) : active === "prestamos" ? (
             <Suspense fallback={moduleFallback}>
               <LoansPanel
+                key={"prestamos-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 loans={loans}
                 onLoansChange={onLoansChange}
