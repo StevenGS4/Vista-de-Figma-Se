@@ -2,7 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
-import { parseLocation } from './concentration-policy.js';
+import { validateReceptionLocations } from './reception-locations.js';
 import {
  transferStates,canSubmitTransfer,canApproveArea,canReviewAdmin,
  canReceiveTransfer,canViewTransfer,uniqueInventoryFolios
@@ -261,26 +261,18 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   const [latest]=await conn.execute('SELECT estado FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1',[id]);
   if(latest[0]?.estado==='RECIBIDA')throw problem('La recepción física ya está registrada',409);
   if(state==='Recibida'){
-   const locations=req.body?.locations;
-   if(!Array.isArray(locations)||!locations.length||locations.length>50000)
-     throw problem('Captura la ubicación física de cada expediente recibido antes de completar la recepción');
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      WHERE ti.transferencia_id=? ORDER BY e.id FOR UPDATE`,[id]);
-   const receivedIds=new Set(linked.map(row=>Number(row.id)));
-   if(locations.length!==receivedIds.size)throw problem('Debes ubicar todos los expedientes incluidos en esta transferencia');
-   const supplied=new Set();
-   for(const item of locations){
-     const rid=Number(String(item?.id??'').replace(/^REG-/,''));
-     if(!Number.isSafeInteger(rid)||!receivedIds.has(rid)||supplied.has(rid))
-       throw problem('Los expedientes ubicados no corresponden exactamente a la transferencia');
-     supplied.add(rid);
-     let loc;
-     try{loc=parseLocation(item);}catch(e){throw problem('Ubicación de expediente '+rid+': '+e.message);}
-     await conn.execute(`UPDATE expedientes SET archivo_zona=?,lugar_resguardo=?,estante=?,nivel=?,
+   let locations;
+   try{locations=validateReceptionLocations(req.body?.locations,linked.map(row=>row.id));}
+   catch(error){throw problem(error.message);}
+   for(const loc of locations){
+     const [updated]=await conn.execute(`UPDATE expedientes SET archivo_zona=?,lugar_resguardo=?,estante=?,nivel=?,
        seccion_fisica=?,posicion=?,caja_ubicacion=?,notas_ubicacion=? WHERE id=? AND etapa='CONCENTRACION'`,
        [loc.archiveZone,loc.room,loc.shelf,loc.level,loc.physicalSection,
-        loc.position,loc.locationBox,loc.locationNotes,rid]);
+        loc.position,loc.locationBox,loc.locationNotes,loc.id]);
+     if(updated.affectedRows!==1)throw problem('La transferencia contiene un expediente que no está en concentración',409);
    }
   }
   await conn.execute('INSERT INTO recepciones(transferencia_id,fecha,responsable_id,estado,observaciones) VALUES (?,?,?,?,?)',
