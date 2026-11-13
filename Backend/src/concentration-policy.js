@@ -9,7 +9,7 @@ export function concentrationScope(user) {
 }
 export function canEditConcentrationLocation(user) {
  return Boolean(user && !user.mustChangePassword &&
-  (user.roles?.includes(roleNames.ADMIN) || user.roles?.includes(roleNames.PRESTAMOS)));
+  user.roles?.includes(roleNames.ADMIN));
 }
 export function canReadConcentrationRecord(user,record) {
  const scope=concentrationScope(user);
