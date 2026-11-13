@@ -214,7 +214,12 @@ function fillSummary(sheet,records,location){
     ['26',String(boxes.size)],['29',String(electronic)],
   ]);
   // Peso, metros lineales y medios de almacenamiento no se inventan.
-  root.value=original.replace(/\\?\((22|23|24|25|26|29)\)/g,(full,n)=>replacements.get(n)||full);
+  const substitute=text=>String(text||'').replace(/\\?\((22|23|24|25|26|29)\)/g,
+    (full,n)=>replacements.get(n)||full);
+  if(root.value && typeof root.value==='object' && Array.isArray(root.value.richText)){
+    // Mantener los tramos rojos, sus fuentes y colores del pie institucional.
+    root.value={richText:root.value.richText.map(part=>({...part,text:substitute(part.text)}))};
+  } else root.value=substitute(original);
 }
 function cloneSheet(book,source,name) {
   const copy=book.addWorksheet(name.slice(0,31));
