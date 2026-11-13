@@ -1354,8 +1354,8 @@ function InventoryForm({
     const next: Errors = {};
     if (record.stage === "Archivo de concentración" || record.transferReference) return next;
     if (step === 1) {
-      if (!record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
-      if (drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
+      if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
+      if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
       if (!isAdmin && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
         next.recordYear="Selecciona un año válido (1900–2100).";
@@ -1458,7 +1458,7 @@ function InventoryForm({
     onSave(
       drafts.map((record) => ({
         ...record,
-        recordNumber: isAdmin ? record.recordNumber.trim().toUpperCase() :
+        recordNumber: isAdmin || /^REG-\d+$/.test(record.id) ? record.recordNumber.trim().toUpperCase() :
           previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
         room: !isAdmin && !record.room ? "Sótano" : record.room,
         archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
@@ -1545,6 +1545,7 @@ function InventoryForm({
           )}
           {currentStep === 3 && (
             <LocationStep
+              key={active.id}
               active={active}
               drafts={drafts}
               errors={errors}
@@ -1596,11 +1597,13 @@ function InventoryForm({
 
 function InventoryDetail({
   canEdit,
+  isAdmin,
   inventory,
   onBack,
   onEdit,
 }: {
   canEdit: boolean;
+  isAdmin: boolean;
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
@@ -1672,7 +1675,7 @@ function InventoryDetail({
           </div>
           <div>
             <span>Hoja</span>
-            <strong>La numeración de hojas se calculará al exportar</strong>
+            <strong>{isAdmin ? `Hoja ${header.initialSheetNumber} de N` : "Hojas numeradas automáticamente al exportar"}</strong>
           </div>
         </div>
       </div>
@@ -1725,7 +1728,7 @@ function InventoryDetail({
                   <td>{record.supportType}</td>
                   <td>{record.documentaryValues.join(", ")}</td>
                   <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años</td>
-                  <td>{record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
+                  <td>{!isAdmin && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
                     <Badge wine={record.stage === "Archivo de concentración"}>{record.stage}</Badge>
@@ -1815,6 +1818,7 @@ export default function RecordsPanel({
   if (view === "detail" && selected.length)
     return (
       <InventoryDetail
+        isAdmin={isAdmin}
         canEdit={
           permissions.includes("edit-records") &&
           selected.every(
