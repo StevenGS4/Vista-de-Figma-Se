@@ -1176,13 +1176,11 @@ function ReceptionForm({
   onBack,
   onSave,
   transfer,
-  records,
 }: {
   currentUser: UserRecord;
   onBack: () => void;
   onSave: (status: ReceptionStatus, date: string, notes: string, location: ReceptionLocation | null) => void;
   transfer: DocumentaryTransfer;
-  records: ArchivalRecord[];
 }) {
   const [status, setStatus] = useState<ReceptionStatus>(
     transfer.receptionStatus === "Pendiente" ? "Recibida" : transfer.receptionStatus,
@@ -1531,7 +1529,6 @@ export default function TransfersPanel({
         onBack={() => setView("detail")}
         onSave={saveReception}
         transfer={selected}
-        records={records}
       />
     );
 
