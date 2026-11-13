@@ -763,12 +763,7 @@ function ExpedientsStep({
           </strong></div>
           {!isAdmin && <small className="field-hint">Vista preliminar; MySQL asigna el siguiente número disponible al guardar para evitar duplicados.</small>}
         </Field>
-        {false && <Field label="Código de clasificación archivística CADIDO">
-          <div className="read-only-code">
-            <ShieldCheck size={16} />
-            <strong>{active.cadidoCode || "Definido por la serie del encabezado"}</strong>
-          </div>
-        </Field>}
+
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
           <input onChange={(event) => update("title", event.target.value)} value={active.title} />
         </Field>
@@ -784,12 +779,14 @@ function ControlStep({
   active,
   drafts,
   errors,
+  isAdmin,
   onSelect,
   update,
 }: {
   active: ArchivalRecord;
   drafts: ArchivalRecord[];
   errors: Errors;
+  isAdmin: boolean;
   onSelect: (id: string) => void;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
@@ -830,8 +827,12 @@ function ControlStep({
           </button>
         ))}
       </div>
+      {!isAdmin && <div className="catalog-note" style={{marginBottom:16}}>
+        <strong>{active.title || "Expediente sin título"}</strong>
+        <div>{active.description || "Sin descripción complementaria"}</div>
+      </div>}
       <fieldset className="record-form-grid" disabled={locked}>
-        <Field className="record-field--wide" label="Título o descripción del asunto" required>
+        {isAdmin && <Field className="record-field--wide" label="Título o descripción del asunto" required>
           <textarea
             onChange={(event) => {
               update("title", event.target.value);
@@ -840,11 +841,12 @@ function ControlStep({
             rows={3}
             value={active.title}
           />
-        </Field>
+        </Field>}
         <Field error={errors.openDate} label="Inicio / Apertura" required>
           <input
             onChange={(event) => update("openDate", event.target.value)}
             type="date"
+            style={{maxWidth:205}}
             value={active.openDate}
           />
         </Field>
@@ -857,6 +859,7 @@ function ControlStep({
             min={active.openDate}
             onChange={(event) => update("closeDate", event.target.value)}
             type="date"
+            style={{maxWidth:205}}
             value={active.closeDate}
           />
         </Field>
@@ -865,6 +868,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("filesCount", event.target.value)}
             type="number"
+            style={{maxWidth:155}}
             value={active.filesCount}
           />
         </Field>
@@ -873,6 +877,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("foliosCount", event.target.value)}
             type="number"
+            style={{maxWidth:155}}
             value={active.foliosCount}
           />
         </Field>
@@ -926,6 +931,7 @@ function ControlStep({
               );
             }}
             type="number"
+            style={{maxWidth:120}}
             value={active.currentValidity}
           />
         </Field>
@@ -945,13 +951,14 @@ function ControlStep({
               );
             }}
             type="number"
+            style={{maxWidth:120}}
             value={active.concentrationValidity}
           />
         </Field>
-        <Field hint="Suma coherente de ambos periodos." label="Vigencia documental total">
+        {isAdmin ? <Field hint="Suma coherente de ambos periodos." label="Vigencia documental total">
           <input disabled value={total || active.totalValidity} />
-        </Field>
-        <Field
+        </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong>{total || active.totalValidity || "Pendiente"} años</strong></div>}
+        {isAdmin && <Field
           className="record-field--wide"
           label="Domicilio y referencia general de resguardo"
         >
@@ -960,7 +967,7 @@ function ControlStep({
             placeholder="Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit"
             value={active.archiveAddress ?? ""}
           />
-        </Field>
+        </Field>}
         <Field className="record-field--wide" label="Observaciones del expediente">
           <textarea
             onChange={(event) => update("observations", event.target.value)}
