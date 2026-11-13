@@ -692,6 +692,7 @@ function ExpedientsStep({
   active,
   drafts,
   errors,
+  isAdmin,
   onAdd,
   onRemove,
   onSelect,
@@ -700,6 +701,7 @@ function ExpedientsStep({
   active: ArchivalRecord;
   drafts: ArchivalRecord[];
   errors: Errors;
+  isAdmin: boolean;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
@@ -722,15 +724,16 @@ function ExpedientsStep({
         onSelect={onSelect}
       />
       <fieldset className="record-form-grid row-detail-editor" disabled={protectedRow}>
-        <Field error={errors.consecutive} label="Número consecutivo" required>
+        {isAdmin && <Field error={errors.consecutive} label="Número consecutivo" required>
           <input
             inputMode="numeric"
             onChange={(event) => update("consecutive", event.target.value)}
             value={active.consecutive}
           />
-        </Field>
+        </Field>}
+        {!isAdmin && <div className="form-field"><span>Consecutivo del inventario</span><strong>{active.consecutive}</strong></div>}
         <Field label="Número de caja">
-          <input
+          <input inputMode="numeric" maxLength={6} pattern="[0-9]{1,6}" style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -738,21 +741,40 @@ function ExpedientsStep({
             value={active.boxNumber}
           />
         </Field>
-        <Field error={errors.recordNumber} label="Número de expediente" required>
+        {!isAdmin && <Field label="Año del expediente" required>
+          <input type="number" min="1900" max="2100" style={{maxWidth:145}}
+            value={active.recordYear || String(new Date().getFullYear())}
+            onChange={event=>{
+              const year=event.target.value;
+              update("recordYear",year);
+              update("recordNumber",previewNumber(active.cadidoCode,active.consecutive,year));
+            }} />
+        </Field>}
+        {isAdmin && <Field error={errors.recordNumber} label="Número de expediente" required>
           <input
             onChange={(event) => update("recordNumber", event.target.value.toUpperCase())}
             value={active.recordNumber}
           />
+        </Field>}
+        <Field className="record-field--wide" label="Código de clasificación archivística">
+          <div className="read-only-code"><ShieldCheck size={16}/><strong>
+            {isAdmin ? (active.recordNumber || "Número de expediente") :
+              previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
+          </strong></div>
+          {!isAdmin && <small className="field-hint">Vista preliminar; MySQL asigna el siguiente número disponible al guardar para evitar duplicados.</small>}
         </Field>
-        <Field label="Código de clasificación archivística CADIDO">
+        {false && <Field label="Código de clasificación archivística CADIDO">
           <div className="read-only-code">
             <ShieldCheck size={16} />
             <strong>{active.cadidoCode || "Definido por la serie del encabezado"}</strong>
           </div>
-        </Field>
+        </Field>}
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
           <input onChange={(event) => update("title", event.target.value)} value={active.title} />
         </Field>
+        {!isAdmin && <Field className="record-field--wide" label="Descripción del asunto">
+          <textarea rows={2} onChange={event=>update("description",event.target.value)} value={active.description}/>
+        </Field>}
       </fieldset>
     </>
   );
