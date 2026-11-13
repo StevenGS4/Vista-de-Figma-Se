@@ -121,3 +121,28 @@ export const inventoriesApi={
 export const areasApi={
  list:async()=>((await request<{areas:Area[]}>('/api/catalogos/areas')).areas),
 };
+
+export type AdminVersion={id:number;year:number;name:string;reference:string|null;active:number};
+export type AdminSeries={id:number;code:string;name:string;section:string;sectionName:string;active:number;enabled:number;records:number};
+export type AdminManager={id:number;name:string;areaId:string;email:string};
+export type AdminArea=Area & {parentId?:string;managerId?:number|null};
+export const adminCatalogApi={
+ areas:async()=>((await request<{areas:AdminArea[]}>('/api/admin-catalog/areas')).areas),
+ managers:async()=>((await request<{users:AdminManager[]}>('/api/admin-catalog/encargados')).users),
+ saveArea:async(area:AdminArea,editing:boolean)=>request<{areas:AdminArea[]}>('/api/admin-catalog/areas'+(editing?'/'+encodeURIComponent(area.id):''),{
+  method:editing?'PUT':'POST',body:JSON.stringify(area),
+ }),
+ versions:async()=>((await request<{versions:AdminVersion[]}>('/api/admin-catalog/versions')).versions),
+ createVersion:(year:number,name:string,reference:string)=>request<{ok:boolean}>('/api/admin-catalog/versions',{
+  method:'POST',body:JSON.stringify({year,name,reference}),
+ }),
+ series:async(year:number,areaId:string)=>((await request<{series:AdminSeries[]}>(
+ '/api/admin-catalog/series?year='+year+'&area='+encodeURIComponent(areaId))).series),
+ saveSeries:(areaId:string,year:number,seriesIds:number[])=>request<{ok:boolean;enabled:number}>(
+ '/api/admin-catalog/areas/'+encodeURIComponent(areaId)+'/series',{
+ method:'PUT',body:JSON.stringify({year,seriesIds}),
+ }),
+ createSeries:(year:number,code:string,name:string,sectionName:string)=>request<{ok:boolean}>('/api/admin-catalog/series',{
+ method:'POST',body:JSON.stringify({year,code,name,sectionName}),
+ }),
+};
