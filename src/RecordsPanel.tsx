@@ -1283,7 +1283,7 @@ function InventoryForm({
         responsiblePosition: isAdmin ? "" : `Encargado del área de ${area?.name || areaName(user.areaId)}`,
         inventoryDate: localDate(),
         initialSheetNumber:"1",
-        fund:"SEMARNAT Nayarit",
+        fund:"Secretaría de Medio Ambiente y Recursos Naturales",
         administrativeUnit:"Oficina de Representación de SEMARNAT en Nayarit",
         cadidoYear:assignedYear,
         recordYear:String(new Date().getFullYear()),
