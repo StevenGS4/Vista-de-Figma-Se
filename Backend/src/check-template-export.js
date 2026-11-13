@@ -48,6 +48,7 @@ try {
  await verify(1,'tramite');
  await verify(12,'tramite');
  await verify(100,'tramite');
+ await verify(1000,'tramite');
  await verify(12,'transferencia');
  const twoInventories=[sample(1),{...sample(2),inventoryId:'INV-PRUEBA-002'}];
  const multi=await makeOfficialTemplateWorkbook(twoInventories,'tramite');
