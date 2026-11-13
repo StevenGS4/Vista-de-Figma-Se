@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: Backend/package-lock.json
       - name: Instalar dependencias
         working-directory: Backend
-        run: npm ci
+        run: npm install --no-save --package-lock=false --no-audit --no-fund
       - name: Validar sintaxis
         working-directory: Backend
         run: |
