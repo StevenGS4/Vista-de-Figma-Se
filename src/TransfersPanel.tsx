@@ -172,7 +172,7 @@ function TransferTray({
             <h3>Bandeja de transferencias</h3>
             <p>{visibleByRole.length} solicitudes disponibles de acuerdo con tus permisos</p>
           </div>
-          <span className="demo-label">Flujo de demostración</span>
+          <span className="demo-label">Seguimiento documental</span>
         </div>
         <div className="transfer-tabs" role="tablist">
           {(
