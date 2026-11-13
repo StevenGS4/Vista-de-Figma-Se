@@ -933,6 +933,7 @@ function Application({
             )}
           {active === "inicio" ? (
             <HomeDashboard user={currentUser} role={role} allowedModules={allowed} onNavigate={navigate}
+                onOpenFolio={openFolio} onOpenRecord={openSearchResult}
                 transfers={transfers} loans={loans} records={archivalRecords} />
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
