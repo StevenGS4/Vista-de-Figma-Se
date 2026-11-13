@@ -13,6 +13,7 @@ export type ArchivalRecord = {
   fund: string;
   consecutive: string;
   recordNumber: string;
+  recordYear?: string;
   boxNumber: string;
   title: string;
   description: string;
@@ -431,6 +432,7 @@ export const emptyRecord = (): ArchivalRecord => ({
   fund: "SEMARNAT Nayarit",
   consecutive: "",
   recordNumber: "",
+  recordYear: String(new Date().getFullYear()),
   boxNumber: "",
   title: "",
   description: "",
