@@ -124,8 +124,8 @@ function normalize(rows,autoNumber=false){
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
    const number=text(r.recordNumber,110).toUpperCase();
    if((!number&&!autoNumber)||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
-   if(unique.has(consecutivo)||numbers.has(number))throw fail('Expediente o consecutivo duplicado');
-   unique.add(consecutivo);numbers.add(number);
+   if(unique.has(consecutivo)||(number&&numbers.has(number)))throw fail('Expediente o consecutivo duplicado');
+   unique.add(consecutivo);if(number)numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
    if(close&&close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
