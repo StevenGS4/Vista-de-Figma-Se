@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, FilePlus2, FolderTree, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
-import { adminCatalogApi, AdminArea, AdminManager, AdminSeries, AdminVersion, areasApi } from "./api";
+import { ArrowLeft, Check, FilePlus2, FolderTree, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { adminCatalogApi, AdminArea, AdminManager, AdminSeries, AdminVersion, areasApi, tramiteApi } from "./api";
 import { setAreasCatalog } from "./data";
+import { setCadidoCatalog } from "./records";
 
 type View="list"|"edit"|"assign";
 const blank:AdminArea={id:"",name:"",parent:"",parentId:"",manager:"",managerId:null};
@@ -72,6 +73,7 @@ export default function AdminAreasPanel(){
    await adminCatalogApi.saveSeries(selected.id,year,chosen);
    const rows=await adminCatalogApi.series(year,selected.id);setSeries(rows);
    setChosen(rows.filter(x=>x.enabled).map(x=>x.id));
+   const catalog=await tramiteApi.catalog();setCadidoCatalog(catalog.sections,catalog.series);
    setSuccess("Asignación guardada en MySQL. Los expedientes históricos permanecen intactos.");
   }catch(e){setError(e instanceof Error?e.message:"Error asignando series");}
   finally{setSaving(false);}
@@ -79,7 +81,7 @@ export default function AdminAreasPanel(){
  const saveVersion=async(event:FormEvent)=>{
   event.preventDefault();clear();setSaving(true);
   try{await adminCatalogApi.createVersion(Number(newYear),newYearName,newRef);await refresh();
-   setShowYear(false);setSuccess("Nueva edición creada; ya puedes registrar series para ese año.");setYear(Number(newYear));}
+   setShowYear(false);setSuccess("Nueva edición creada; ya puedes registrar series para ese año.");setYear(Number(newYear));setSeries([]);setChosen([]);}
   catch(e){setError(e instanceof Error?e.message:"Error creando edición");}
   finally{setSaving(false);}
  };
