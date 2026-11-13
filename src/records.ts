@@ -13,6 +13,7 @@ export type ArchivalRecord = {
   fund: string;
   consecutive: string;
   recordNumber: string;
+  archiveClassificationCode?: string;
   recordYear?: string;
   boxNumber: string;
   title: string;
