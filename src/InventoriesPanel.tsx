@@ -12,7 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas } from "./data";
-import { ArchivalRecord, cadidoSections, cadidoSeries, locationSummary } from "./records";
+import { ArchivalRecord, cadidoSections, cadidoSeries } from "./records";
 import { DocumentaryTransfer } from "./transfers";
 import { inventoriesApi } from "./api";
 
@@ -352,7 +352,7 @@ function cells(record: ArchivalRecord) {
     `${record.currentValidity} años`,
     `${record.concentrationValidity} años`,
     `${record.totalValidity} años`,
-    locationSummary(record),
+    record.archiveAddress?.trim() || "",
     record.observations,
   ];
 }
