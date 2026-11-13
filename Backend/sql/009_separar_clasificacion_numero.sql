@@ -32,7 +32,7 @@ UPDATE expedientes e JOIN series_cadido sr ON sr.id=e.serie_id
  SET e.codigo_clasificacion=e.numero_expediente
  WHERE e.codigo_clasificacion IS NULL
    AND e.numero_expediente REGEXP '^SEMARNAT\\.[0-9]{1,2}[CS]\\.[0-9]{1,3}\\.[0-9]{3,}\\.[0-9]{4}$'
-   AND SUBSTRING_INDEX(SUBSTRING(e.numero_expediente,9),'.',2)=sr.codigo;
+   AND e.numero_expediente LIKE CONCAT('SEMARNAT.',sr.codigo,'.%');
 
 SELECT COUNT(*) AS expedientes_sin_clave_archivistica FROM expedientes WHERE codigo_clasificacion IS NULL;
 -- Si este conteo es mayor a 0, revisar expedientes antiguos, NO asignar códigos ficticios.
