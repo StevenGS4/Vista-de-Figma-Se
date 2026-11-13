@@ -1,0 +1,35 @@
+name: Verificar plantilla institucional Excel
+on:
+  push:
+    branches:
+      - feature/integracion-validacion-etapa-7
+    paths:
+      - 'Backend/src/template-workbooks.js'
+      - 'Backend/src/check-template-export.js'
+      - 'Backend/src/exports.js'
+      - 'Backend/plantillas/inventario_tramite.xlsx'
+      - 'Backend/package.json'
+      - '.github/workflows/official-template.yml'
+  workflow_dispatch:
+jobs:
+  verificar-plantilla:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Backend/package-lock.json
+      - name: Instalar dependencias
+        working-directory: Backend
+        run: npm ci
+      - name: Validar sintaxis
+        working-directory: Backend
+        run: |
+          node --check src/template-workbooks.js
+          node --check src/check-template-export.js
+          node --check src/exports.js
+      - name: Verificar formato y expedientes
+        working-directory: Backend
+        run: npm run test:template
