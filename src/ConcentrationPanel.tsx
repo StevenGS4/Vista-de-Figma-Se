@@ -274,7 +274,7 @@ function ConcentrationList({
                       </td>
                       <td>{areaName(record.areaId)}</td>
                       <td>
-                        <span className="cadido-code">{record.cadidoCode}</span>
+                        <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                       </td>
                       <td>{formatDate(record.transferDate)}</td>
                       <td>Estante {record.shelf}</td>
@@ -459,7 +459,7 @@ function ConcentrationDetail({
         <DetailSection icon={<FolderTree size={17} />} title="Clasificación CADIDO">
           <DetailField label="Sección documental" value={sectionName(record.cadidoSectionId)} />
           <DetailField label="Serie documental" value={seriesName(record.cadidoSeriesId)} />
-          <DetailField label="Código CADIDO ficticio" value={record.cadidoCode} />
+          <DetailField label="Código de clasificación archivística" value={record.archiveClassificationCode || record.cadidoCode} />
           <DetailField label="Soporte documental" value={record.supportType} />
           <DetailField label="Valor documental" value={record.documentaryValues.join(", ")} />
         </DetailSection>

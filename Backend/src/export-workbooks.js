@@ -97,7 +97,7 @@ function layout(book,records,kind,index,total,pageNo=1,pages=1,fullRecords=recor
   const isElectronic=support==='electrónico'||support==='mixto';
   const vals=new Set((rec.documentaryValues||[]).map(x=>String(x).toLowerCase()));
   const data={
-   B:rec.consecutive,C:rec.boxNumber,D:rec.recordNumber,E:rec.cadidoCode,
+   B:rec.consecutive,C:rec.boxNumber,D:rec.recordNumber,E:rec.archiveClassificationCode||rec.cadidoCode,
    G:[rec.title,rec.description].filter(Boolean).join(' — '),
    H:formatDate(rec.openDate),I:formatDate(rec.closeDate),
    J:rec.filesCount,K:rec.foliosCount,L:isPhysical?'X':'',M:isElectronic?'X':'',

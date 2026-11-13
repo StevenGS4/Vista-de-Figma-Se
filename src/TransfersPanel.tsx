@@ -398,7 +398,7 @@ function InventoryTable({ records }: { records: ArchivalRecord[] }) {
               </td>
               <td>{areaName(record.areaId)}</td>
               <td>
-                <span className="cadido-code">{record.cadidoCode}</span>
+                <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
               </td>
               <td>
                 <span className="inventory-title">{record.title}</span>
@@ -670,7 +670,7 @@ function TransferWizard({
                               <strong>{record.recordNumber}</strong>
                               <small>{record.title}</small>
                             </span>
-                            <span className="cadido-code">{record.cadidoCode}</span>
+                            <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                             <span className="eligible-meta">
                               {record.filesCount} legajos · {record.foliosCount} folios
                             </span>
@@ -754,7 +754,7 @@ function TransferWizard({
                     <strong>{record.recordNumber}</strong>
                     <small>{record.title}</small>
                   </span>
-                  <span className="cadido-code">{record.cadidoCode}</span>
+                  <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                 </div>
               ))}
             </div>

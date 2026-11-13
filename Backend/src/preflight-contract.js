@@ -11,7 +11,7 @@ export const REQUIRED_COLUMNS = Object.freeze({
  series_cadido: ['id','seccion_id','codigo','nombre','activo','es_demostracion','catalogo_version_id'],
  series_areas: ['serie_id','area_id','habilitado'],
  inventarios: ['id','folio','area_id','creado_por','serie_id','seccion_id','estado','fecha_elaboracion'],
- expedientes: ['id','inventario_id','numero_expediente','consecutivo','etapa','disponibilidad',
+ expedientes: ['id','inventario_id','numero_expediente','codigo_clasificacion','consecutivo','etapa','disponibilidad',
   'soporte','anios_tramite','anios_concentracion','anios_total','archivo_zona',
   'lugar_resguardo','estante','nivel','seccion_fisica'],
  expediente_valores: ['expediente_id','valor'],

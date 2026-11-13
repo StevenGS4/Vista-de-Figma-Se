@@ -84,3 +84,12 @@ test('cada inventario reinicia sus hojas y mantiene el formato de transferencia'
  assert.equal(wb.worksheets[1].getCell('U5').value,'HOJA 2 DE 2');
  assert.equal(wb.worksheets[2].getCell('U5').value,'HOJA 1 DE 1');
 });
+
+test('exporta por separado el número de expediente y su clave de clasificación',async()=>{
+ const record={...sample,recordNumber:'EXP-2026-018',cadidoCode:'1C.15',
+  archiveClassificationCode:'SEMARNAT.1C.15.001.2026'};
+ const wb=await reload(makeInventoryWorkbook([record],'tramite'));
+ const sheet=wb.worksheets[0];
+ assert.equal(sheet.getCell('D23').value,'EXP-2026-018');
+ assert.equal(sheet.getCell('E23').value,'SEMARNAT.1C.15.001.2026');
+});
