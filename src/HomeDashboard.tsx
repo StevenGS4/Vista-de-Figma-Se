@@ -13,7 +13,11 @@ const dateToday = () => {
   return [now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("-");
 };
 const daysUntil = (iso: string) => Math.ceil((new Date(iso+"T12:00:00").getTime()-new Date(dateToday()+"T12:00:00").getTime())/86400000);
-export const greetingForHour = (hour: number) => hour >= 5 && hour < 11.5 ? "Buenos días" : hour < 13 ? "Buen día" : hour < 18 ? "Buenas tardes" : "Buenas noches";
+export const greetingForHour = (hour: number) =>
+  hour >= 5 && hour < 11.5 ? "Buenos días" :
+  hour >= 11.5 && hour < 13 ? "Buen día" :
+  hour >= 13 && hour < 18 ? "Buenas tardes" :
+  "Buenas noches";
 
 export function buildHomeNotices(user: UserRecord, role: Role, transfers: DocumentaryTransfer[], loans: ArchivalLoan[]): HomeNotice[] {
   const notices: HomeNotice[] = [];
