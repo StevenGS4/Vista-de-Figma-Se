@@ -341,7 +341,7 @@ function cells(record: ArchivalRecord) {
     record.consecutive,
     record.boxNumber,
     record.recordNumber,
-    record.cadidoCode,
+    record.archiveClassificationCode || record.cadidoCode,
     record.title,
     formatDate(record.openDate),
     record.closeDate ? formatDate(record.closeDate) : "Expediente abierto",
