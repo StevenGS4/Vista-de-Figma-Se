@@ -112,7 +112,7 @@ async function catalog(conn,user,mode){
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
       detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(',')}))};
 }
-function normalize(rows){
+function normalize(rows,autoNumber=false){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
  if(!hasCommonHeader(rows))throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
  if(rows.length>50000)throw fail('Inventario demasiado grande para una sola operación; usa importación por lotes',413);
@@ -123,7 +123,7 @@ function normalize(rows){
      throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
    const number=text(r.recordNumber,110).toUpperCase();
-   if(!number||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
+   if((!number&&!autoNumber)||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
    if(unique.has(consecutivo)||numbers.has(number))throw fail('Expediente o consecutivo duplicado');
    unique.add(consecutivo);numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
@@ -184,10 +184,62 @@ function insertSql(table,record){const keys=Object.keys(record);return {
  sql:`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,
  vals:Object.values(record)
 };}
+const archiveAddress='Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit';
+const yearNumber=(value)=>{
+ const y=Number(value);
+ if(!Number.isSafeInteger(y)||y<1900||y>2100)throw fail('Selecciona un año válido para el expediente (1900–2100)');
+ return y;
+};
+const codeFor=(serie,index,year)=>'SEMARNAT.'+serie+'.'+String(index).padStart(3,'0')+'.'+year;
+async function nextNumbers(conn,serieId,serieCode,rows){
+ // Serie bloqueada hasta COMMIT: evita que dos usuarios reciban el mismo consecutivo simultáneamente.
+ await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[serieId]);
+ const [existing]=await conn.execute('SELECT numero_expediente FROM expedientes WHERE serie_id=?',[serieId]);
+ const max=new Map();
+ for(const row of existing){
+  const number=String(row.numero_expediente||'');
+  const prefix='SEMARNAT.'+serieCode+'.';
+  if(!number.startsWith(prefix))continue;
+  const suffix=number.slice(prefix.length);
+  const match=suffix.match(/^(\d{3,})\.(\d{4})$/);
+  if(match)max.set(match[2],Math.max(max.get(match[2])||0,Number(match[1])));
+ }
+ for(const row of rows){
+  if(/^REG-\d+$/.test(row.id))continue;
+  const year=String(yearNumber(row.recordYear||row.openDate?.slice(0,4)||new Date().getFullYear()));
+  const index=(max.get(year)||0)+1;
+  max.set(year,index);
+  row.recordNumber=codeFor(serieCode,index,year);
+ }
+}
 async function save(req,res,next,editing=false){
  let conn;
  try{
-  const user=req.auth.user,mode=access(user),rows=req.body?.rows,header=normalize(rows);
+  const user=req.auth.user,mode=access(user);
+  const isAdmin=user.roles.includes(roleNames.ADMIN);
+  const rows=Array.isArray(req.body?.rows)?req.body.rows.map(r=>({...r})):[];
+  if(!rows.length)throw fail('Agrega al menos un expediente');
+  if(!isAdmin){
+   const requestedArea=user.areaId;
+   const [areaRows]=await pool.execute(`SELECT a.nombre,a.codigo,
+     CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS encargado
+     FROM areas a LEFT JOIN usuarios u ON u.id=a.encargado_usuario_id AND u.estado='ACTIVO'
+     WHERE a.codigo=? AND a.activo=1`,[requestedArea]);
+   if(!areaRows.length)throw fail('El área asignada no está habilitada',403);
+   if(!areaRows[0].encargado)throw fail('El administrador debe asignar un encargado al área antes de crear inventarios',409);
+   const today=(await pool.execute("SELECT DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today"))[0][0].today;
+   for(const r of rows){
+    r.areaId=requestedArea;
+    r.administrativeUnit='Oficina de Representación de SEMARNAT en Nayarit';
+    r.responsible=areaRows[0].encargado;
+    r.responsiblePosition='Encargado del área de '+areaRows[0].nombre;
+    r.fund='SEMARNAT Nayarit';
+    r.initialSheetNumber='1';
+    r.archiveAddress=archiveAddress;
+    if(!editing)r.inventoryDate=today;
+   }
+  }
+  const header=normalize(rows,!isAdmin);
   if(!['GLOBAL','AREA','PROPIO'].includes(mode))throw fail('No autorizado',403);
   conn=await pool.getConnection();
   await conn.beginTransaction();
@@ -207,7 +259,7 @@ async function save(req,res,next,editing=false){
     fondo=?,fecha_elaboracion=?,hoja_inicial=? WHERE id=?`,
     [text(header.administrativeUnit,220),text(header.responsible,200),text(header.responsiblePosition,200),
      text(header.fund,160),date(header.inventoryDate,true),num(header.initialSheetNumber||1,'hoja',1,65535),inventoryId]);
-   const [oldRows]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? FOR UPDATE',[inventoryId]);
+   const [oldRows]=await conn.execute('SELECT id,consecutivo FROM expedientes WHERE inventario_id=? FOR UPDATE',[inventoryId]);
    const oldIds=new Set(oldRows.map(r=>r.id));
    const supplied=new Set();
    for(const r of rows){
@@ -234,6 +286,24 @@ async function save(req,res,next,editing=false){
    inventoryId=result.insertId;folio=folioGenerated;
   }
   const cat=await resolveCatalog(conn,header,user,mode);
+  if(!isAdmin){
+   const [[serie]]=await conn.execute('SELECT codigo FROM series_cadido WHERE id=?',[cat.serieId]);
+   if(!serie)throw fail('La serie seleccionada no existe');
+   await nextNumbers(conn,cat.serieId,serie.codigo,rows);
+   const [assigned]=await conn.execute('SELECT consecutivo FROM expedientes WHERE inventario_id=?',[inventoryId]);
+   const reserved=new Set(assigned.map(x=>Number(x.consecutivo)));
+   let next=0;
+   for(const r of rows){
+    if(editing && /^REG-\d+$/.test(r.id)){
+     const [[old]]=await conn.execute('SELECT consecutivo,numero_expediente FROM expedientes WHERE id=? AND inventario_id=?',[Number(r.id.slice(4)),inventoryId]);
+     if(!old)throw fail('Expediente existente no encontrado',404);
+     r.consecutive=String(old.consecutivo);r.recordNumber=old.numero_expediente;
+    }else{
+     while(reserved.has(++next)){}
+     reserved.add(next);r.consecutive=String(next);
+    }
+   }
+  }
   for(const r of rows){
    const fields=rowFields(r,inventoryId,cat.serieId,editing && /^REG-\d+$/.test(r.id)
      ? (await conn.execute('SELECT creado_por FROM expedientes WHERE id=?',[Number(r.id.slice(4))]))[0][0]?.creado_por || user.id
