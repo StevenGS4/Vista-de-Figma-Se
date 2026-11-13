@@ -48,3 +48,20 @@ SELECT prestamo_id,accion,fecha,detalle FROM prestamo_historial ORDER BY id DESC
 - El formulario original de Figma permite ingresar nombres de autorización y de entrega, pero el backend usa la identidad autenticada como fuente de verdad y los campos no se usan para suplantar al autorizador.
 - Por ahora no se emiten avisos periódicos automáticamente: la bandeja distingue próximos vencimientos y vencidos. La implementación de recordatorios push/correo puede tratarse después.
 - No se han ejecutado pruebas de integración real sobre el servidor MySQL local del usuario. No utilizar datos institucionales reales antes de la revisión integral.
+
+
+## Etapa 10 — Solicitante y entregador relacionados con usuarios (migración 010)
+1. Realizar respaldo de MySQL y ejecutar **Backend/sql/010_prestamos_usuarios.sql** en la base existente. No recrea tablas ni modifica los préstamos históricos.
+2. Reiniciar backend. Con rol de administrador o encargado de préstamos, abrir nuevo préstamo.
+3. Elegir área solicitante: la lista de solicitantes muestra solo usuarios activos de esa área. Al cambiar de área, se limpia la selección anterior.
+4. La persona que autoriza aparece automáticamente con el nombre de quien inició sesión y no puede editarse.
+5. Persona que entrega: seleccionar usuario activo del área de concentración o con rol de encargado de préstamos/administrador. Se propone el usuario actual cuando es elegible.
+6. Persona que recibe: permanece como texto libre (identifica a la persona física receptora).
+7. Registrar y comprobar en MySQL el vínculo `solicitante_usuario_id` y los identificadores `autorizado_por`, `entregado_por`.
+8. Iniciar sesión con el usuario solicitante y abrir la campana: debe aparecer aviso del préstamo y recordatorios cuando falten hasta tres días o esté vencido. El aviso se consulta bajo su propia sesión.
+9. Intentar enviar un solicitante de otra área, un usuario inactivo o un entregador no autorizado por API: debe rechazarse antes de crear el préstamo.
+10. La disponibilidad y devolución siguen siendo gestionadas por los procedimientos originales; los préstamos históricos conservan su nombre aunque no tengan todavía una cuenta asociada.
+
+**Nota de seguridad:** no registrar préstamos nuevos con el backend actualizado sin ejecutar primero la migración. El servidor verifica su existencia antes de invocar el procedimiento que confirma la entrega.
+
+**Límite:** la campana consulta avisos al abrirse y el estado de lectura permanece en el navegador. No envía mensajes push ni correos.
