@@ -737,28 +737,30 @@ function ExpedientsStep({
             value={active.boxNumber}
           />
         </Field>
-        {!isAdmin && <Field error={errors.recordYear} label="Año del expediente" required>
+        <Field error={errors.recordYear} label="Año del código archivístico" required>
           <input type="number" min="1900" max="2100" style={{maxWidth:145}}
-            value={active.recordYear || active.recordNumber.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
+            value={active.recordYear || active.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
             disabled={/^REG-\d+$/.test(active.id)}
             onChange={event=>{
               const year=event.target.value;
               update("recordYear",year);
-              update("recordNumber",previewNumber(active.cadidoCode,active.consecutive,year));
             }} />
         </Field>}
-        {isAdmin && <Field error={errors.recordNumber} label="Número de expediente" required>
+        <Field error={errors.recordNumber} label="Número de expediente" required>
           <input
-            onChange={(event) => update("recordNumber", event.target.value.toUpperCase())}
+            maxLength={110}
+            placeholder="Captura el número propio del expediente"
+            onChange={(event) => update("recordNumber", event.target.value)}
             value={active.recordNumber}
           />
-        </Field>}
+        </Field>
         <Field className="record-field--wide" label="Código de clasificación archivística">
           <div className="read-only-code"><ShieldCheck size={16}/><strong>
-            {isAdmin || /^REG-\d+$/.test(active.id) ? (active.recordNumber || "Número de expediente") :
+            {/^REG-\d+$/.test(active.id) ?
+              (active.archiveClassificationCode || "Clasificación histórica pendiente de revisión") :
               previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
           </strong></div>
-          {!isAdmin && <small className="field-hint">Vista preliminar; MySQL asigna el siguiente número disponible al guardar para evitar duplicados.</small>}
+          <small className="field-hint">Clave CADIDO preliminar. MySQL asigna el consecutivo definitivo al guardar. Es independiente del número de expediente.</small>
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
@@ -997,7 +999,7 @@ function InventoryForm({
   const makeInitial = () => {
     if (editing) return existing.map(item => ({
       ...item,
-      recordYear:item.recordNumber.match(/\.(\d{4})$/)?.[1] || item.openDate?.slice(0,4) || String(new Date().getFullYear())
+      recordYear:item.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || item.openDate?.slice(0,4) || String(new Date().getFullYear())
     }));
     const base = emptyRecord();
     const inventoryId = `INV-TR-${String(groupInventories(records).length + 1).padStart(3, "0")}`;
@@ -1094,10 +1096,10 @@ function InventoryForm({
       if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
       if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
-      if (!isAdmin && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
+      if (!/^REG-\d+$/.test(record.id) && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
         next.recordYear="Selecciona un año válido (1900–2100).";
-      if (isAdmin && !record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
-      if (isAdmin &&
+      if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
+      if (
         records.some(
           (item) =>
             item.id !== record.id &&
@@ -1190,8 +1192,8 @@ function InventoryForm({
     onSave(
       drafts.map((record) => ({
         ...record,
-        recordNumber: isAdmin || /^REG-\d+$/.test(record.id) ? record.recordNumber.trim().toUpperCase() :
-          previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
+        recordNumber: record.recordNumber.trim(),
+        archiveClassificationCode: /^REG-\d+$/.test(record.id) ? (record.archiveClassificationCode||"") : "",
         room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
         archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
         initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
@@ -1265,8 +1267,9 @@ function InventoryForm({
                 preview
                 inventory={drafts.map(record=>({
                   ...record,
-                  recordNumber: isAdmin || /^REG-\d+$/.test(record.id) ? record.recordNumber :
-                    previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
+                  archiveClassificationCode: /^REG-\d+$/.test(record.id)
+                    ? record.archiveClassificationCode
+                    : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
                   totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
                 }))}
                 isAdmin={isAdmin}
@@ -1444,7 +1447,7 @@ function InventoryDetail({
                   <td>{record.boxNumber}</td>
                   <td>{record.recordNumber}</td>
                   <td>
-                    <span className="cadido-code">{record.cadidoCode}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                   </td>
                   <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
