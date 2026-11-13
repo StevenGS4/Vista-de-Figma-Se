@@ -6,9 +6,10 @@ import type { DocumentaryTransfer } from "./transfers";
 import type { ArchivalLoan } from "./loans";
 import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
 
-export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord}:{
+export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onRefresh}:{
  user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:ArchivalLoan[];
  allowed:HomeModule[];onNavigate:(id:HomeModule)=>void;onSearchRecord:(record:ArchivalRecord)=>void;
+ onRefresh:()=>Promise<void>;
 }) {
  const [searchOpen,setSearchOpen]=useState(false);
  const [notificationsOpen,setNotificationsOpen]=useState(false);
@@ -43,7 +44,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
  },[query,records,role,allowed,user.id,user.areaId]);
  return <>
   <button aria-label="Búsqueda global" aria-expanded={searchOpen} className="header-icon" onClick={()=>{setSearchOpen(!searchOpen);setNotificationsOpen(false);}}><Search size={19}/></button>
-  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
+  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen)void onRefresh();setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
    <Bell size={19}/>{unread>0 && <i/>}
   </button>
   {searchOpen && <div className="header-popover header-popover--search home-header-popover">
