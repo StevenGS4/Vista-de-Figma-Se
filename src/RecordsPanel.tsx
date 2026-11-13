@@ -401,9 +401,10 @@ function HeaderStep({
   locked: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
-  const enabledSeries = cadidoSeries.filter((series) =>
-    series.enabledAreaIds.includes(form.areaId),
-  );
+  const areaSeries = cadidoSeries.filter(series => series.enabledAreaIds.includes(form.areaId));
+  const years = [...new Set(areaSeries.map(series=>series.year).filter((year):year is string=>Boolean(year)))].sort((a,b)=>Number(b)-Number(a));
+  const selectedYear = form.cadidoYear || years[0] || "";
+  const enabledSeries = areaSeries.filter(series=>!selectedYear||series.year===selectedYear);
   const sectionIds = new Set(enabledSeries.map((series) => series.sectionId));
   return (
     <>
@@ -476,6 +477,15 @@ function HeaderStep({
         <Field error={errors.fund} label="Fondo documental" required>
           <input onChange={(event) => update("fund", event.target.value)} value={form.fund} />
         </Field>
+        <Field label="Edición CADIDO" required>
+          <select value={selectedYear} disabled={locked} onChange={event=>{
+            update("cadidoYear",event.target.value);
+            update("cadidoSectionId","");update("cadidoSeriesId","");update("cadidoCode","");
+          }}>
+            <option value="">Selecciona una edición</option>
+            {years.map(y=><option key={y} value={y}>CADIDO {y}</option>)}
+          </select>
+        </Field>
         <Field error={errors.cadidoSectionId} label="Sección documental" required>
           <select
             onChange={(event) => {
@@ -502,6 +512,7 @@ function HeaderStep({
               const series = cadidoSeries.find((item) => item.id === event.target.value);
               update("cadidoSeriesId", event.target.value);
               update("cadidoCode", series?.code ?? "");
+              update("cadidoYear",series?.year ?? selectedYear);
             }}
             value={form.cadidoSeriesId}
           >
