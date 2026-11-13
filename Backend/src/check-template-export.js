@@ -19,7 +19,11 @@ const fail=(message)=>{throw new Error('Verificación de plantilla: '+message);}
 function contains(sheet,term){
   let found=false;
   sheet.eachRow(row=>row.eachCell(cell=>{
-    if(typeof cell.value==='string' && cell.value.includes(term))found=true;
+    const v=cell.value;
+    const text=typeof v==='string'?v:
+      v && typeof v==='object' && Array.isArray(v.richText)?
+        v.richText.map(x=>x.text||'').join(''):String(v?.text||v?.result||'');
+    if(text.includes(term))found=true;
   }));
   return found;
 }
