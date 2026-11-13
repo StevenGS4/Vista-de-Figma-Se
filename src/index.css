@@ -6976,3 +6976,26 @@
   .app-header .home-header-popover { display: block; position: fixed; top: 65px; right: 12px; left: 12px; width: auto; }
   .home-activity-button { grid-template-columns: 34px minmax(0,1fr); }
 }
+
+/* La campana utiliza contenido real en varias filas; no heredar el bloque demo. */
+.header-popover--notifications.home-header-popover > .home-notice-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+.header-popover--notifications.home-header-popover > .home-notice-items {
+  display: grid;
+  padding: 0;
+  margin-top: 10px;
+  gap: 6px;
+  background: transparent;
+}
+.header-popover--notifications.home-header-popover > .home-notice-items > button {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+.header-popover--notifications.home-header-popover > small { line-height: 1.45; }
