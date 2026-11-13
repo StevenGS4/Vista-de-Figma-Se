@@ -163,7 +163,7 @@ function fillHeader(sheet,first,location,kind){
     const target=sheet.getCell(fallback);
     if(target.row>=start)continue;
     const existing=normalize(visible(target.value));
-    if(target.type===ExcelJS.ValueType.Formula || (existing && !/^\\(\\d+\\)$/.test(existing)))continue;
+    if(target.type===ExcelJS.ValueType.Formula || (existing && !/^\(\d+\)$/.test(existing)))continue;
     fillCell(sheet,fallback,val);
   }
 }
