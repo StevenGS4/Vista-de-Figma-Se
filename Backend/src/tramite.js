@@ -49,6 +49,7 @@ export async function readRecords(conn,where='',params=[]){
  e.numero_expediente AS recordNumber,e.numero_caja AS boxNumber,e.titulo_asunto AS title,
  e.descripcion AS description,e.domicilio_resguardo AS archiveAddress,e.observaciones AS observations,
  sc.codigo AS cadidoSectionId,sc.nombre AS cadidoSectionName,sr.id AS dbSeriesId,sr.codigo AS cadidoCode,sr.nombre AS cadidoSeriesName,
+ cv.anio AS cadidoYear,
  DATE_FORMAT(e.apertura,'%Y-%m-%d') AS openDate,DATE_FORMAT(e.cierre,'%Y-%m-%d') AS closeDate,
  CAST(e.legajos AS CHAR) AS filesCount,CAST(e.folios AS CHAR) AS foliosCount,
  e.soporte AS supportType,CAST(e.anios_tramite AS CHAR) AS currentValidity,
@@ -64,6 +65,7 @@ export async function readRecords(conn,where='',params=[]){
  JOIN expedientes e ON e.inventario_id=i.id
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
  JOIN series_cadido sr ON sr.id=e.serie_id
+ LEFT JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  LEFT JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
  LEFT JOIN transferencias t ON t.id=ti.transferencia_id
  ${where} ORDER BY i.fecha_elaboracion DESC,i.id DESC,e.consecutivo ASC`,params);
@@ -81,7 +83,7 @@ export async function readRecords(conn,where='',params=[]){
  id:rowId(r.dbId),inventoryId:r.inventoryId,inventoryDate:r.inventoryDate,
  responsiblePosition:r.responsiblePosition,initialSheetNumber:String(r.initialSheetNumber),
  administrativeUnit:r.administrativeUnit,areaId:r.areaId,areaName:r.areaName,responsible:r.responsible,fund:r.fund,
- consecutive:r.consecutive,recordNumber:r.recordNumber,boxNumber:r.boxNumber||'',title:r.title,
+ consecutive:r.consecutive,cadidoYear:r.cadidoYear?String(r.cadidoYear):'',recordNumber:r.recordNumber,boxNumber:r.boxNumber||'',title:r.title,
  description:r.description||'',archiveAddress:r.archiveAddress||'',observations:r.observations||'',
  cadidoSectionId:r.cadidoSectionId,cadidoSectionName:r.cadidoSectionName,cadidoSeriesId:seriesId(r.dbSeriesId),cadidoCode:r.cadidoCode,cadidoSeriesName:r.cadidoSeriesName,
  openDate:r.openDate,closeDate:r.closeDate||'',filesCount:r.filesCount,foliosCount:r.foliosCount,
