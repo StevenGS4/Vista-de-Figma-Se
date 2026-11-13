@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { usersApi } from "./api";
+import AdminAreasPanel from "./AdminAreasPanel";
 import {
   ArrowLeft,
   Check,
@@ -20,7 +21,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  Area,
   Role,
   UserRecord,
   UserStatus,
@@ -760,49 +760,6 @@ function UsersList({
   );
 }
 
-function AreasCatalog({ items }: { items: Area[] }) {
-  return (
-    <div className="surface table-surface">
-      <div className="table-titlebar">
-        <div>
-          <h2>Catálogo de áreas</h2>
-          <p>Estructura administrativa utilizada para clasificar el acceso.</p>
-        </div>
-        <span className="demo-label">Datos de demostración</span>
-      </div>
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Identificador</th>
-              <th>Nombre del área</th>
-              <th>Área superior</th>
-              <th>Responsable</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((area) => (
-              <tr key={area.id}>
-                <td>
-                  <span className="record-id">{area.id}</span>
-                </td>
-                <td>
-                  <strong className="cell-primary">{area.name}</strong>
-                </td>
-                <td>{area.parent}</td>
-                <td>{area.manager}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="catalog-note">
-        Este catálogo utiliza información ficticia y no modifica la estructura institucional real.
-      </div>
-    </div>
-  );
-}
-
 function PermissionMatrix({
   onChange,
   rolePermissions,
@@ -1043,7 +1000,7 @@ export default function AdminPanel({
           users={users}
         />
       )}
-      {tab === "areas" && <AreasCatalog items={areas} />}
+      {tab === "areas" && <AdminAreasPanel />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />
       )}

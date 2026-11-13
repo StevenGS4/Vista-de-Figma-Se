@@ -196,6 +196,8 @@ function InventoryList({
 }) {
   const [search, setSearch] = useState("");
   const [searched, setSearched] = useState(false);
+  const [cadidoYear, setCadidoYear] = useState("");
+  const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
     "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos los autorizados"
   >("Recientes activos");
@@ -211,6 +213,8 @@ function InventoryList({
           (quickView === "Recientes activos" && !transferred && index < 5);
         return (
           matchesView &&
+          (!cadidoYear || header.cadidoYear === cadidoYear) &&
+          (!cadidoCodeFilter || header.cadidoCode === cadidoCodeFilter) &&
           (!query ||
             id.toLowerCase().includes(query) ||
             areaName(header.areaId).toLowerCase().includes(query) ||
@@ -224,7 +228,7 @@ function InventoryList({
             ))
         );
       }),
-    [quickView, records, search],
+    [quickView, records, search, cadidoYear, cadidoCodeFilter],
   );
   return (
     <>
@@ -275,6 +279,14 @@ function InventoryList({
               <option>Todos los autorizados</option>
             </select>
           </label>
+          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);setSearched(true);}}>
+            <option value="">Todas las ediciones CADIDO</option>
+            {[...new Set(records.map(r=>r.cadidoYear||"Sin versión"))].sort().map(v=><option key={v} value={v==="Sin versión"?"":v}>{v}</option>)}
+          </select></label>
+          <label className="filter-select"><select aria-label="Filtrar código CADIDO histórico" value={cadidoCodeFilter} onChange={e=>{setCadidoCodeFilter(e.target.value);setSearched(true);}}>
+            <option value="">Todos los códigos</option>
+            {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(code=><option key={code} value={code}>{code}</option>)}
+          </select></label>
           <Button className="button--primary" onClick={() => setSearched(true)}>
             <Search size={16} /> Buscar
           </Button>
@@ -389,9 +401,10 @@ function HeaderStep({
   locked: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
-  const enabledSeries = cadidoSeries.filter((series) =>
-    series.enabledAreaIds.includes(form.areaId),
-  );
+  const areaSeries = cadidoSeries.filter(series => series.enabledAreaIds.includes(form.areaId));
+  const years = [...new Set(areaSeries.map(series=>series.year).filter((year):year is string=>Boolean(year)))].sort((a,b)=>Number(b)-Number(a));
+  const selectedYear = form.cadidoYear || years[0] || "";
+  const enabledSeries = areaSeries.filter(series=>!selectedYear||series.year===selectedYear);
   const sectionIds = new Set(enabledSeries.map((series) => series.sectionId));
   return (
     <>
@@ -464,6 +477,15 @@ function HeaderStep({
         <Field error={errors.fund} label="Fondo documental" required>
           <input onChange={(event) => update("fund", event.target.value)} value={form.fund} />
         </Field>
+        <Field label="Edición CADIDO" required>
+          <select value={selectedYear} disabled={locked} onChange={event=>{
+            update("cadidoYear",event.target.value);
+            update("cadidoSectionId","");update("cadidoSeriesId","");update("cadidoCode","");
+          }}>
+            <option value="">Selecciona una edición</option>
+            {years.map(y=><option key={y} value={y}>CADIDO {y}</option>)}
+          </select>
+        </Field>
         <Field error={errors.cadidoSectionId} label="Sección documental" required>
           <select
             onChange={(event) => {
@@ -490,6 +512,7 @@ function HeaderStep({
               const series = cadidoSeries.find((item) => item.id === event.target.value);
               update("cadidoSeriesId", event.target.value);
               update("cadidoCode", series?.code ?? "");
+              update("cadidoYear",series?.year ?? selectedYear);
             }}
             value={form.cadidoSeriesId}
           >

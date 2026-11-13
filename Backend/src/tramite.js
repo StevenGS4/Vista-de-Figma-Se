@@ -49,6 +49,7 @@ export async function readRecords(conn,where='',params=[]){
  e.numero_expediente AS recordNumber,e.numero_caja AS boxNumber,e.titulo_asunto AS title,
  e.descripcion AS description,e.domicilio_resguardo AS archiveAddress,e.observaciones AS observations,
  sc.codigo AS cadidoSectionId,sc.nombre AS cadidoSectionName,sr.id AS dbSeriesId,sr.codigo AS cadidoCode,sr.nombre AS cadidoSeriesName,
+ cv.anio AS cadidoYear,
  DATE_FORMAT(e.apertura,'%Y-%m-%d') AS openDate,DATE_FORMAT(e.cierre,'%Y-%m-%d') AS closeDate,
  CAST(e.legajos AS CHAR) AS filesCount,CAST(e.folios AS CHAR) AS foliosCount,
  e.soporte AS supportType,CAST(e.anios_tramite AS CHAR) AS currentValidity,
@@ -64,6 +65,7 @@ export async function readRecords(conn,where='',params=[]){
  JOIN expedientes e ON e.inventario_id=i.id
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
  JOIN series_cadido sr ON sr.id=e.serie_id
+ LEFT JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  LEFT JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
  LEFT JOIN transferencias t ON t.id=ti.transferencia_id
  ${where} ORDER BY i.fecha_elaboracion DESC,i.id DESC,e.consecutivo ASC`,params);
@@ -81,7 +83,7 @@ export async function readRecords(conn,where='',params=[]){
  id:rowId(r.dbId),inventoryId:r.inventoryId,inventoryDate:r.inventoryDate,
  responsiblePosition:r.responsiblePosition,initialSheetNumber:String(r.initialSheetNumber),
  administrativeUnit:r.administrativeUnit,areaId:r.areaId,areaName:r.areaName,responsible:r.responsible,fund:r.fund,
- consecutive:r.consecutive,recordNumber:r.recordNumber,boxNumber:r.boxNumber||'',title:r.title,
+ consecutive:r.consecutive,cadidoYear:r.cadidoYear?String(r.cadidoYear):'',recordNumber:r.recordNumber,boxNumber:r.boxNumber||'',title:r.title,
  description:r.description||'',archiveAddress:r.archiveAddress||'',observations:r.observations||'',
  cadidoSectionId:r.cadidoSectionId,cadidoSectionName:r.cadidoSectionName,cadidoSeriesId:seriesId(r.dbSeriesId),cadidoCode:r.cadidoCode,cadidoSeriesName:r.cadidoSeriesName,
  openDate:r.openDate,closeDate:r.closeDate||'',filesCount:r.filesCount,foliosCount:r.foliosCount,
@@ -99,15 +101,16 @@ export async function readRecords(conn,where='',params=[]){
 }
 async function catalog(conn,user,mode){
  const [sections]=await conn.execute('SELECT codigo AS id,nombre AS name FROM secciones_cadido ORDER BY codigo');
- const [series]=await conn.execute(`SELECT sr.id,sr.nombre,sr.codigo,sc.codigo AS sectionCode,
+ const [series]=await conn.execute(`SELECT sr.id,sr.nombre,sr.codigo,cv.anio AS editionYear,sc.codigo AS sectionCode,
  GROUP_CONCAT(DISTINCT a.codigo ORDER BY a.codigo SEPARATOR ',') AS enabled
  FROM series_cadido sr JOIN secciones_cadido sc ON sc.id=sr.seccion_id
+ JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  JOIN series_areas sa ON sa.serie_id=sr.id JOIN areas a ON a.id=sa.area_id
- WHERE sr.activo=1 GROUP BY sr.id,sr.nombre,sr.codigo,sc.codigo ORDER BY sr.codigo`);
+ WHERE sr.activo=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sa.habilitado=1 GROUP BY sr.id,sr.nombre,sr.codigo,cv.anio,sc.codigo ORDER BY cv.anio DESC,sr.codigo`);
  return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),
   series:series.filter(s=>mode==='GLOBAL'||s.enabled.split(',').includes(user.areaId))
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
-      detail:'Clasificación de catálogo',enabledAreaIds:s.enabled.split(',')}))};
+      detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(',')}))};
 }
 function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
@@ -146,7 +149,7 @@ async function resolveCatalog(conn,header,user,mode){
  if(!Number.isSafeInteger(id))throw fail('Serie CADIDO inexistente');
  const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code FROM series_cadido sr
  JOIN secciones_cadido sc ON sc.id=sr.seccion_id JOIN series_areas sa ON sa.serie_id=sr.id
- WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND sr.activo=1`,
+ WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND sa.habilitado=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sr.activo=1`,
  [id,header.cadidoSectionId,areas[0].id]);
  if(!series.length)throw fail('Serie CADIDO no autorizada para esta área');
  return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id};

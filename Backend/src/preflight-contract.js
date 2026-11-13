@@ -1,14 +1,15 @@
 // Contrato de la base académica ya definida para el proyecto SEMARNAT.
 // Esta lista es de LECTURA: el diagnóstico nunca crea, borra ni edita registros.
 export const REQUIRED_COLUMNS = Object.freeze({
- areas: ['id','codigo','nombre','activo'],
+ areas: ['id','codigo','nombre','activo','encargado_usuario_id'],
+ catalogos_cadido_versiones: ['id','anio','nombre','activo'],
  usuarios: ['id','codigo','nombres','apellido_paterno','correo','password_hash','area_id','estado','cambiar_password'],
  roles: ['id','codigo','nombre'],
  usuario_roles: ['usuario_id','rol_id'],
  sesiones: ['usuario_id','token_hash','expira_en','revocado_en'],
  secciones_cadido: ['id','codigo','nombre','es_demostracion'],
- series_cadido: ['id','seccion_id','codigo','nombre','activo','es_demostracion'],
- series_areas: ['serie_id','area_id'],
+ series_cadido: ['id','seccion_id','codigo','nombre','activo','es_demostracion','catalogo_version_id'],
+ series_areas: ['serie_id','area_id','habilitado'],
  inventarios: ['id','folio','area_id','creado_por','serie_id','seccion_id','estado','fecha_elaboracion'],
  expedientes: ['id','inventario_id','numero_expediente','consecutivo','etapa','disponibilidad',
   'soporte','anios_tramite','anios_concentracion','anios_total','archivo_zona',
