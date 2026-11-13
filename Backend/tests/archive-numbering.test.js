@@ -33,3 +33,10 @@ test('no permite años o series inválidas',()=>{
  assert.throws(()=>codeFor('4S.1',0,2022));
  assert.throws(()=>allocateNumbers([],[{id:'DRAFT-1',recordYear:'1800'}],'4S.1'),/año válido/);
 });
+
+test('el número de expediente del usuario queda independiente de la clave CADIDO calculada',()=>{
+ const rows=[{id:'DRAFT-1',recordNumber:'EXP-2026-ABC',recordYear:'2026'}];
+ const codes=allocateNumbers([],rows,'1C.15');
+ assert.deepEqual(codes,['SEMARNAT.1C.15.001.2026']);
+ assert.equal(rows[0].recordNumber,'EXP-2026-ABC');
+});
