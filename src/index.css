@@ -6775,3 +6775,85 @@
     width: 100%;
   }
 }
+
+
+/* Archivo de trámite: cinco controles alineados, con anchos equilibrados.
+   La regla específica prevalece sobre el estilo antiguo de una columna. */
+.records-filters.inventory-list-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(145px, 1fr)) minmax(118px, 0.75fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.records-filters.inventory-list-filters > * {
+  min-width: 0;
+  width: 100%;
+}
+
+.records-filters.inventory-list-filters .records-search input {
+  min-width: 0;
+  width: 100%;
+}
+
+.records-filters.inventory-list-filters > .button {
+  min-height: 40px;
+  white-space: nowrap;
+  justify-content: center;
+}
+
+.inventory-preview-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--gray-200);
+  border-radius: 9px;
+  background: var(--gray-50);
+}
+
+.inventory-preview-add-row > div {
+  flex: 1 1 240px;
+}
+
+.inventory-preview-add-row strong {
+  display: block;
+  color: var(--green-950);
+  font-size: 14px;
+}
+
+.inventory-preview-add-row p {
+  margin-top: 5px;
+  color: var(--gray-600);
+  font-size: 12px;
+}
+
+.inventory-preview-add-row .button {
+  white-space: nowrap;
+}
+
+@media (max-width: 1160px) {
+  .records-filters.inventory-list-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .records-filters.inventory-list-filters .records-search {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .records-filters.inventory-list-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .records-filters.inventory-list-filters .records-search {
+    grid-column: auto;
+  }
+  .inventory-preview-add-row .button {
+    width: 100%;
+  }
+}
