@@ -61,6 +61,7 @@ export type CadidoSeries = {
   sectionId: string;
   name: string;
   code: string;
+  year?: string;
   detail: string;
   enabledAreaIds: string[];
 };
