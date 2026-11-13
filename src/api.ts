@@ -118,6 +118,11 @@ export const inventoriesApi={
  }
 };
 
+export type HomeActivity = { id:string; title:string; detail:string; module:string; action:string; date:string|null };
+export const homeApi={
+ activity:async()=>((await request<{activities:HomeActivity[]}>('/api/inicio/actividad')).activities),
+};
+
 export const areasApi={
  list:async()=>((await request<{areas:Area[]}>('/api/catalogos/areas')).areas),
 };
