@@ -1,0 +1,1396 @@
+{
+  "fuente": "Catálogo de Disposición Documental de la SEMARNAT 2023, Cuadro General de Clasificación Archivística, páginas 15–21 del PDF CADIDO VALIDADO (SELLADO).pdf.",
+  "anio": 2023,
+  "secciones": [
+    {
+      "codigo": "1C",
+      "nombre": "LEGISLACIÓN"
+    },
+    {
+      "codigo": "2C",
+      "nombre": "ASUNTOS JURÍDICOS"
+    },
+    {
+      "codigo": "3C",
+      "nombre": "PROGRAMACIÓN, ORGANIZACIÓN Y PRESUPUESTACIÓN"
+    },
+    {
+      "codigo": "4C",
+      "nombre": "RECURSOS HUMANOS"
+    },
+    {
+      "codigo": "5C",
+      "nombre": "RECURSOS FINANCIEROS"
+    },
+    {
+      "codigo": "6C",
+      "nombre": "RECURSOS MATERIALES Y OBRA PÚBLICA"
+    },
+    {
+      "codigo": "7C",
+      "nombre": "SERVICIOS GENERALES"
+    },
+    {
+      "codigo": "8C",
+      "nombre": "TECNOLOGÍAS Y SERVICIOS DE LA INFORMACIÓN"
+    },
+    {
+      "codigo": "9C",
+      "nombre": "COMUNICACIÓN SOCIAL"
+    },
+    {
+      "codigo": "10C",
+      "nombre": "CONTROL Y AUDITORÍA DE ACTIVIDADES PÚBLICAS"
+    },
+    {
+      "codigo": "11C",
+      "nombre": "PLANEACIÓN, INFORMACIÓN EVALUACIÓN Y POLÍTICAS"
+    },
+    {
+      "codigo": "12C",
+      "nombre": "TRANSPARENCIA Y ACCESO A LA INFORMACIÓN"
+    },
+    {
+      "codigo": "1S",
+      "nombre": "PLANEACIÓN Y POLÍTICA AMBIENTAL"
+    },
+    {
+      "codigo": "2S",
+      "nombre": "FOMENTO Y REGULACIÓN AMBIENTAL"
+    },
+    {
+      "codigo": "3S",
+      "nombre": "GESTIÓN INTEGRAL DE MATERIALES Y ACTIVIDADES RIESGOSAS"
+    },
+    {
+      "codigo": "4S",
+      "nombre": "VALORACIÓN DEL IMPACTO Y RIESGO AMBIENTAL"
+    },
+    {
+      "codigo": "5S",
+      "nombre": "EVALUACIÓN DE LA GESTIÓN FORESTAL Y DE SUELOS"
+    },
+    {
+      "codigo": "6S",
+      "nombre": "GESTIÓN DEL MANEJO Y APROVECHAMIENTO DE VIDA SILVESTRE"
+    },
+    {
+      "codigo": "8S",
+      "nombre": "GESTIÓN DE LA CALIDAD DEL AIRE Y REGISTRO DE EMISIONES Y TRANSFERENCIA DE CONTAMINANTES"
+    },
+    {
+      "codigo": "9S",
+      "nombre": "AGROECOLOGÍA Y PATRIMONIO CULTURAL"
+    },
+    {
+      "codigo": "10S",
+      "nombre": "RECURSOS NATURALES Y BIOSEGURIDAD"
+    },
+    {
+      "codigo": "7S",
+      "nombre": "GESTIÓN Y ADMINISTRACIÓN DE LA ZONA FEDERAL MARÍTIMO TERRESTRE Y AMBIENTES COSTEROS"
+    }
+  ],
+  "series": [
+    {
+      "codigo": "1C.2",
+      "seccion": "1C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE LEGISLACIÓN"
+    },
+    {
+      "codigo": "1C.3",
+      "seccion": "1C",
+      "nombre": "LEYES"
+    },
+    {
+      "codigo": "1C.5",
+      "seccion": "1C",
+      "nombre": "CONVENIOS Y TRATADOS INTERNACIONALES"
+    },
+    {
+      "codigo": "1C.6",
+      "seccion": "1C",
+      "nombre": "DECRETOS"
+    },
+    {
+      "codigo": "1C.7",
+      "seccion": "1C",
+      "nombre": "REGLAMENTOS"
+    },
+    {
+      "codigo": "1C.8",
+      "seccion": "1C",
+      "nombre": "ACUERDOS GENERALES"
+    },
+    {
+      "codigo": "1C.10",
+      "seccion": "1C",
+      "nombre": "INSTRUMENTOS JURÍDICOS CONSENSUALES (CONVENIOS, BASES DE COLABORACIÓN, ACUERDOS, ETC.)"
+    },
+    {
+      "codigo": "1C.11",
+      "seccion": "1C",
+      "nombre": "RESOLUCIONES"
+    },
+    {
+      "codigo": "1C.13",
+      "seccion": "1C",
+      "nombre": "DIARIO OFICIAL DE LA FEDERACIÓN (PUBLICACIONES EN EL)"
+    },
+    {
+      "codigo": "1C.14",
+      "seccion": "1C",
+      "nombre": "NORMAS OFICIALES MEXICANAS"
+    },
+    {
+      "codigo": "1C.15",
+      "seccion": "1C",
+      "nombre": "COMITÉS Y SUBCOMITÉS DE NORMALIZACIÓN"
+    },
+    {
+      "codigo": "2C.1",
+      "seccion": "2C",
+      "nombre": "DISPOSICIONES EN MATERIA DE ASUNTOS JURÍDICOS"
+    },
+    {
+      "codigo": "2C.2",
+      "seccion": "2C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE ASUNTOS JURÍDICOS"
+    },
+    {
+      "codigo": "2C.3",
+      "seccion": "2C",
+      "nombre": "REGISTRO Y CERTIFICACIÓN DE FIRMAS"
+    },
+    {
+      "codigo": "2C.4",
+      "seccion": "2C",
+      "nombre": "REGISTRO Y CERTIFICACIÓN DE FIRMAS ACREDITADAS ANTE LA DEPENDENCIA"
+    },
+    {
+      "codigo": "2C.5",
+      "seccion": "2C",
+      "nombre": "ACTUACIONES Y REPRESENTACIONES EN MATERIA LEGAL"
+    },
+    {
+      "codigo": "2C.6",
+      "seccion": "2C",
+      "nombre": "ASISTENCIA CONSULTA Y ASESORÍAS"
+    },
+    {
+      "codigo": "2C.7",
+      "seccion": "2C",
+      "nombre": "ESTUDIOS, DICTÁMENES E INFORMES"
+    },
+    {
+      "codigo": "2C.8",
+      "seccion": "2C",
+      "nombre": "JUICIOS CONTRA LA DEPENDENCIA"
+    },
+    {
+      "codigo": "2C.9",
+      "seccion": "2C",
+      "nombre": "JUICIOS DE LA DEPENDENCIA"
+    },
+    {
+      "codigo": "2C.10",
+      "seccion": "2C",
+      "nombre": "AMPAROS"
+    },
+    {
+      "codigo": "2C.11",
+      "seccion": "2C",
+      "nombre": "INTERPOSICIÓN DE RECURSOS ADMINISTRATIVOS"
+    },
+    {
+      "codigo": "2C.12",
+      "seccion": "2C",
+      "nombre": "OPINIONES TÉCNICO JURÍDICAS"
+    },
+    {
+      "codigo": "2C.13",
+      "seccion": "2C",
+      "nombre": "INSPECCIÓN Y DESIGNACIÓN DE PERITOS"
+    },
+    {
+      "codigo": "2C.14",
+      "seccion": "2C",
+      "nombre": "DESFALCOS, PECULADOS, FRAUDES Y COHECHOS"
+    },
+    {
+      "codigo": "2C.15",
+      "seccion": "2C",
+      "nombre": "NOTIFICACIONES"
+    },
+    {
+      "codigo": "2C.16",
+      "seccion": "2C",
+      "nombre": "INCONFORMIDADES Y PETICIONES"
+    },
+    {
+      "codigo": "2C.17",
+      "seccion": "2C",
+      "nombre": "DELITOS Y FALTAS"
+    },
+    {
+      "codigo": "2C.18",
+      "seccion": "2C",
+      "nombre": "DERECHOS HUMANOS"
+    },
+    {
+      "codigo": "3C.1",
+      "seccion": "3C",
+      "nombre": "DISPOSICIONES EN MATERIA DE PROGRAMACIÓN"
+    },
+    {
+      "codigo": "3C.2",
+      "seccion": "3C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE PROGRAMACIÓN"
+    },
+    {
+      "codigo": "3C.3",
+      "seccion": "3C",
+      "nombre": "PROCESOS DE PROGRAMACIÓN"
+    },
+    {
+      "codigo": "3C.4",
+      "seccion": "3C",
+      "nombre": "PROGRAMA ANUAL DE INVERSIONES"
+    },
+    {
+      "codigo": "3C.5",
+      "seccion": "3C",
+      "nombre": "REGISTRO PROGRÁMATICO DE PROYECTOS INSTITUCIONALES"
+    },
+    {
+      "codigo": "3C.6",
+      "seccion": "3C",
+      "nombre": "REGISTRO PROGRÁMATICO DE PROYECTOS ESPECIALES"
+    },
+    {
+      "codigo": "3C.8",
+      "seccion": "3C",
+      "nombre": "DISPOSICIONES EN MATERIA DE ORGANIZACIÓN"
+    },
+    {
+      "codigo": "3C.9",
+      "seccion": "3C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE ORGANIZACIÓN"
+    },
+    {
+      "codigo": "3C.10",
+      "seccion": "3C",
+      "nombre": "DICTAMEN TÉCNICO DE ESTRUCTURAS"
+    },
+    {
+      "codigo": "3C.11",
+      "seccion": "3C",
+      "nombre": "INTEGRACIÓN Y DICTAMEN DE MANUALES DE ORGANIZACIÓN"
+    },
+    {
+      "codigo": "3C.12",
+      "seccion": "3C",
+      "nombre": "INTEGRACIÓN Y DICTAMEN DE MANUALES, NORMAS Y LINEAMIENTOS, DE PROCESOS Y PROCEDIMIENTOS"
+    },
+    {
+      "codigo": "3C.13",
+      "seccion": "3C",
+      "nombre": "ACCIONES DE MODERNIZACIÓN ADMINISTRATIVA"
+    },
+    {
+      "codigo": "3C.14",
+      "seccion": "3C",
+      "nombre": "CERTIFICACIÓN DE CALIDAD DE PROCESOS Y SERVICIOS ADMINISTRATIVOS"
+    },
+    {
+      "codigo": "3C.17",
+      "seccion": "3C",
+      "nombre": "DISPOSICIONES EN MATERIA DE PRESUPUESTACIÓN"
+    },
+    {
+      "codigo": "3C.18",
+      "seccion": "3C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE PRESUPUESTACIÓN"
+    },
+    {
+      "codigo": "3C.19",
+      "seccion": "3C",
+      "nombre": "ANÁLISIS FINANCIERO Y PRESUPUESTAL"
+    },
+    {
+      "codigo": "3C.20",
+      "seccion": "3C",
+      "nombre": "EVALUACIÓN Y CONTROL DEL EJERCICIO PRESUPUESTAL"
+    },
+    {
+      "codigo": "4C.1",
+      "seccion": "4C",
+      "nombre": "DISPOSICIONES EN MATERIA DE RECURSOS HUMANOS"
+    },
+    {
+      "codigo": "4C.2",
+      "seccion": "4C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE RECURSOS HUMANOS"
+    },
+    {
+      "codigo": "4C.3",
+      "seccion": "4C",
+      "nombre": "EXPEDIENTE ÚNICO DE PERSONAL"
+    },
+    {
+      "codigo": "4C.4",
+      "seccion": "4C",
+      "nombre": "REGISTRO Y CONTROL DE PUESTOS Y PLAZAS"
+    },
+    {
+      "codigo": "4C.5",
+      "seccion": "4C",
+      "nombre": "NÓMINA DE PAGO DE PERSONAL"
+    },
+    {
+      "codigo": "4C.6",
+      "seccion": "4C",
+      "nombre": "RECLUTAMIENTO Y SELECCIÓN DE PERSONAL"
+    },
+    {
+      "codigo": "4C.7",
+      "seccion": "4C",
+      "nombre": "IDENTIFICACIÓN Y ACREDITACIÓN DE PERSONAL"
+    },
+    {
+      "codigo": "4C.8",
+      "seccion": "4C",
+      "nombre": "CONTROL DE ASISTENCIA (VACACIONES, DESCANSOS Y LICENCIAS, INCAPACIDADES, ETC.)"
+    },
+    {
+      "codigo": "4C.9",
+      "seccion": "4C",
+      "nombre": "CONTROL DISCIPLINARIO"
+    },
+    {
+      "codigo": "4C.10",
+      "seccion": "4C",
+      "nombre": "DESCUENTOS"
+    },
+    {
+      "codigo": "4C.11",
+      "seccion": "4C",
+      "nombre": "ESTÍMULOS Y RECOMPENSAS"
+    },
+    {
+      "codigo": "4C.12",
+      "seccion": "4C",
+      "nombre": "EVALUACIONES Y PROMOCIONES"
+    },
+    {
+      "codigo": "4C.13",
+      "seccion": "4C",
+      "nombre": "PRODUCTIVIDAD EN EL TRABAJO"
+    },
+    {
+      "codigo": "4C.14",
+      "seccion": "4C",
+      "nombre": "EVALUACIÓN DEL DESEMPEÑO DE SERVIDORES DE MANDO"
+    },
+    {
+      "codigo": "4C.15",
+      "seccion": "4C",
+      "nombre": "AFILIACIONES AL INSTITUTO DE SEGURIDAD Y SERVICIOS SOCIALES DE LOS TRABAJADORES DEL ESTADO"
+    },
+    {
+      "codigo": "4C.16",
+      "seccion": "4C",
+      "nombre": "CONTROL DE PRESTACIONES EN MATERIA ECONÓMICA (FONAC, SISTEMA DE AHORRO PARA EL RETIRO, SEGUROS, ETC.)"
+    },
+    {
+      "codigo": "4C.17",
+      "seccion": "4C",
+      "nombre": "JUBILACIONES Y PENSIONES"
+    },
+    {
+      "codigo": "4C.18",
+      "seccion": "4C",
+      "nombre": "PROGRAMAS DE RETIRO VOLUNTARIO"
+    },
+    {
+      "codigo": "4C.19",
+      "seccion": "4C",
+      "nombre": "BECAS"
+    },
+    {
+      "codigo": "4C.20",
+      "seccion": "4C",
+      "nombre": "RELACIONES LABORALES (COMISIONES MIXTAS, SINDICATO NACIONAL DE TRABAJADORES AL SERVICIO DEL ESTADO, CONDICIONES LABORALES)"
+    },
+    {
+      "codigo": "4C.21",
+      "seccion": "4C",
+      "nombre": "SERVICIOS SOCIALES Y CULTURALES Y DE SEGURIDAD E HIGIENE EN EL TRABAJO"
+    },
+    {
+      "codigo": "4C.22",
+      "seccion": "4C",
+      "nombre": "CAPACITACIÓN CONTINUA Y DESARROLLO PROFESIONAL DEL PERSONAL DE ÁREAS ADMINISTRATIVAS"
+    },
+    {
+      "codigo": "4C.23",
+      "seccion": "4C",
+      "nombre": "SERVICIO SOCIAL DE ÁREAS ADMINISTRATIVAS"
+    },
+    {
+      "codigo": "4C.26",
+      "seccion": "4C",
+      "nombre": "EXPEDICIÓN DE CONSTANCIAS Y CREDENCIALES"
+    },
+    {
+      "codigo": "4C.27",
+      "seccion": "4C",
+      "nombre": "COORDINACIÓN LABORAL CON ORGANISMOS DESCENTRALIZADOS Y PARAESTATALES"
+    },
+    {
+      "codigo": "4C.28",
+      "seccion": "4C",
+      "nombre": "SERVICIO PROFESIONAL DE CARRERA"
+    },
+    {
+      "codigo": "5C.1",
+      "seccion": "5C",
+      "nombre": "DISPOSICIONES EN MATERIA DE RECURSOS FINANCIEROS Y CONTABILIDAD GUBERNAMENTAL"
+    },
+    {
+      "codigo": "5C.2",
+      "seccion": "5C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE RECURSOS FINANCIEROS Y CONTABILIDAD GUBERNAMENTAL"
+    },
+    {
+      "codigo": "5C.3",
+      "seccion": "5C",
+      "nombre": "GASTOS O EGRESOS POR PARTIDA PRESUPUESTAL"
+    },
+    {
+      "codigo": "5C.4",
+      "seccion": "5C",
+      "nombre": "INGRESOS"
+    },
+    {
+      "codigo": "5C.5",
+      "seccion": "5C",
+      "nombre": "LIBROS CONTABLES"
+    },
+    {
+      "codigo": "5C.6",
+      "seccion": "5C",
+      "nombre": "REGISTROS CONTABLES (GLOSA)"
+    },
+    {
+      "codigo": "5C.7",
+      "seccion": "5C",
+      "nombre": "VALORES FINANCIEROS"
+    },
+    {
+      "codigo": "5C.10",
+      "seccion": "5C",
+      "nombre": "FINANCIAMIENTO EXTERNO"
+    },
+    {
+      "codigo": "5C.14",
+      "seccion": "5C",
+      "nombre": "CUENTAS POR LIQUIDAR CERTIFICADAS"
+    },
+    {
+      "codigo": "5C.15",
+      "seccion": "5C",
+      "nombre": "TRANSFERENCIAS DE PRESUPUESTO"
+    },
+    {
+      "codigo": "5C.16",
+      "seccion": "5C",
+      "nombre": "AMPLIACIONES DEL PRESUPUESTO"
+    },
+    {
+      "codigo": "5C.17",
+      "seccion": "5C",
+      "nombre": "REGISTRO Y CONTROL DE PÓLIZAS DE EGRESOS"
+    },
+    {
+      "codigo": "5C.18",
+      "seccion": "5C",
+      "nombre": "REGISTRO Y CONTROL DE PÓLIZAS DE INGRESOS"
+    },
+    {
+      "codigo": "5C.19",
+      "seccion": "5C",
+      "nombre": "PÓLIZAS DE DIARIO"
+    },
+    {
+      "codigo": "5C.22",
+      "seccion": "5C",
+      "nombre": "CONTROL DE CHEQUES"
+    },
+    {
+      "codigo": "5C.23",
+      "seccion": "5C",
+      "nombre": "CONCILIACIONES"
+    },
+    {
+      "codigo": "5C.24",
+      "seccion": "5C",
+      "nombre": "ESTADOS FINANCIEROS"
+    },
+    {
+      "codigo": "5C.25",
+      "seccion": "5C",
+      "nombre": "AUXILIARES DE CUENTAS"
+    },
+    {
+      "codigo": "5C.26",
+      "seccion": "5C",
+      "nombre": "ESTADO DEL EJERCICIO DEL PRESUPUESTO"
+    },
+    {
+      "codigo": "5C.27",
+      "seccion": "5C",
+      "nombre": "FONDO ROTATORIO"
+    },
+    {
+      "codigo": "5C.28",
+      "seccion": "5C",
+      "nombre": "PAGO DE DERECHOS"
+    },
+    {
+      "codigo": "6C.1",
+      "seccion": "6C",
+      "nombre": "DISPOSICIONES EN MATERIA DE RECURSOS MATERIALES, OBRA PÚBLICA, CONSERVACIÓN Y MANTENIMIENTO"
+    },
+    {
+      "codigo": "6C.2",
+      "seccion": "6C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE RECURSOS MATERIALES, OBRA PÚBLICA, CONSERVACIÓN Y MANTENIMIENTO"
+    },
+    {
+      "codigo": "6C.3",
+      "seccion": "6C",
+      "nombre": "LICITACIONES"
+    },
+    {
+      "codigo": "6C.4",
+      "seccion": "6C",
+      "nombre": "ADQUISICIONES"
+    },
+    {
+      "codigo": "6C.5",
+      "seccion": "6C",
+      "nombre": "SANCIONES, INCONFOMIDADES Y CONCILIACIONES, DERIVADOS DE CONTRATOS"
+    },
+    {
+      "codigo": "6C.6",
+      "seccion": "6C",
+      "nombre": "CONTROL DE CONTRATOS"
+    },
+    {
+      "codigo": "6C.7",
+      "seccion": "6C",
+      "nombre": "SEGUROS Y FIANZAS"
+    },
+    {
+      "codigo": "6C.8",
+      "seccion": "6C",
+      "nombre": "SUSPENSIÓN, RESCISIÓN, TERMINACIÓN DE OBRA PÚBLICA"
+    },
+    {
+      "codigo": "6C.9",
+      "seccion": "6C",
+      "nombre": "BITÁCORAS DE OBRA PÚBLICA"
+    },
+    {
+      "codigo": "6C.10",
+      "seccion": "6C",
+      "nombre": "CALIDAD EN MATERIA DE OBRAS, CONSERVACIÓN Y EQUIPAMIENTO"
+    },
+    {
+      "codigo": "6C.11",
+      "seccion": "6C",
+      "nombre": "PRECIOS UNITARIOS EN OBRA PÚBLICA Y SERVICIOS"
+    },
+    {
+      "codigo": "6C.12",
+      "seccion": "6C",
+      "nombre": "ASESORÍA TÉCNICA EN MATERIA DE OBRA PÚBLICA"
+    },
+    {
+      "codigo": "6C.13",
+      "seccion": "6C",
+      "nombre": "CONSERVACIÓN Y MANTENIMIENTO DE LA INFRAESTRUCTURA FÍSICA"
+    },
+    {
+      "codigo": "6C.14",
+      "seccion": "6C",
+      "nombre": "REGISTRO DE PROVEEDORES Y CONTRATISTAS"
+    },
+    {
+      "codigo": "6C.15",
+      "seccion": "6C",
+      "nombre": "ARRENDAMIENTOS"
+    },
+    {
+      "codigo": "6C.16",
+      "seccion": "6C",
+      "nombre": "DISPOSICIONES DE ACTIVO FIJO"
+    },
+    {
+      "codigo": "6C.17",
+      "seccion": "6C",
+      "nombre": "INVENTARIO FÍSICO Y CONTROL DE BIENES MUEBLES"
+    },
+    {
+      "codigo": "6C.18",
+      "seccion": "6C",
+      "nombre": "INVENTARIO FÍSICO Y CONTROL DE BIENES INMUEBLES"
+    },
+    {
+      "codigo": "6C.19",
+      "seccion": "6C",
+      "nombre": "ALMACENAMIENTO, CONTROL Y DISTRIBUCIÓN DE BIENES MUEBLES"
+    },
+    {
+      "codigo": "6C.20",
+      "seccion": "6C",
+      "nombre": "DISPOSICIONES Y SISTEMAS DE ABASTECIMIENTO Y ALMACENES"
+    },
+    {
+      "codigo": "6C.21",
+      "seccion": "6C",
+      "nombre": "CONTROL DE CALIDAD DE BIENES E INSUMOS"
+    },
+    {
+      "codigo": "6C.22",
+      "seccion": "6C",
+      "nombre": "CONTROL Y SEGUIMIENTO DE OBRAS Y REMODELACIONES"
+    },
+    {
+      "codigo": "6C.23",
+      "seccion": "6C",
+      "nombre": "COMITÉS Y SUBCOMITÉS DE ADQUISICIONES, ARRENDAMIENTOS Y SERVICIOS"
+    },
+    {
+      "codigo": "6C.24",
+      "seccion": "6C",
+      "nombre": "COMITÉ DE ENAJENACIÓN DE BIENES MUEBLES E INMUEBLES"
+    },
+    {
+      "codigo": "6C.25",
+      "seccion": "6C",
+      "nombre": "COMITÉ DE OBRA PÚBLICA"
+    },
+    {
+      "codigo": "6C.26",
+      "seccion": "6C",
+      "nombre": "COMISIONES CONSULTIVAS MIXTAS DE ABASTECIMIENTO"
+    },
+    {
+      "codigo": "7C.1",
+      "seccion": "7C",
+      "nombre": "DISPOSICIONES EN MATERIA DE SERVICIOS GENERALES"
+    },
+    {
+      "codigo": "7C.2",
+      "seccion": "7C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE SERVICIOS GENERALES"
+    },
+    {
+      "codigo": "7C.3",
+      "seccion": "7C",
+      "nombre": "SERVICIOS BÁSICOS (ENERGÍA ELÉCTRICA, AGUA, PREDIAL, ETC.)"
+    },
+    {
+      "codigo": "7C.4",
+      "seccion": "7C",
+      "nombre": "SERVICIOS DE EMBALAJE, FLETES Y MANIOBRAS"
+    },
+    {
+      "codigo": "7C.5",
+      "seccion": "7C",
+      "nombre": "SERVICIOS DE SEGURIDAD Y VIGILANCIA"
+    },
+    {
+      "codigo": "7C.6",
+      "seccion": "7C",
+      "nombre": "SERVICIOS DE LAVANDERÍA, LIMPIEZA, HIGIENE Y FUMIGACIÓN"
+    },
+    {
+      "codigo": "7C.7",
+      "seccion": "7C",
+      "nombre": "SERVICIOS DE TRANSPORTACIÓN"
+    },
+    {
+      "codigo": "7C.8",
+      "seccion": "7C",
+      "nombre": "SERVICIOS DE TELEFONÍA, TELEFONÍA CELULAR Y RADIOLOCALIZACIÓN"
+    },
+    {
+      "codigo": "7C.9",
+      "seccion": "7C",
+      "nombre": "SERVICIO POSTAL"
+    },
+    {
+      "codigo": "7C.10",
+      "seccion": "7C",
+      "nombre": "SERVICIOS ESPECIALIZADOS DE MENSAJERÍA"
+    },
+    {
+      "codigo": "7C.11",
+      "seccion": "7C",
+      "nombre": "MANTENIMIENTO, CONSERVACIÓN E INSTALACIÓN DE MOBILIARIO"
+    },
+    {
+      "codigo": "7C.12",
+      "seccion": "7C",
+      "nombre": "MANTENIMIENTO, CONSERVACIÓN E INSTALACIÓN DE EQUIPO DE COMPUTO"
+    },
+    {
+      "codigo": "7C.13",
+      "seccion": "7C",
+      "nombre": "CONTROL DE PARQUE VEHICULAR"
+    },
+    {
+      "codigo": "7C.14",
+      "seccion": "7C",
+      "nombre": "CONTROL DE COMBUSTIBLE"
+    },
+    {
+      "codigo": "7C.15",
+      "seccion": "7C",
+      "nombre": "CONTROL Y SERVICIOS EN AUDITORIOS Y SALAS"
+    },
+    {
+      "codigo": "7C.16",
+      "seccion": "7C",
+      "nombre": "PROTECCIÓN CIVIL"
+    },
+    {
+      "codigo": "8C.1",
+      "seccion": "8C",
+      "nombre": "DISPOSICIONES EN MATERIA DE TELECOMUNICACIONES"
+    },
+    {
+      "codigo": "8C.2",
+      "seccion": "8C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE TELECOMUNICACIONES"
+    },
+    {
+      "codigo": "8C.3",
+      "seccion": "8C",
+      "nombre": "NORMATIVIDAD TECNOLÓGICA"
+    },
+    {
+      "codigo": "8C.4",
+      "seccion": "8C",
+      "nombre": "DESARROLLO E INFRAESTRUCTURA DE TELECOMUNICACIONES"
+    },
+    {
+      "codigo": "8C.5",
+      "seccion": "8C",
+      "nombre": "DESARROLLO E INFRAESTRUCTURA DEL PORTAL DE INTERNET DE LA DEPENDENCIA"
+    },
+    {
+      "codigo": "8C.6",
+      "seccion": "8C",
+      "nombre": "DESARROLLO REDES DE COMUNICACIÓN DE DATOS Y VOZ"
+    },
+    {
+      "codigo": "8C.7",
+      "seccion": "8C",
+      "nombre": "DISPOSICIONES EN MATERIA DE INFORMÁTICA"
+    },
+    {
+      "codigo": "8C.8",
+      "seccion": "8C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE INFORMÁTICA"
+    },
+    {
+      "codigo": "8C.9",
+      "seccion": "8C",
+      "nombre": "DESARROLLO INFORMÁTICO"
+    },
+    {
+      "codigo": "8C.10",
+      "seccion": "8C",
+      "nombre": "SEGURIDAD INFORMÁTICA"
+    },
+    {
+      "codigo": "8C.11",
+      "seccion": "8C",
+      "nombre": "DESARROLLO DE SISTEMAS"
+    },
+    {
+      "codigo": "8C.12",
+      "seccion": "8C",
+      "nombre": "AUTOMATIZACIÓN DE PROCESOS"
+    },
+    {
+      "codigo": "8C.13",
+      "seccion": "8C",
+      "nombre": "CONTROL Y DESARROLLO DEL PARQUE INFORMÁTICO"
+    },
+    {
+      "codigo": "8C.14",
+      "seccion": "8C",
+      "nombre": "DISPOSICIONES EN MATERIA DE SERVICIOS DE INFORMACIÓN"
+    },
+    {
+      "codigo": "8C.15",
+      "seccion": "8C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE SERVICIOS DE INFORMACIÓN"
+    },
+    {
+      "codigo": "8C.16",
+      "seccion": "8C",
+      "nombre": "ADMINISTRACIÓN Y SERVICIOS DE ARCHIVO"
+    },
+    {
+      "codigo": "8C.17",
+      "seccion": "8C",
+      "nombre": "ADMINISTRACIÓN Y SERVICIOS DE CORRESPONDENCIA"
+    },
+    {
+      "codigo": "8C.20",
+      "seccion": "8C",
+      "nombre": "ADMINISTRACIÓN Y PRESERVACIÓN DE ACERVOS DIGITALES"
+    },
+    {
+      "codigo": "8C.21",
+      "seccion": "8C",
+      "nombre": "INSTRUMENTOS DE CONSULTA"
+    },
+    {
+      "codigo": "8C.25",
+      "seccion": "8C",
+      "nombre": "SERVICIOS Y PRODUCTOS DE INTERNET E INTRANET"
+    },
+    {
+      "codigo": "9C.1",
+      "seccion": "9C",
+      "nombre": "DISPOSICIONES EN MATERIA DE COMUNICACIÓN SOCIAL"
+    },
+    {
+      "codigo": "9C.2",
+      "seccion": "9C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE COMUNICACIÓN SOCIAL"
+    },
+    {
+      "codigo": "9C.3",
+      "seccion": "9C",
+      "nombre": "PUBLICACIONES E IMPRESOS INSTITUCIONALES"
+    },
+    {
+      "codigo": "9C.4",
+      "seccion": "9C",
+      "nombre": "MATERIA MULTIMEDIA"
+    },
+    {
+      "codigo": "9C.5",
+      "seccion": "9C",
+      "nombre": "PUBLICIDAD INSTITUCIONAL"
+    },
+    {
+      "codigo": "9C.6",
+      "seccion": "9C",
+      "nombre": "BOLETINES Y ENTREVISTAS PARA MEDIOS"
+    },
+    {
+      "codigo": "9C.7",
+      "seccion": "9C",
+      "nombre": "BOLETINES INFORMATIVOS PARA MEDIOS"
+    },
+    {
+      "codigo": "9C.8",
+      "seccion": "9C",
+      "nombre": "INSERCIONES Y ANUNCIOS EN PERIÓDICOS Y REVISTAS"
+    },
+    {
+      "codigo": "9C.9",
+      "seccion": "9C",
+      "nombre": "AGENCIAS PERIODÍSTICAS, DE NOTICIAS, REPORTEROS, ARTICULISTAS, CADENAS TELEVISIVAS Y OTROS MEDIOS DE COMUNICACIÓN SOCIAL"
+    },
+    {
+      "codigo": "9C.10",
+      "seccion": "9C",
+      "nombre": "NOTAS PARA MEDIOS"
+    },
+    {
+      "codigo": "9C.11",
+      "seccion": "9C",
+      "nombre": "PRENSA INSTITUCIONAL"
+    },
+    {
+      "codigo": "9C.14",
+      "seccion": "9C",
+      "nombre": "ACTOS Y EVENTOS OFICIALES"
+    },
+    {
+      "codigo": "9C.15",
+      "seccion": "9C",
+      "nombre": "REGISTRO DE AUDIENCIAS PÚBLICAS"
+    },
+    {
+      "codigo": "9C.16",
+      "seccion": "9C",
+      "nombre": "INVITACIONES Y FELICITACIONES"
+    },
+    {
+      "codigo": "10C.1",
+      "seccion": "10C",
+      "nombre": "DISPOSICIONES EN MATERIA DE CONTROL Y AUDITORÍA"
+    },
+    {
+      "codigo": "10C.2",
+      "seccion": "10C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE CONTROL Y AUDITORÍA"
+    },
+    {
+      "codigo": "10C.3",
+      "seccion": "10C",
+      "nombre": "AUDITORÍA"
+    },
+    {
+      "codigo": "10C.4",
+      "seccion": "10C",
+      "nombre": "VISITADURÍAS"
+    },
+    {
+      "codigo": "10C.5",
+      "seccion": "10C",
+      "nombre": "REVISIONES DE RUBROS ESPECÍFICOS"
+    },
+    {
+      "codigo": "10C.6",
+      "seccion": "10C",
+      "nombre": "SEGUIMIENTO A LA APLICACIÓN EN MEDIDAS O RECOMENDACIONES"
+    },
+    {
+      "codigo": "10C.7",
+      "seccion": "10C",
+      "nombre": "PARTICIPANTES EN COMITÉS"
+    },
+    {
+      "codigo": "10C.8",
+      "seccion": "10C",
+      "nombre": "REQUERIMIENTOS DE INFORMACIÓN A DEPENDENCIAS Y ENTIDADES"
+    },
+    {
+      "codigo": "10C.9",
+      "seccion": "10C",
+      "nombre": "QUEJAS Y DENUNCIAS DE ACTIVIDADES PÚBLICAS"
+    },
+    {
+      "codigo": "10C.10",
+      "seccion": "10C",
+      "nombre": "PETICIONES, SUGERENCIAS Y RECOMENDACIONES"
+    },
+    {
+      "codigo": "10C.11",
+      "seccion": "10C",
+      "nombre": "RESPONSABILIDADES"
+    },
+    {
+      "codigo": "10C.12",
+      "seccion": "10C",
+      "nombre": "INCONFORMIDADES"
+    },
+    {
+      "codigo": "10C.13",
+      "seccion": "10C",
+      "nombre": "INHABILITACIONES"
+    },
+    {
+      "codigo": "10C.14",
+      "seccion": "10C",
+      "nombre": "DECLARACIONES PATRIMONIALES"
+    },
+    {
+      "codigo": "10C.15",
+      "seccion": "10C",
+      "nombre": "ENTREGA-RECEPCIÓN"
+    },
+    {
+      "codigo": "10C.16",
+      "seccion": "10C",
+      "nombre": "LIBROS BLANCOS"
+    },
+    {
+      "codigo": "11C.1",
+      "seccion": "11C",
+      "nombre": "DISPOSICIONES EN MATERIA DE PLANEACIÓN"
+    },
+    {
+      "codigo": "11C.2",
+      "seccion": "11C",
+      "nombre": "DISPOSICIONES EN MATERIA DE INFORMACIÓN Y EVALUACIÓN"
+    },
+    {
+      "codigo": "11C.3",
+      "seccion": "11C",
+      "nombre": "DISPOSICIONES EN MATERIA DE POLÍTICAS"
+    },
+    {
+      "codigo": "11C.4",
+      "seccion": "11C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE INFORMACIÓN Y EVALUACIÓN"
+    },
+    {
+      "codigo": "11C.5",
+      "seccion": "11C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE POLÍTICAS"
+    },
+    {
+      "codigo": "11C.6",
+      "seccion": "11C",
+      "nombre": "PLANES NACIONALES"
+    },
+    {
+      "codigo": "11C.7",
+      "seccion": "11C",
+      "nombre": "PROGRAMAS A MEDIANO PLAZO"
+    },
+    {
+      "codigo": "11C.8",
+      "seccion": "11C",
+      "nombre": "PROGRAMAS DE ACCIÓN"
+    },
+    {
+      "codigo": "11C.9",
+      "seccion": "11C",
+      "nombre": "SISTEMAS DE INFORMACIÓN ESTADÍSTICA DE LA DEPENDENCIA"
+    },
+    {
+      "codigo": "11C.10",
+      "seccion": "11C",
+      "nombre": "SISTEMA NACIONAL DE INFORMACIÓN ESTADÍSTICA"
+    },
+    {
+      "codigo": "11C.11",
+      "seccion": "11C",
+      "nombre": "NORMAS DE ELABORACIÓN Y ACTUALIZACIÓN DE LA INFORMACIÓN ESTADÍSTICA"
+    },
+    {
+      "codigo": "11C.12",
+      "seccion": "11C",
+      "nombre": "CAPTACIÓN, PRODUCCIÓN Y DIFUSIÓN DE LA INFORMACIÓN ESTADÍSTICA"
+    },
+    {
+      "codigo": "11C.13",
+      "seccion": "11C",
+      "nombre": "DESARROLLO DE ENCUESTAS"
+    },
+    {
+      "codigo": "11C.14",
+      "seccion": "11C",
+      "nombre": "GRUPO INTERINSTITUCIONAL DE INFORMACIÓN (COMITÉS)"
+    },
+    {
+      "codigo": "11C.15",
+      "seccion": "11C",
+      "nombre": "EVALUACIÓN DE PROGRAMAS DE ACCIÓN"
+    },
+    {
+      "codigo": "11C.16",
+      "seccion": "11C",
+      "nombre": "INFORME DE LABORES"
+    },
+    {
+      "codigo": "11C.17",
+      "seccion": "11C",
+      "nombre": "INFORME DE EJECUCIÓN"
+    },
+    {
+      "codigo": "11C.18",
+      "seccion": "11C",
+      "nombre": "INFORME DE GOBIERNO"
+    },
+    {
+      "codigo": "11C.19",
+      "seccion": "11C",
+      "nombre": "INDICADORES"
+    },
+    {
+      "codigo": "11C.20",
+      "seccion": "11C",
+      "nombre": "INDICADORES DE DESEMPEÑO, CALIDAD Y PRODUCTIVIDAD"
+    },
+    {
+      "codigo": "11C.21",
+      "seccion": "11C",
+      "nombre": "NORMAS PARA LA EVALUACIÓN"
+    },
+    {
+      "codigo": "11C.22",
+      "seccion": "11C",
+      "nombre": "MODELOS DE ORGANIZACIÓN"
+    },
+    {
+      "codigo": "12C.1",
+      "seccion": "12C",
+      "nombre": "DISPOSICIONES EN MATERIA DE ACCESO A LA INFORMACIÓN"
+    },
+    {
+      "codigo": "12C.2",
+      "seccion": "12C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE ACCESO A LA INFORMACIÓN"
+    },
+    {
+      "codigo": "12C.3",
+      "seccion": "12C",
+      "nombre": "PROGRAMAS Y PROYECTOS EN MATERIA DE TRANSPARENCIA Y COMBATE A LA CORRUPCIÓN"
+    },
+    {
+      "codigo": "12C.4",
+      "seccion": "12C",
+      "nombre": "UNIDADES DE ENLACE"
+    },
+    {
+      "codigo": "12C.5",
+      "seccion": "12C",
+      "nombre": "COMITÉ DE INFORMACIÓN"
+    },
+    {
+      "codigo": "12C.6",
+      "seccion": "12C",
+      "nombre": "SOLICITUDES DE ACCESO A LA INFORMACIÓN"
+    },
+    {
+      "codigo": "12C.7",
+      "seccion": "12C",
+      "nombre": "PORTAL DE TRANSPARENCIA"
+    },
+    {
+      "codigo": "12C.8",
+      "seccion": "12C",
+      "nombre": "CLASIFICACIÓN DE INFORMACIÓN RESERVADA"
+    },
+    {
+      "codigo": "12C.9",
+      "seccion": "12C",
+      "nombre": "CLASIFICACIÓN DE INFORMACIÓN CONFIDENCIAL"
+    },
+    {
+      "codigo": "12C.10",
+      "seccion": "12C",
+      "nombre": "SISTEMAS DE DATOS PERSONALES"
+    },
+    {
+      "codigo": "12C.12",
+      "seccion": "12C",
+      "nombre": "ARCHIVOS DEL PRESIDENTE ELECTO"
+    },
+    {
+      "codigo": "1S.1",
+      "seccion": "1S",
+      "nombre": "SISTEMA NACIONAL DE INFORMACIÓN AMBIENTAL Y DE RECURSOS NATURALES"
+    },
+    {
+      "codigo": "1S.2",
+      "seccion": "1S",
+      "nombre": "ORDENAMIENTO ECOLÓGICO DEL TERRITORIO"
+    },
+    {
+      "codigo": "2S.1",
+      "seccion": "2S",
+      "nombre": "DISPOSICIONES EN MATERIA DE MEJORA REGULATORIA DEL SECTOR AMBIENTAL"
+    },
+    {
+      "codigo": "2S.2",
+      "seccion": "2S",
+      "nombre": "INSTRUMENTOS DE FOMENTO AMBIENTAL"
+    },
+    {
+      "codigo": "2S.3",
+      "seccion": "2S",
+      "nombre": "INFRAESTRUCTURA DE LA CALIDAD DEL SECTOR AMBIENTAL"
+    },
+    {
+      "codigo": "3S.1",
+      "seccion": "3S",
+      "nombre": "REMEDIACIÓN AMBIENTAL"
+    },
+    {
+      "codigo": "3S.2",
+      "seccion": "3S",
+      "nombre": "EVALUACIÓN DE RIESGO AMBIENTAL"
+    },
+    {
+      "codigo": "3S.3",
+      "seccion": "3S",
+      "nombre": "RESIDUOS PELIGROSOS"
+    },
+    {
+      "codigo": "3S.4",
+      "seccion": "3S",
+      "nombre": "AUTORIZACIONES DE PLAGUICIDAS, NUTRIENTES VEGETALES Y SUSTANCIAS Y MATERIALES TÓXICOS O PELIGROSOS"
+    },
+    {
+      "codigo": "4S.1",
+      "seccion": "4S",
+      "nombre": "MANIFESTACIONES DE IMPACTO AMBIENTAL (MIA)"
+    },
+    {
+      "codigo": "4S.2",
+      "seccion": "4S",
+      "nombre": "INFORME PREVENTIVO EN MATERIA DE IMPACTO AMBIENTAL"
+    },
+    {
+      "codigo": "4S.3",
+      "seccion": "4S",
+      "nombre": "EXPEDICIÓN DE TRÁMITE UNIFICADO DE CAMBIO DE USO DEL SUELO FORESTAL MODALIDAD B"
+    },
+    {
+      "codigo": "4S.4",
+      "seccion": "4S",
+      "nombre": "EXENCIÓN DE LA PRESENTACIÓN DE MANIFESTACIÓN DE IMPACTO AMBIENTAL"
+    },
+    {
+      "codigo": "4S.5",
+      "seccion": "4S",
+      "nombre": "AVISOS DE NO REQUERIMIENTO DE AUTORIZACIÓN EN MATERIA DE IMPACTO AMBIENTAL"
+    },
+    {
+      "codigo": "4S.6",
+      "seccion": "4S",
+      "nombre": "ORGANISMOS GENÉTICAMENTE MODIFICADOS (OGM’S)"
+    },
+    {
+      "codigo": "5S.1",
+      "seccion": "5S",
+      "nombre": "CERTIFICACIONES FITOSANITARIAS"
+    },
+    {
+      "codigo": "5S.2",
+      "seccion": "5S",
+      "nombre": "COLECTA DE RECURSOS FORESTALES"
+    },
+    {
+      "codigo": "5S.3",
+      "seccion": "5S",
+      "nombre": "MEDIDAS FITOSANITARIAS PARA LA PREVENCIÓN, CONTROL Y COMBATE DE PLAGAS Y ENFERMEDADES"
+    },
+    {
+      "codigo": "5S.4",
+      "seccion": "5S",
+      "nombre": "CAMBIO DE USO DE SUELO EN TERRENOS FORESTALES (CUSTF)"
+    },
+    {
+      "codigo": "5S.5",
+      "seccion": "5S",
+      "nombre": "PRODUCCIÓN EN MATERIA FORESTAL Y DE SUELOS"
+    },
+    {
+      "codigo": "5S.6",
+      "seccion": "5S",
+      "nombre": "REGISTRO FORESTAL NACIONAL"
+    },
+    {
+      "codigo": "5S.7",
+      "seccion": "5S",
+      "nombre": "CENTROS DE ALMACENAMIENTO Y TRANSFORMACIÓN DE MATERIAS PRIMAS FORESTALES"
+    },
+    {
+      "codigo": "5S.8",
+      "seccion": "5S",
+      "nombre": "PROCEDENCIA DE LAS MATERIAS PRIMAS PRODUCTOS Y SUBPRODUCTOS FORESTALES"
+    },
+    {
+      "codigo": "5S.9",
+      "seccion": "5S",
+      "nombre": "APROVECHAMIENTOS EN MATERIA FORESTAL"
+    },
+    {
+      "codigo": "6S.1",
+      "seccion": "6S",
+      "nombre": "UNIDADES DE MANEJO PARA LA CONSERVACIÓN"
+    },
+    {
+      "codigo": "6S.2",
+      "seccion": "6S",
+      "nombre": "AUTORIZACIONES DE APROVECHAMIENTOS DE LOS ORGANISMOS"
+    },
+    {
+      "codigo": "6S.3",
+      "seccion": "6S",
+      "nombre": "GESTIÓN DE COLECTA CIENTÍFICA DE LOS ORGANISMOS"
+    },
+    {
+      "codigo": "6S.4",
+      "seccion": "6S",
+      "nombre": "COORDINACIÓN DE COMERCIALIZACIÓN DE ESPECIES"
+    },
+    {
+      "codigo": "6S.5",
+      "seccion": "6S",
+      "nombre": "SANIDAD, MANEJO Y CONTROL DE POBLACIONES"
+    },
+    {
+      "codigo": "6S.6",
+      "seccion": "6S",
+      "nombre": "PADRONES DE CAZA Y MASCOTAS"
+    },
+    {
+      "codigo": "6S.7",
+      "seccion": "6S",
+      "nombre": "SUBSIDIO PARA EL FOMENTO PARA PROTECCIÓN A LAS ESPECIES"
+    },
+    {
+      "codigo": "7S.1",
+      "seccion": "7S",
+      "nombre": "PERMISOS DE CONSTRUCCIÓN DE OBRAS, CONCESIONES Y DESINCORPORACIÓN DE TERRENOS GANADOS AL MAR"
+    },
+    {
+      "codigo": "7S.2",
+      "seccion": "7S",
+      "nombre": "PERMISOS PARA USO TRANSITORIO Y COMERCIO AMBULANTE"
+    },
+    {
+      "codigo": "7S.3",
+      "seccion": "7S",
+      "nombre": "ACUERDOS DE DESTINOS DE LOS BIENES NACIONALES"
+    },
+    {
+      "codigo": "7S.4",
+      "seccion": "7S",
+      "nombre": "CARTOGRAFÍA DE DELIMITACIÓN DE BIENES NACIONALES Y AMBIENTES COSTEROS"
+    },
+    {
+      "codigo": "8S.1",
+      "seccion": "8S",
+      "nombre": "PROTECCIÓN DE LA ATMÓSFERA"
+    },
+    {
+      "codigo": "8S.2",
+      "seccion": "8S",
+      "nombre": "FUENTES FIJAS DE JURISDICCIÓN FEDERAL"
+    },
+    {
+      "codigo": "8S.3",
+      "seccion": "8S",
+      "nombre": "EMISIONES POR FUENTES Y TRANSFERENCIA DE CONTAMINANTES"
+    },
+    {
+      "codigo": "9S.1",
+      "seccion": "9S",
+      "nombre": "ADMINISTRACIÓN DE LA AGROECOLOGÍA"
+    },
+    {
+      "codigo": "9S.2",
+      "seccion": "9S",
+      "nombre": "GESTIONES BIOCULTURALES"
+    },
+    {
+      "codigo": "10S.1",
+      "seccion": "10S",
+      "nombre": "INSTRUMENTOS DE FOMENTO AMBIENTAL EN MATERIA DE BIODIVERSIDAD Y APROVECHAMIENTO SUSTENTABLE"
+    },
+    {
+      "codigo": "10S.2",
+      "seccion": "10S",
+      "nombre": "DISPOSICIONES EN MATERIA DE REGULACIÓN DE LA BIODIVERSIDAD, BIOSEGURIDAD Y SU APROVECHAMIENTO SUSTENTABLE"
+    }
+  ]
+}
