@@ -4,6 +4,7 @@ import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { inventoryScope,hasInventoryAccess,hasCommonHeader,validSupport } from './inventory-policy.js';
 import { roleNames } from './auth-policy.js';
+import { allocateNumbers } from './archive-numbering.js';
 
 export const tramiteRouter = express.Router();
 tramiteRouter.use(requireAuth);
@@ -195,32 +196,14 @@ function insertSql(table,record){const keys=Object.keys(record);return {
  vals:Object.values(record)
 };}
 const archiveAddress='Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit';
-const yearNumber=(value)=>{
- const y=Number(value);
- if(!Number.isSafeInteger(y)||y<1900||y>2100)throw fail('Selecciona un año válido para el expediente (1900–2100)');
- return y;
-};
-const codeFor=(serie,index,year)=>'SEMARNAT.'+serie+'.'+String(index).padStart(3,'0')+'.'+year;
 async function nextNumbers(conn,serieId,serieCode,rows){
- // Serie bloqueada hasta COMMIT: evita que dos usuarios reciban el mismo consecutivo simultáneamente.
+ // El bloqueo de la serie se mantiene hasta COMMIT para serializar altas concurrentes.
  await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[serieId]);
  const [existing]=await conn.execute('SELECT numero_expediente FROM expedientes WHERE serie_id=?',[serieId]);
- const max=new Map();
- for(const row of existing){
-  const number=String(row.numero_expediente||'');
-  const prefix='SEMARNAT.'+serieCode+'.';
-  if(!number.startsWith(prefix))continue;
-  const suffix=number.slice(prefix.length);
-  const match=suffix.match(/^(\d{3,})\.(\d{4})$/);
-  if(match)max.set(match[2],Math.max(max.get(match[2])||0,Number(match[1])));
- }
- for(const row of rows){
-  if(/^REG-\d+$/.test(row.id))continue;
-  const year=String(yearNumber(row.recordYear||row.openDate?.slice(0,4)||new Date().getFullYear()));
-  const index=(max.get(year)||0)+1;
-  max.set(year,index);
-  row.recordNumber=codeFor(serieCode,index,year);
- }
+ let assigned;
+ try{assigned=allocateNumbers(existing.map(r=>r.numero_expediente),rows,serieCode);}
+ catch(e){throw fail(e.message);}
+ rows.forEach((r,i)=>{if(assigned[i])r.recordNumber=assigned[i];});
 }
 async function save(req,res,next,editing=false){
  let conn;
