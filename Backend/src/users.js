@@ -27,7 +27,7 @@ usersRouter.get('/',async(_req,res,next)=>{
 });
 usersRouter.post('/',async(req,res,next)=>{
  const data=req.body||{};const issue=validate(data);
- if(issue||!passwordValid(data.password)) return res.status(400).json({error:issue||'Contraseña temporal inválida'});
+ if(issue||!passwordValid(data.password)) return res.status(400).json({error:issue||'La contraseña debe tener entre 8 y 128 caracteres, al menos una mayúscula, una minúscula y un número.'});
  const conn=await pool.getConnection();
  try {
    await conn.beginTransaction();
