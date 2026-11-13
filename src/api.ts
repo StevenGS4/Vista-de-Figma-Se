@@ -69,17 +69,20 @@ export const concentrationApi={
 };
 
 import type { ArchivalLoan } from './loans';
+export type LoanEligibleUser={id:string;name:string;areaId:string;canDeliver:boolean};
 export type NewLoanPayload={
  mode:'INDIVIDUAL'|'INVENTARIO_COMPLETO';
  recordIds:string[];
  requestingAreaId:string;
- requesterName:string;
+ requesterUserId:string;
+ delivererUserId:string;
  loanDate:string;
  expectedReturnDate:string;
  receivedBy:string;
  observations:string;
 };
 export const loanApi={
+ eligibleUsers:async()=>((await request<{users:LoanEligibleUser[]}>('/api/prestamos/usuarios-elegibles')).users),
  list:async()=>((await request<{loans:ArchivalLoan[]}>('/api/prestamos')).loans),
  create:async(payload:NewLoanPayload)=>(await request<{loan:ArchivalLoan}>('/api/prestamos',{
   method:'POST',body:JSON.stringify(payload)
