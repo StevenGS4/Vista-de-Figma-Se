@@ -46,6 +46,8 @@ import {
 } from "./data";
 import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan } from "./loans";
+import HomeDashboard from "./HomeDashboard";
+import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
@@ -597,8 +599,20 @@ function Header({
   onRoleChange,
   role,
   user,
+  records,
+  transfers,
+  loans,
+  allowed,
+  onNavigate,
+  onSearchRecord,
 }: {
   active: ModuleId;
+  records: ArchivalRecord[];
+  transfers: DocumentaryTransfer[];
+  loans: ArchivalLoan[];
+  allowed: ModuleId[];
+  onNavigate: (id: ModuleId) => void;
+  onSearchRecord: (record: ArchivalRecord) => void;
   onChangePassword: () => void;
   onLogout: () => void;
   onMenu: () => void;
@@ -607,8 +621,6 @@ function Header({
   user: UserRecord;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
     <header className="app-header">
       <button aria-label="Abrir navegación" className="mobile-menu" onClick={onMenu}>
@@ -623,54 +635,8 @@ function Header({
         </div>
       </div>
       <div className="app-header__actions">
-        <button
-          aria-expanded={searchOpen}
-          aria-label="Buscar"
-          className="header-icon"
-          onClick={() => {
-            setSearchOpen((current) => !current);
-            setNotificationsOpen(false);
-          }}
-        >
-          <Search size={19} />
-        </button>
-        <button
-          aria-expanded={notificationsOpen}
-          aria-label="Notificaciones"
-          className="header-icon"
-          onClick={() => {
-            setNotificationsOpen((current) => !current);
-            setSearchOpen(false);
-          }}
-        >
-          <Bell size={19} />
-          <i />
-        </button>
-        {searchOpen && (
-          <div className="header-popover header-popover--search">
-            <strong>Búsqueda rápida</strong>
-            <label>
-              <Search size={16} />
-              <input autoFocus placeholder="Buscar expediente o folio…" />
-            </label>
-            <small>La búsqueda global se habilitará en una siguiente etapa.</small>
-          </div>
-        )}
-        {notificationsOpen && (
-          <div className="header-popover header-popover--notifications">
-            <strong>Notificaciones</strong>
-            <div>
-              <span>
-                <FileCheck2 size={16} />
-              </span>
-              <p>
-                <b>Transferencia en revisión</b>
-                La solicitud TP-2025-008 tiene actividad reciente.
-              </p>
-            </div>
-            <small>Información de demostración</small>
-          </div>
-        )}
+        <HomeHeaderTools user={user} role={role} records={records} transfers={transfers} loans={loans}
+          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} />
         <span className="header-divider" />
         <div className="profile-menu">
           <button className="profile-trigger" onClick={() => setProfileOpen((current) => !current)}>
@@ -725,125 +691,6 @@ function Header({
         </div>
       </div>
     </header>
-  );
-}
-
-const activity = [
-  {
-    icon: FileCheck2,
-    title: "Expediente actualizado",
-    detail: "SEMARNAT-NAY/UJ/2025/0042",
-    meta: "Hace 18 minutos",
-    color: "green",
-  },
-  {
-    icon: FolderArchive,
-    title: "Transferencia enviada a revisión",
-    detail: "Solicitud TP-2025-008 · Unidad Jurídica",
-    meta: "Hoy, 10:24",
-    color: "wine",
-  },
-  {
-    icon: BriefcaseBusiness,
-    title: "Devolución registrada",
-    detail: "SEMARNAT-NAY/DA/2021/0189",
-    meta: "Ayer, 16:42",
-    color: "gold",
-  },
-];
-
-function Dashboard({
-  allowedModules,
-  onNavigate,
-  role,
-}: {
-  allowedModules: ModuleId[];
-  onNavigate: (id: ModuleId) => void;
-  role: Role;
-}) {
-  const pendingTarget =
-    role === "Administrador / Coordinador" && allowedModules.includes("administracion")
-      ? "administracion"
-      : allowedModules.includes("tramite")
-        ? "tramite"
-        : allowedModules.includes("transferencias")
-          ? "transferencias"
-          : null;
-  return (
-    <div className="dashboard">
-      <div className="dashboard-grid dashboard-grid--focused">
-        <section className="surface activity-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Actividad reciente</h2>
-              <p>Movimientos relacionados con tus permisos.</p>
-            </div>
-            <span className="demo-label">Datos de demostración</span>
-          </div>
-          <div className="activity-list">
-            {activity.map((item) => {
-              const ItemIcon = item.icon;
-              return (
-                <div className="activity-item" key={item.title}>
-                  <span className={`activity-item__icon activity-item__icon--${item.color}`}>
-                    <ItemIcon size={17} />
-                  </span>
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                  <time>
-                    <Clock3 size={14} />
-                    {item.meta}
-                  </time>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <aside className="surface pending-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Pendientes operativos</h2>
-              <p>Atención sugerida para hoy.</p>
-            </div>
-          </div>
-          <div className="pending-list">
-            {!pendingTarget ? (
-              <div className="empty-state compact-empty">
-                <Check size={26} />
-                <strong>Sin pendientes operativos</strong>
-                <p>No hay acciones disponibles para este perfil.</p>
-              </div>
-            ) : (
-              <>
-                <button onClick={() => onNavigate(pendingTarget)}>
-                  <span>03</span>
-                  <div>
-                    <strong>
-                      {role === "Administrador / Coordinador"
-                        ? "Cuentas por revisar"
-                        : "Expedientes incompletos"}
-                    </strong>
-                    <small>Requieren validación</small>
-                  </div>
-                  <ChevronRight size={15} />
-                </button>
-                <button onClick={() => onNavigate("transferencias")}>
-                  <span>02</span>
-                  <div>
-                    <strong>Transferencias pendientes</strong>
-                    <small>En proceso de seguimiento</small>
-                  </div>
-                  <ChevronRight size={15} />
-                </button>
-              </>
-            )}
-          </div>
-        </aside>
-      </div>
-    </div>
   );
 }
 
@@ -968,6 +815,7 @@ function Application({
   const [role, setRole] = useState<Role>(currentUser.roles[0]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
   const currentPermissions = rolePermissions[role];
   const allowed = useMemo(
     () =>
@@ -987,7 +835,13 @@ function Application({
   }, [active, allowed, currentUser.roles, role]);
 
   const navigate = (id: ModuleId) => {
-    if (allowed.includes(id)) setActive(id);
+    if (allowed.includes(id)) { setGlobalQuery(""); setActive(id); }
+  };
+  const openSearchResult = (record: ArchivalRecord) => {
+    const target: ModuleId = record.stage === "Archivo de concentración" ? "concentracion" : "tramite";
+    if (!allowed.includes(target)) return;
+    setGlobalQuery(record.recordNumber);
+    setActive(target);
   };
 
   const changeRole = (next: Role) => {
@@ -1026,6 +880,12 @@ function Application({
           onRoleChange={changeRole}
           role={role}
           user={currentUser}
+          records={archivalRecords}
+          transfers={transfers}
+          loans={loans}
+          allowed={allowed}
+          onNavigate={navigate}
+          onSearchRecord={openSearchResult}
         />
         <main className="workspace">
           {active !== "tramite" &&
@@ -1047,10 +907,13 @@ function Application({
               </div>
             )}
           {active === "inicio" ? (
-            <Dashboard allowedModules={allowed} onNavigate={navigate} role={role} />
+            <HomeDashboard user={currentUser} role={role} allowedModules={allowed} onNavigate={navigate}
+                transfers={transfers} loans={loans} records={archivalRecords} />
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
               <RecordsPanel
+                key={"tramite-"+globalQuery}
+                initialSearch={globalQuery}
                 loadError={recordsLoadError}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
@@ -1069,6 +932,8 @@ function Application({
           ) : active === "concentracion" ? (
             <Suspense fallback={moduleFallback}>
               <ConcentrationPanel
+                key={"concentracion-"+globalQuery}
+                initialSearch={globalQuery}
                 currentUser={currentUser}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
