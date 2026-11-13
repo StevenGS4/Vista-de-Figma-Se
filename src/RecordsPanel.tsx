@@ -1175,6 +1175,15 @@ function InventoryForm({
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
   };
+  const addRowFromPreview = () => {
+    // El encabezado y los expedientes capturados permanecen en memoria.
+    // Una fila adicional se crea en el mismo inventario sin guardar ni salir.
+    addRow();
+    setErrors({});
+    setCurrentStep(1);
+    setMaxVisited((current) => Math.max(current, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const removeRow = (id: string) => {
     if (!window.confirm("¿Quitar esta fila no transferida del inventario?")) return;
     setDrafts((current) => current.filter((item) => item.id !== id));
@@ -1277,6 +1286,16 @@ function InventoryForm({
                 onBack={()=>setCurrentStep(2)}
                 onEdit={()=>setCurrentStep(2)}
               />
+              <div className="inventory-preview-add-row">
+                <div>
+                  <strong>¿Necesitas registrar otro expediente?</strong>
+                  <p>Conservarás todos los datos del inventario y regresarás al paso 2 con una nueva fila lista para capturar.</p>
+                </div>
+                <Button className="button--secondary" onClick={addRowFromPreview}>
+                  <Plus size={17} />
+                  Agregar otro expediente
+                </Button>
+              </div>
               <p className="catalog-note" role="status">Vista previa sin guardar. El número archivístico definitivo lo asigna MySQL al confirmar.</p>
             </>
           )}
