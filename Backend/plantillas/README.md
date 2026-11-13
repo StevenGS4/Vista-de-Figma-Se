@@ -1,24 +1,31 @@
-# Plantillas institucionales de inventarios (SEMARNAT Nayarit)
+# Plantilla institucional SEMARNAT — inventarios Excel
 
-Esta carpeta contiene los formatos oficiales **sin datos de expedientes** que servirán como plantillas de descarga. No deben reconstruirse sus diseños desde cero.
+## Archivo base
 
-## Archivo requerido ahora
+`Backend/plantillas/inventario_tramite.xlsx` — es la copia institucional de partida para **Archivo de trámite** y **Transferencia primaria**.
 
-**Ruta exacta:** `Backend/plantillas/inventario_tramite.xlsx`
+El generador `Backend/src/template-workbooks.js` abre este archivo con ExcelJS y rellena una copia en memoria, sin alterar ni guardar cambios en la plantilla original. Los expedientes se incorporan a la hoja original y el cierre, las firmas y los demás elementos se desplazan al ampliar las filas.
 
-1. Abrir en Microsoft Excel el archivo original `Formato Inventario Documental(3).xls`.
-2. Usar **Archivo > Guardar como > Libro de Excel (*.xlsx)**. Conservar logos, fórmulas, formatos, celdas combinadas, hojas e impresión. Revisar que Excel no reporte características perdidas en la conversión.
-3. Abrir y comparar el archivo convertido con el original, en especial encabezado, filas de expedientes, resumen y cuatro firmas.
-4. En GitHub, entrar a la rama `feature/integracion-validacion-etapa-7` y abrir esta carpeta `Backend/plantillas/`.
-5. Elegir **Add file > Upload files** y subir el .xlsx con el nombre exacto `inventario_tramite.xlsx`. Confirmar el commit en la misma rama.
+**No utilizar esta plantilla para Archivo de concentración**; la exportación de concentración mantiene su generador anterior hasta incorporar un formato institucional distinto.
 
-## Alcance previsto
+## Prueba obligatoria antes de usar en producción
 
-- **Trámite:** plantilla `inventario_tramite.xlsx`.
-- **Transferencia primaria:** utilizará esa misma plantilla base, con datos correspondientes y sin sustituir la fuente original.
-- **Concentración:** necesita otro archivo institucional y otro mapeo; no utilizar la plantilla de trámite.
-- Datos de MySQL rellenan exclusivamente las celdas correspondientes; la plantilla maestra permanece intacta.
-- El generador debe ampliar filas manteniendo formatos y desplazar el resumen y firmas, sin sobreescribirlos.
-- Deben probarse exportaciones de 1, 11, 12, 100 y 1,000 expedientes, además de encabezados y área de impresión.
+En PowerShell, desde la raíz del proyecto:
 
-**Estado:** carpeta preparada. Hasta identificar y verificar las coordenadas de las celdas en la plantilla convertida, NO reemplazar el exportador de producción: `Backend/src/export-workbooks.js` sigue funcionando como hasta ahora. 
+```powershell
+cd Backend
+npm run test:template
+```
+
+La prueba crea copias temporales en memoria para 1, 12 y 100 expedientes de trámite y 12 de transferencia primaria, y verifica que se puedan volver a abrir, mantengan el cierre y contengan todos los registros y logotipos del documento original.
+
+Si la prueba falla, **no uses el archivo descargado para entregas oficiales**: hay que revisar el error y el mapeo de la plantilla. Revisar visualmente, en Excel, cabecera, celdas, renglones añadidos, salto de página, el recuadro de firmas y el instructivo. La prueba no sustituye esa inspección.
+
+## Restricciones
+
+- El backend utiliza el `.xlsx` existente, **no** el archivo original `.xls`.
+- La plantilla maestra nunca se modifica en disco.
+- El límite actual del API es 15,000 expedientes por exportación.
+- No se inventan firmas, peso de cajas, metros lineales ni otros datos que MySQL no almacena.
+- Los datos generados se toman de los registros filtrados por permisos de usuario.
+- Si el formato institucional cambia, volver a comprobar ubicaciones, combinaciones de celdas y fórmulas antes de cambiar esta plantilla.
