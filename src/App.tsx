@@ -226,7 +226,7 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
         <InstitutionalMarks />
         <div className="login__header-meta">
           <ShieldCheck size={17} />
-          Sistema institucional de demostración
+          Acceso institucional seguro
         </div>
       </header>
 
@@ -343,8 +343,8 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
       </div>
 
       <footer className="login__footer">
-        <span>SEMARNAT Nayarit · Versión académica</span>
-        <span>La información mostrada es ficticia y de uso demostrativo.</span>
+        <span>Control Archivístico · SEMARNAT Nayarit</span>
+        <span>Acceso exclusivo para personal autorizado.</span>
       </footer>
     </main>
   );
@@ -755,10 +755,10 @@ function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracio
           </span>
           <div>
             <h2>Registros recientes</h2>
-            <p>Vista preliminar con información ficticia.</p>
+            <p>Vista ilustrativa del formato de registros.</p>
           </div>
         </div>
-        <span className="demo-label">Datos de demostración</span>
+        <span className="demo-label">Vista ilustrativa</span>
       </div>
       <div className="table-scroll">
         <table className="data-table">
