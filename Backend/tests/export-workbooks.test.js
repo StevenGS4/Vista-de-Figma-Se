@@ -62,3 +62,25 @@ test('transferencia primaria tiene la misma tabla documental, no una fila-resume
  assert.equal(sh.getCell('D24').value,'EXP-0002');
  assert.match(String(sh.getCell('B35').value),/2 EXPEDIENTES/);
 });
+
+test('las hojas se numeran automáticamente al exportar 25 expedientes de trámite',async()=>{
+ const records=Array.from({length:25},(_,i)=>({...sample,recordNumber:'SEMARNAT.4S.1.'+String(i+1).padStart(3,'0')+'.2022',consecutive:String(i+1)}));
+ const wb=await reload(makeInventoryWorkbook(records,'tramite'));
+ assert.equal(wb.worksheets.length,4); // 3 hojas de inventario + instructivo
+ assert.equal(wb.worksheets[0].getCell('U5').value,'HOJA 1 DE 3');
+ assert.equal(wb.worksheets[1].getCell('U5').value,'HOJA 2 DE 3');
+ assert.equal(wb.worksheets[2].getCell('U5').value,'HOJA 3 DE 3');
+ assert.equal(wb.worksheets[1].getCell('D23').value,'SEMARNAT.4S.1.012.2022');
+ assert.equal(wb.worksheets[2].getCell('D25').value,'SEMARNAT.4S.1.025.2022');
+ for(const sh of wb.worksheets.slice(0,3))
+  assert.match(String(sh.getCell('B35').value),/25 EXPEDIENTES/);
+});
+test('cada inventario reinicia sus hojas y mantiene el formato de transferencia',async()=>{
+ const group1=Array.from({length:12},(_,i)=>({...sample,inventoryId:'INV-A',recordNumber:'A'+i,consecutive:String(i+1)}));
+ const group2=Array.from({length:2},(_,i)=>({...sample,inventoryId:'INV-B',recordNumber:'B'+i,consecutive:String(i+1)}));
+ const wb=await reload(makeTransferWorkbook([...group1,...group2]));
+ assert.equal(wb.worksheets.length,4);
+ assert.equal(wb.worksheets[0].getCell('U5').value,'HOJA 1 DE 2');
+ assert.equal(wb.worksheets[1].getCell('U5').value,'HOJA 2 DE 2');
+ assert.equal(wb.worksheets[2].getCell('U5').value,'HOJA 1 DE 1');
+});

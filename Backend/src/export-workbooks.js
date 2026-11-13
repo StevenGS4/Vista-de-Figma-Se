@@ -49,7 +49,7 @@ const sampleSignatures=[
  ['VALIDÓ','NOMBRE, CARGO Y FIRMA DE LA PERSONA SERVIDORA PÚBLICA RESPONSABLE DEL ÁREA GENERADORA'],
  ['AUTORIZÓ','NOMBRE, CARGO Y FIRMA DE LA PERSONA SERVIDORA PÚBLICA TITULAR DE LA UNIDAD ADMINISTRATIVA O DIRECCIÓN DE ÁREA'],
 ];
-function layout(book,records,kind,index,total){
+function layout(book,records,kind,index,total,pageNo=1,pages=1,fullRecords=records){
  const sheet=book.addWorksheet(total===1?(kind==='tramite'?'INVENTARIO A.T.':kind==='concentracion'?'INVENTARIO A.C.':'TRANSFERENCIA PRIMARIA'):
   ('INV '+String(index+1).padStart(3,'0')).slice(0,31));
  sheet.views=[{state:'frozen',ySplit:22}];
@@ -66,7 +66,7 @@ function layout(book,records,kind,index,total){
  put(sheet,'G3',title);
  put(sheet,'B5','NOMBRE DE LA UNIDAD ADMINISTRATIVA:');
  put(sheet,'E6',first?.administrativeUnit||'');
- put(sheet,'U5','HOJA 1 DE '+Math.max(1,Math.ceil(records.length/11)));
+ put(sheet,'U5','HOJA '+pageNo+' DE '+pages);
  put(sheet,'B8','NOMBRE DEL ÁREA GENERADORA:');
  put(sheet,'E9',[first?.areaId,first?.areaName].filter(Boolean).join(' — '));
  put(sheet,'U8','FECHA DE ELABORACIÓN:');
@@ -116,13 +116,13 @@ function layout(book,records,kind,index,total){
  }
  const closingRow=Math.max(35,r+1);
  merge(sheet,`B${closingRow}:W${closingRow+1}`);
- const years=records.flatMap(x=>[x.openDate,x.closeDate])
+ const years=fullRecords.flatMap(x=>[x.openDate,x.closeDate])
   .filter(x=>x&&/^\d{4}/.test(String(x))).map(x=>Number(String(x).slice(0,4)));
- const boxes=new Set(records.map(x=>String(x.boxNumber||'').trim()).filter(Boolean));
- const electronic=records.filter(x=>['electrónico','mixto'].includes(String(x.supportType||'').toLowerCase())).length;
- const countPages=Math.max(1,Math.ceil(records.length/11));
+ const boxes=new Set(fullRecords.map(x=>String(x.boxNumber||'').trim()).filter(Boolean));
+ const electronic=fullRecords.filter(x=>['electrónico','mixto'].includes(String(x.supportType||'').toLowerCase())).length;
+ const countPages=pages;
  const countBoxes=boxes.size;
- put(sheet,'B'+closingRow,`EL PRESENTE INVENTARIO CONSTA DE ${countPages} FOJAS Y AMPARA LA CANTIDAD DE ${records.length} EXPEDIENTES, DE LOS AÑOS DE ${years.length?Math.min(...years):'—'} A ${years.length?Math.max(...years):'—'}, CONTENIDOS EN ${countBoxes} CAJAS, CON UN PESO APROXIMADO DE ${countBoxes*20} KILOGRAMOS, CORRESPONDIENTES A ${(countBoxes*20*0.02).toFixed(2)} METROS LINEALES. EXPEDIENTES CON DOCUMENTOS ELECTRÓNICOS: ${electronic}. ALMACENAMIENTO ELECTRÓNICO: NO REGISTRADO EN BASE DE DATOS.`);
+ put(sheet,'B'+closingRow,`EL PRESENTE INVENTARIO CONSTA DE ${countPages} FOJAS Y AMPARA LA CANTIDAD DE ${fullRecords.length} EXPEDIENTES, DE LOS AÑOS DE ${years.length?Math.min(...years):'—'} A ${years.length?Math.max(...years):'—'}, CONTENIDOS EN ${countBoxes} CAJAS, CON UN PESO APROXIMADO DE ${countBoxes*20} KILOGRAMOS, CORRESPONDIENTES A ${(countBoxes*20*0.02).toFixed(2)} METROS LINEALES. EXPEDIENTES CON DOCUMENTOS ELECTRÓNICOS: ${electronic}. ALMACENAMIENTO ELECTRÓNICO: NO REGISTRADO EN BASE DE DATOS.`);
  sheet.getRow(closingRow).height=30;
  sheet.getRow(closingRow+1).height=30;
  sheet.getCell('B'+closingRow).alignment={wrapText:true,vertical:'middle'};
@@ -194,7 +194,15 @@ export function makeInventoryWorkbook(records,type){
  for(const rec of records){
   const a=groups.get(rec.inventoryId)||[];a.push(rec);groups.set(rec.inventoryId,a);
  }
- [...groups.values()].forEach((rows,i)=>layout(book,rows,type,i,groups.size));
+ const sheets=[];
+ for(const rows of groups.values()){
+  const pageCount=Math.max(1,Math.ceil(rows.length/11));
+  for(let page=0;page<pageCount;page++){
+   sheets.push({rows:rows.slice(page*11,(page+1)*11),pageNo:page+1,pageCount,fullRecords:rows});
+  }
+ }
+ sheets.forEach(({rows,pageNo,pageCount,fullRecords},i)=>
+  layout(book,rows,type,i,sheets.length,pageNo,pageCount,fullRecords));
  if(groups.size===0)layout(book,[],type,0,1);
  instructivo(book);
  return book;

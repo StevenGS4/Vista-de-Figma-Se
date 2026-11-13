@@ -4,6 +4,7 @@ import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { inventoryScope,hasInventoryAccess,hasCommonHeader,validSupport } from './inventory-policy.js';
 import { roleNames } from './auth-policy.js';
+import { allocateNumbers } from './archive-numbering.js';
 
 export const tramiteRouter = express.Router();
 tramiteRouter.use(requireAuth);
@@ -99,7 +100,14 @@ export async function readRecords(conn,where='',params=[]){
  transferAcceptedDate:r.transferAcceptedDate||'',receptionDate:'',receptionResponsible:'',receptionNotes:'',
  }));
 }
+async function latestCadidoYear(conn){
+ const [[row]]=await conn.execute(`SELECT MAX(cv.anio) AS year FROM catalogos_cadido_versiones cv
+ JOIN series_cadido sr ON sr.catalogo_version_id=cv.id
+ WHERE cv.activo=1 AND sr.activo=1 AND sr.es_demostracion=0`);
+ return Number(row.year)||null;
+}
 async function catalog(conn,user,mode){
+ const latest=await latestCadidoYear(conn);
  const [sections]=await conn.execute('SELECT codigo AS id,nombre AS name FROM secciones_cadido ORDER BY codigo');
  const [series]=await conn.execute(`SELECT sr.id,sr.nombre,sr.codigo,cv.anio AS editionYear,sc.codigo AS sectionCode,
  GROUP_CONCAT(DISTINCT a.codigo ORDER BY a.codigo SEPARATOR ',') AS enabled
@@ -107,12 +115,12 @@ async function catalog(conn,user,mode){
  JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  JOIN series_areas sa ON sa.serie_id=sr.id JOIN areas a ON a.id=sa.area_id
  WHERE sr.activo=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sa.habilitado=1 GROUP BY sr.id,sr.nombre,sr.codigo,cv.anio,sc.codigo ORDER BY cv.anio DESC,sr.codigo`);
- return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),
-  series:series.filter(s=>mode==='GLOBAL'||s.enabled.split(',').includes(user.areaId))
+ return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),currentYear:latest,
+  series:series.filter(s=>mode==='GLOBAL'||(Number(s.editionYear)===latest && s.enabled.split(',').includes(user.areaId)))
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
       detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(',')}))};
 }
-function normalize(rows){
+function normalize(rows,autoNumber=false){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
  if(!hasCommonHeader(rows))throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
  if(rows.length>50000)throw fail('Inventario demasiado grande para una sola operación; usa importación por lotes',413);
@@ -123,9 +131,9 @@ function normalize(rows){
      throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
    const number=text(r.recordNumber,110).toUpperCase();
-   if(!number||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
-   if(unique.has(consecutivo)||numbers.has(number))throw fail('Expediente o consecutivo duplicado');
-   unique.add(consecutivo);numbers.add(number);
+   if((!number&&!autoNumber)||!text(r.title))throw fail('Número y asunto de cada expediente son obligatorios');
+   if(unique.has(consecutivo)||(number&&numbers.has(number)))throw fail('Expediente o consecutivo duplicado');
+   unique.add(consecutivo);if(number)numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
    if(close&&close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
@@ -141,18 +149,21 @@ function normalize(rows){
  date(header.inventoryDate,true);
  return header;
 }
-async function resolveCatalog(conn,header,user,mode){
+async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
  const [areas]=await conn.execute('SELECT id,codigo FROM areas WHERE codigo=? AND activo=1',[header.areaId]);
  if(!areas.length)throw fail('Área no registrada en MySQL; carga primero el catálogo');
  if(mode!=='GLOBAL'&&header.areaId!==user.areaId)throw fail('No puedes registrar inventarios de otra área',403);
  const id=Number(String(header.cadidoSeriesId).replace(/^SER-/,'')); 
  if(!Number.isSafeInteger(id))throw fail('Serie CADIDO inexistente');
- const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code FROM series_cadido sr
- JOIN secciones_cadido sc ON sc.id=sr.seccion_id JOIN series_areas sa ON sa.serie_id=sr.id
- WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND sa.habilitado=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sr.activo=1`,
- [id,header.cadidoSectionId,areas[0].id]);
+ const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code,cv.anio AS edition_year FROM series_cadido sr
+ JOIN secciones_cadido sc ON sc.id=sr.seccion_id
+ JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
+ JOIN series_areas sa ON sa.serie_id=sr.id
+ WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND (sa.habilitado=1 OR ?=1)
+ AND sr.es_demostracion=0 AND sr.activo=1`,
+ [id,header.cadidoSectionId,areas[0].id,allowDisabled?1:0]);
  if(!series.length)throw fail('Serie CADIDO no autorizada para esta área');
- return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id};
+ return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id,editionYear:series[0].edition_year};
 }
 function rowFields(r,inventoryId,serieId,userId){
  return {
@@ -184,10 +195,46 @@ function insertSql(table,record){const keys=Object.keys(record);return {
  sql:`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,
  vals:Object.values(record)
 };}
+const archiveAddress='Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit';
+async function nextNumbers(conn,serieId,serieCode,rows){
+ // El bloqueo de la serie se mantiene hasta COMMIT para serializar altas concurrentes.
+ await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[serieId]);
+ const [existing]=await conn.execute('SELECT numero_expediente FROM expedientes WHERE serie_id=?',[serieId]);
+ let assigned;
+ try{assigned=allocateNumbers(existing.map(r=>r.numero_expediente),rows,serieCode);}
+ catch(e){throw fail(e.message);}
+ rows.forEach((r,i)=>{if(assigned[i])r.recordNumber=assigned[i];});
+}
 async function save(req,res,next,editing=false){
  let conn;
  try{
-  const user=req.auth.user,mode=access(user),rows=req.body?.rows,header=normalize(rows);
+  const user=req.auth.user,mode=access(user);
+  const isAdmin=user.roles.includes(roleNames.ADMIN);
+  const rows=Array.isArray(req.body?.rows)?req.body.rows.map(r=>({...r})):[];
+  if(!rows.length)throw fail('Agrega al menos un expediente');
+  if(!isAdmin){
+   const requestedArea=user.areaId;
+   const [areaRows]=await pool.execute(`SELECT a.nombre,a.codigo,
+     CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS encargado
+     FROM areas a LEFT JOIN usuarios u ON u.id=a.encargado_usuario_id AND u.estado='ACTIVO'
+     WHERE a.codigo=? AND a.activo=1`,[requestedArea]);
+   if(!areaRows.length)throw fail('El área asignada no está habilitada',403);
+   if(!areaRows[0].encargado)throw fail('El administrador debe asignar un encargado al área antes de crear inventarios',409);
+   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Mazatlan'});
+   for(const r of rows){
+    r.areaId=requestedArea;
+    r.administrativeUnit='Oficina de Representación de SEMARNAT en Nayarit';
+    r.responsible=areaRows[0].encargado;
+    r.responsiblePosition='Encargado del área de '+areaRows[0].nombre;
+    r.fund='Secretaría de Medio Ambiente y Recursos Naturales';
+    if(r.boxNumber && !/^\d{1,6}$/.test(String(r.boxNumber)))throw fail('El número de caja debe tener de 1 a 6 dígitos');
+    r.room=String(r.room||'').trim()||'Sótano';
+    r.initialSheetNumber='1';
+    r.archiveAddress=archiveAddress;
+    if(!editing)r.inventoryDate=today;
+   }
+  }
+  const header=normalize(rows,!isAdmin);
   if(!['GLOBAL','AREA','PROPIO'].includes(mode))throw fail('No autorizado',403);
   conn=await pool.getConnection();
   await conn.beginTransaction();
@@ -199,15 +246,20 @@ async function save(req,res,next,editing=false){
    const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
    if(linked.length)throw fail('Inventario vinculado a transferencia: edición bloqueada',409);
    if(header.inventoryId!==inv.folio)throw fail('No puedes cambiar el identificador de inventario');
-   const cat=await resolveCatalog(conn,header,user,mode);
+   const cat=await resolveCatalog(conn,header,user,mode,true);
    if(inv.serie_id!==cat.serieId||inv.seccion_id!==cat.seccionId||inv.area_id!==cat.areaId)
      throw fail('No se puede cambiar la clasificación común de un inventario existente; crea otro inventario',409);
    inventoryId=inv.id;folio=inv.folio;
+   if(!isAdmin){
+    const [[oldHeader]]=await conn.execute("SELECT DATE_FORMAT(fecha_elaboracion,'%Y-%m-%d') AS originalDate FROM inventarios WHERE id=?",[inv.id]);
+    header.inventoryDate=oldHeader.originalDate;
+    for(const row of rows)row.inventoryDate=oldHeader.originalDate;
+   }
    await conn.execute(`UPDATE inventarios SET unidad_administrativa=?,responsable_nombre=?,responsable_cargo=?,
     fondo=?,fecha_elaboracion=?,hoja_inicial=? WHERE id=?`,
     [text(header.administrativeUnit,220),text(header.responsible,200),text(header.responsiblePosition,200),
      text(header.fund,160),date(header.inventoryDate,true),num(header.initialSheetNumber||1,'hoja',1,65535),inventoryId]);
-   const [oldRows]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? FOR UPDATE',[inventoryId]);
+   const [oldRows]=await conn.execute('SELECT id,consecutivo FROM expedientes WHERE inventario_id=? FOR UPDATE',[inventoryId]);
    const oldIds=new Set(oldRows.map(r=>r.id));
    const supplied=new Set();
    for(const r of rows){
@@ -224,6 +276,9 @@ async function save(req,res,next,editing=false){
    }
   }else{
    const cat=await resolveCatalog(conn,header,user,mode);
+   if(!isAdmin && cat.editionYear!==await latestCadidoYear(conn))
+    throw fail('Solo puedes registrar con la edición CADIDO vigente. Solicita al administrador habilitar códigos actuales.',409);
+   if(!isAdmin)await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[cat.serieId]);
    const folioGenerated='INV-TR-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+randomUUID().slice(0,10).toUpperCase();
    const entry={folio:folioGenerated,unidad_administrativa:text(header.administrativeUnit,220),
      area_id:cat.areaId,responsable_nombre:text(header.responsible,200),responsable_cargo:text(header.responsiblePosition,200),
@@ -233,7 +288,28 @@ async function save(req,res,next,editing=false){
    const insert=insertSql('inventarios',entry),[result]=await conn.execute(insert.sql,insert.vals);
    inventoryId=result.insertId;folio=folioGenerated;
   }
-  const cat=await resolveCatalog(conn,header,user,mode);
+  const cat=await resolveCatalog(conn,header,user,mode,editing);
+  if(!isAdmin && rows.some(r=>!/^REG-\d+$/.test(r.id)) &&
+     cat.editionYear!==await latestCadidoYear(conn))
+    throw fail('No puedes agregar expedientes nuevos con una edición CADIDO histórica. Crea un inventario con la edición vigente.',409);
+  if(!isAdmin){
+   const [[serie]]=await conn.execute('SELECT codigo FROM series_cadido WHERE id=?',[cat.serieId]);
+   if(!serie)throw fail('La serie seleccionada no existe');
+   await nextNumbers(conn,cat.serieId,serie.codigo,rows);
+   const [assigned]=await conn.execute('SELECT consecutivo FROM expedientes WHERE inventario_id=?',[inventoryId]);
+   const reserved=new Set(assigned.map(x=>Number(x.consecutivo)));
+   let next=0;
+   for(const r of rows){
+    if(editing && /^REG-\d+$/.test(r.id)){
+     const [[old]]=await conn.execute('SELECT consecutivo,numero_expediente FROM expedientes WHERE id=? AND inventario_id=?',[Number(r.id.slice(4)),inventoryId]);
+     if(!old)throw fail('Expediente existente no encontrado',404);
+     r.consecutive=String(old.consecutivo);r.recordNumber=old.numero_expediente;
+    }else{
+     while(reserved.has(++next)){}
+     reserved.add(next);r.consecutive=String(next);
+    }
+   }
+  }
   for(const r of rows){
    const fields=rowFields(r,inventoryId,cat.serieId,editing && /^REG-\d+$/.test(r.id)
      ? (await conn.execute('SELECT creado_por FROM expedientes WHERE id=?',[Number(r.id.slice(4))]))[0][0]?.creado_por || user.id
