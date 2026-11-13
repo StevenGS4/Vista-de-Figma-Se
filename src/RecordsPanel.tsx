@@ -984,6 +984,7 @@ function LocationStep({
   active,
   drafts,
   errors,
+  isAdmin,
   onCopy,
   onSelect,
   update,
@@ -991,11 +992,13 @@ function LocationStep({
   active: ArchivalRecord;
   drafts: ArchivalRecord[];
   errors: Errors;
+  isAdmin: boolean;
   onCopy: () => void;
   onSelect: (id: string) => void;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
   const locked = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
+  const [otherRoom,setOtherRoom] = useState(active.room!=="" && active.room.toLowerCase()!=="sótano" && active.room.toLowerCase()!=="sotano");
   return (
     <>
       <StepHeading
@@ -1027,7 +1030,15 @@ function LocationStep({
             <input disabled value={`Archivo de trámite — ${areaName(active.areaId)}`} />
           </Field>
           <Field error={errors.room} label="Lugar de resguardo" required>
-            <input onChange={(event) => update("room", event.target.value)} value={active.room} />
+            {!isAdmin && <label style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <input type="checkbox" checked={otherRoom} onChange={event=>{
+                setOtherRoom(event.target.checked);
+                if(!event.target.checked)update("room","Sótano");
+                else if(active.room==="Sótano")update("room","");
+              }}/> Otro lugar de resguardo
+            </label>}
+            <input disabled={!isAdmin&&!otherRoom} onChange={(event) => update("room", event.target.value)}
+              value={!isAdmin&&!otherRoom?"Sótano":active.room} />
           </Field>
           <Field error={errors.shelf} label="Estante" required>
             <select onChange={(event) => update("shelf", event.target.value)} value={active.shelf}>
@@ -1491,6 +1502,7 @@ function InventoryForm({
               active={active}
               drafts={drafts}
               errors={errors}
+              isAdmin={isAdmin}
               onAdd={addRow}
               onRemove={removeRow}
               onSelect={setActiveId}
@@ -1502,6 +1514,7 @@ function InventoryForm({
               active={active}
               drafts={drafts}
               errors={errors}
+              isAdmin={isAdmin}
               onSelect={setActiveId}
               update={updateAll}
             />
@@ -1511,6 +1524,7 @@ function InventoryForm({
               active={active}
               drafts={drafts}
               errors={errors}
+              isAdmin={isAdmin}
               onCopy={copyLocation}
               onSelect={setActiveId}
               update={updateAll}
