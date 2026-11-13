@@ -3,7 +3,7 @@ import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
 
 const sample=(i)=>({
   id:'REG-'+i,inventoryId:'INV-PRUEBA-001',areaId:'AR-001',areaName:'Área de pruebas',
-  administrativeUnit:'SEMARNAT Nayarit',responsible:'Persona responsable',responsiblePosition:'Encargado',
+  administrativeUnit:'UNIDAD DE CONTROL TEST XYZ',responsible:'Persona responsable',responsiblePosition:'Encargado',
   inventoryDate:'2026-11-13',fund:'Secretaría de Medio Ambiente y Recursos Naturales',
   cadidoSectionName:'Legislación',cadidoSeriesName:'Leyes',cadidoCode:'1C.11',
   consecutive:String(i),boxNumber:'1',recordNumber:'EXP-'+String(i).padStart(4,'0'),
@@ -35,6 +35,7 @@ async function verify(size,kind){
  if(!contains(first,'EXPEDIENTE DE VERIFICACIÓN 1'))fail('no se escribió el primer expediente');
  if(!contains(first,'EXPEDIENTE DE VERIFICACIÓN '+size))fail('no se escribió el último expediente');
  if(!contains(first,'EL PRESENTE INVENTARIO CONSTA'))fail('se perdió el resumen del formato');
+ if(!contains(first,'UNIDAD DE CONTROL TEST XYZ'))fail('no se completó el encabezado de unidad administrativa');
  if(imagesBefore && !first.getImages().length)fail('se perdieron los logotipos');
  console.log('OK',kind,size,'expedientes; hojas',reread.worksheets.length,
   '; imágenes conservadas',first.getImages().length,'; bytes',output.length);
