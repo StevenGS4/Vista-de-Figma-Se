@@ -103,7 +103,7 @@ async function catalog(conn,user,mode){
  GROUP_CONCAT(DISTINCT a.codigo ORDER BY a.codigo SEPARATOR ',') AS enabled
  FROM series_cadido sr JOIN secciones_cadido sc ON sc.id=sr.seccion_id
  JOIN series_areas sa ON sa.serie_id=sr.id JOIN areas a ON a.id=sa.area_id
- WHERE sr.activo=1 GROUP BY sr.id,sr.nombre,sr.codigo,sc.codigo ORDER BY sr.codigo`);
+ WHERE sr.activo=1 AND sa.habilitado=1 GROUP BY sr.id,sr.nombre,sr.codigo,sc.codigo ORDER BY sr.codigo`);
  return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),
   series:series.filter(s=>mode==='GLOBAL'||s.enabled.split(',').includes(user.areaId))
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
@@ -146,7 +146,7 @@ async function resolveCatalog(conn,header,user,mode){
  if(!Number.isSafeInteger(id))throw fail('Serie CADIDO inexistente');
  const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code FROM series_cadido sr
  JOIN secciones_cadido sc ON sc.id=sr.seccion_id JOIN series_areas sa ON sa.serie_id=sr.id
- WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND sr.activo=1`,
+ WHERE sr.id=? AND sc.codigo=? AND sa.area_id=? AND sa.habilitado=1 AND sr.activo=1`,
  [id,header.cadidoSectionId,areas[0].id]);
  if(!series.length)throw fail('Serie CADIDO no autorizada para esta área');
  return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id};
