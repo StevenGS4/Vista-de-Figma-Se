@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { homeApi, type LoanNotice } from "./api";
 import { Bell, Check, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
@@ -17,11 +18,23 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
  const [query,setQuery]=useState("");
  const key="semarnat-notices-read-"+user.id;
  const [seen,setSeen]=useState<string[]>([]);
+ const [personalLoanNotices,setPersonalLoanNotices]=useState<LoanNotice[]>([]);
  useEffect(()=>{
   try{const stored=JSON.parse(window.localStorage.getItem(key)||"[]");setSeen(Array.isArray(stored)?stored.filter(x=>typeof x==="string"):[]);}
   catch{setSeen([]);}
  },[key]);
- const notices=useMemo(()=>buildHomeNotices(user,role,transfers,loans).filter(n=>allowed.includes(n.module)),[user,role,transfers,loans,allowed]);
+ useEffect(()=>{
+  let active=true;
+  const load=()=>homeApi.loanNotices().then(items=>{if(active)setPersonalLoanNotices(items);})
+    .catch(error=>console.error("No se pudieron consultar avisos de préstamos:",error));
+  void load();
+  return ()=>{active=false;};
+ },[user.id]);
+ const notices=useMemo(()=>{
+   const staff=buildHomeNotices(user,role,transfers,loans).filter(n=>allowed.includes(n.module));
+   const merged=[...personalLoanNotices,...staff];
+   return merged.filter((n,i)=>merged.findIndex(x=>x.id===n.id)===i).slice(0,40);
+ },[user,role,transfers,loans,allowed,personalLoanNotices]);
  const unread=notices.filter(n=>!seen.includes(n.id)).length;
  const markRead=(id:string)=>{
   setSeen(old=>{
@@ -53,7 +66,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
    ? loans.filter(l=>l.folio.toLowerCase().includes(query.trim().toLowerCase())).slice(0,4) : [];
  return <>
   <button aria-label="Búsqueda global" aria-expanded={searchOpen} className="header-icon" onClick={()=>{setSearchOpen(!searchOpen);setNotificationsOpen(false);}}><Search size={19}/></button>
-  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen)void onRefresh();setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
+  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen){void onRefresh();void homeApi.loanNotices().then(setPersonalLoanNotices).catch(error=>console.error("Avisos no disponibles:",error));}setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
    <Bell size={19}/>{unread>0 && <i/>}
   </button>
   {searchOpen && <div className="header-popover header-popover--search home-header-popover">
