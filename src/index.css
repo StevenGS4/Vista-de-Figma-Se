@@ -6951,3 +6951,28 @@
   height: 42px;
   align-self: end;
 }
+
+/* Inicio: saludo y actividad verificada; mantiene la apariencia institucional. */
+.home-greeting { margin: 0 0 18px; padding: 4px 1px; }
+.home-greeting h3 { color: var(--green-950); font-size: clamp(19px,2vw,25px); font-weight: 700; }
+.home-greeting p { margin-top: 4px; color: var(--gray-600); font-size: 12px; }
+.home-activity-button { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.home-activity-button:hover:not(:disabled) { background: var(--gray-50); }
+.home-activity-button:disabled { cursor: default; }
+.home-empty-line { padding: 20px 4px; font-size: 11px; color: var(--gray-600); }
+.home-header-popover { width: min(390px, calc(100vw - 28px)); z-index: 30; }
+.home-search-results, .home-notice-items { display: grid; max-height: 340px; overflow-y: auto; margin-top: 10px; gap: 5px; }
+.home-search-results > button, .home-notice-items > button { display: flex; width: 100%; align-items: flex-start; gap: 9px; padding: 10px; text-align: left; border: 1px solid var(--gray-200); border-radius: 7px; background: var(--white); color: var(--green-950); cursor: pointer; }
+.home-search-results > button:hover, .home-notice-items > button:hover { background: var(--green-50); }
+.home-search-results > button > span, .home-notice-items > button > span:last-child { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.home-search-results b, .home-notice-items b { font-size: 10px; }
+.home-search-results small, .home-notice-items small, .home-no-notices { display: block; color: var(--gray-600); font-size: 10px; line-height: 1.5; }
+.home-notice-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.home-notice-heading strong { font-size: 12px; }
+.home-notice-heading small { color: var(--gray-600); font-size: 10px; }
+.home-notice-items > button.is-seen { opacity: 0.68; }
+.home-no-notices { margin: 10px 0; }
+@media (max-width: 680px) {
+  .app-header .home-header-popover { display: block; position: fixed; top: 65px; right: 12px; left: 12px; width: auto; }
+  .home-activity-button { grid-template-columns: 34px minmax(0,1fr); }
+}
