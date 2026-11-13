@@ -34,6 +34,14 @@ import {
 
 type View = "list" | "form" | "detail";
 type Errors = Partial<Record<keyof ArchivalRecord, string>>;
+const TRAMITE_ADDRESS = "Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit";
+const localDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime()-offset).toISOString().slice(0,10);
+};
+const previewNumber=(code:string,consecutive:string,year:string) =>
+  code && consecutive && year ? `SEMARNAT.${code}.${consecutive.padStart(3,"0")}.${year}` : "Se generará al guardar";
 
 const steps = [
   { label: "Datos generales del inventario", icon: Files },
@@ -403,7 +411,8 @@ function HeaderStep({
 }) {
   const areaSeries = cadidoSeries.filter(series => series.enabledAreaIds.includes(form.areaId));
   const years = [...new Set(areaSeries.map(series=>series.year).filter((year):year is string=>Boolean(year)))].sort((a,b)=>Number(b)-Number(a));
-  const selectedYear = form.cadidoYear || years[0] || "";
+  const selectedYear = isAdmin ? (form.cadidoYear || years[0] || "") : (years[0] || "");
+  const compact = !isAdmin;
   const enabledSeries = areaSeries.filter(series=>!selectedYear||series.year===selectedYear);
   const sectionIds = new Set(enabledSeries.map((series) => series.sectionId));
   return (
@@ -422,8 +431,27 @@ function HeaderStep({
           </span>
         </div>
       )}
+      {compact && (
+        <div className="surface" style={{padding:16,marginBottom:18}}>
+          <div className="section-heading"><div>
+            <span className="section-kicker">Datos automáticos del área</span>
+            <h3>{areaName(form.areaId)}</h3>
+            <p>Los siguientes datos se obtienen del catálogo institucional y no requieren captura.</p>
+          </div></div>
+          <div className="transfer-summary-grid" style={{marginTop:12}}>
+            <div><span>Fecha de elaboración</span><strong>{formatDate(form.inventoryDate)}</strong></div>
+            <div><span>Unidad administrativa</span><strong>{form.administrativeUnit}</strong></div>
+            <div><span>Responsable</span><strong>{form.responsible && form.responsible!=="Sin asignar" ? form.responsible : "Pendiente: asignar encargado en Administración"}</strong></div>
+            <div><span>Cargo</span><strong>{form.responsiblePosition}</strong></div>
+            <div><span>Fondo</span><strong>{form.fund}</strong></div>
+            <div><span>Edición vigente</span><strong>{selectedYear || "Sin CADIDO autorizado"}</strong></div>
+          </div>
+          {!years.length && <p role="alert" className="field-error">El administrador debe asignar códigos de una edición CADIDO a esta área.</p>}
+          {(!form.responsible || form.responsible==="Sin asignar") && <p role="alert" className="field-error">El administrador debe asignar un encargado de área antes de continuar.</p>}
+        </div>
+      )}
       <fieldset className="record-form-grid" disabled={locked}>
-        <Field
+        {isAdmin && <Field
           error={errors.administrativeUnit}
           label="Nombre de la unidad administrativa"
           required
@@ -432,8 +460,8 @@ function HeaderStep({
             onChange={(event) => update("administrativeUnit", event.target.value)}
             value={form.administrativeUnit}
           />
-        </Field>
-        <Field error={errors.areaId} label="Nombre del área generadora" required>
+        </Field>}
+        {isAdmin && <Field error={errors.areaId} label="Nombre del área generadora" required>
           <select
             disabled={!isAdmin || locked}
             onChange={(event) => {
@@ -450,21 +478,21 @@ function HeaderStep({
               </option>
             ))}
           </select>
-        </Field>
-        <Field error={errors.inventoryDate} label="Fecha de elaboración" required>
+        </Field>}
+        {isAdmin && <Field error={errors.inventoryDate} label="Fecha de elaboración" required>
           <input
             onChange={(event) => update("inventoryDate", event.target.value)}
             type="date"
             value={form.inventoryDate}
           />
-        </Field>
-        <Field error={errors.responsible} label="Responsable del área generadora" required>
+        </Field>}
+        {isAdmin && <Field error={errors.responsible} label="Responsable del área generadora" required>
           <input
             onChange={(event) => update("responsible", event.target.value)}
             value={form.responsible}
           />
-        </Field>
-        <Field
+        </Field>}
+        {isAdmin && <Field
           error={errors.responsiblePosition}
           label="Cargo del responsable del área generadora"
           required
@@ -473,11 +501,11 @@ function HeaderStep({
             onChange={(event) => update("responsiblePosition", event.target.value)}
             value={form.responsiblePosition}
           />
-        </Field>
-        <Field error={errors.fund} label="Fondo documental" required>
+        </Field>}
+        {isAdmin && <Field error={errors.fund} label="Fondo documental" required>
           <input onChange={(event) => update("fund", event.target.value)} value={form.fund} />
-        </Field>
-        <Field label="Edición CADIDO" required>
+        </Field>}
+        {isAdmin && <Field label="Edición CADIDO" required>
           <select value={selectedYear} disabled={locked} onChange={event=>{
             update("cadidoYear",event.target.value);
             update("cadidoSectionId","");update("cadidoSeriesId","");update("cadidoCode","");
@@ -485,7 +513,7 @@ function HeaderStep({
             <option value="">Selecciona una edición</option>
             {years.map(y=><option key={y} value={y}>CADIDO {y}</option>)}
           </select>
-        </Field>
+        </Field>}
         <Field error={errors.cadidoSectionId} label="Sección documental" required>
           <select
             onChange={(event) => {
@@ -526,7 +554,7 @@ function HeaderStep({
               ))}
           </select>
         </Field>
-        <Field
+        {isAdmin && <Field
           hint="El total se calculará en la exportación según la cantidad de filas."
           label="Número inicial de hoja"
           required
@@ -541,7 +569,7 @@ function HeaderStep({
             />
             <strong>de N</strong>
           </div>
-        </Field>
+        </Field>}
       </fieldset>
     </>
   );
