@@ -1,24 +1,13 @@
 import { parseLocation } from './concentration-policy.js';
 
-// Valida todo el conjunto ANTES de guardar cualquiera de sus posiciones.
-// La transacción de recepción incluye estas posiciones y su estado RECIBIDA.
-export function validateReceptionLocations(locations,receivedIds){
- if(!Array.isArray(locations)||!locations.length||locations.length>50000)
-  throw new Error('Captura la ubicación física de cada expediente recibido');
- const ids=new Set(receivedIds.map(Number));
- if(locations.length!==ids.size)
-  throw new Error('Debes ubicar todos los expedientes incluidos en esta transferencia');
- const supplied=new Set(),parsed=[];
- for(const item of locations){
-  if(!/^REG-[1-9]\d*$/.test(String(item?.id??'')))
-   throw new Error('Identificador de expediente inválido');
-  const rid=Number(String(item.id).slice(4));
-  if(!Number.isSafeInteger(rid)||!ids.has(rid)||supplied.has(rid))
-   throw new Error('Los expedientes ubicados no corresponden exactamente a la transferencia');
-  supplied.add(rid);
-  let loc;
-  try{loc=parseLocation(item);}catch(error){throw new Error('Ubicación de expediente '+rid+': '+error.message);}
-  parsed.push({id:rid,...loc});
- }
- return parsed;
+// La ubicación se captura UNA VEZ por recepción de transferencia.
+// Se replica en todos sus expedientes dentro de una única transacción SQL.
+export function validateSharedReceptionLocation(location,receivedIds){
+ if(!Array.isArray(receivedIds)||receivedIds.length===0)
+  throw new Error('La transferencia no contiene expedientes para ubicar');
+ const ids=receivedIds.map(Number);
+ if(ids.some(id=>!Number.isSafeInteger(id)||id<1)||new Set(ids).size!==ids.length)
+  throw new Error('Los expedientes asociados a la transferencia no son válidos');
+ try { return parseLocation(location); }
+ catch(error){throw new Error('Ubicación física de la transferencia: '+error.message);}
 }

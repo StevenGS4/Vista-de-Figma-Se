@@ -1176,13 +1176,11 @@ function ReceptionForm({
   onBack,
   onSave,
   transfer,
-  records,
 }: {
   currentUser: UserRecord;
   onBack: () => void;
-  onSave: (status: ReceptionStatus, date: string, notes: string, locations: ReceptionLocation[]) => void;
+  onSave: (status: ReceptionStatus, date: string, notes: string, location: ReceptionLocation | null) => void;
   transfer: DocumentaryTransfer;
-  records: ArchivalRecord[];
 }) {
   const [status, setStatus] = useState<ReceptionStatus>(
     transfer.receptionStatus === "Pendiente" ? "Recibida" : transfer.receptionStatus,
@@ -1190,22 +1188,13 @@ function ReceptionForm({
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
-  const included=records.filter(r=>transfer.recordIds.includes(r.id));
-  const [locations,setLocations]=useState<Record<string,ReceptionLocation>>(()=>{
-    const result:Record<string,ReceptionLocation>={};
-    for(const id of transfer.recordIds){
-      const record=records.find(r=>r.id===id);
-      result[id]={id,archiveZone:record?.archiveZone && record.archiveZone!=="Ubicación pendiente de asignación"? record.archiveZone:"Archivo de concentración",
-        room:record?.room||"Sótano",shelf:record?.shelf||"",level:record?.level||"",
-        physicalSection:record?.physicalSection||"",position:record?.position||"",
-        locationBox:record?.locationBox||record?.boxNumber||"",locationNotes:record?.locationNotes||""};
-    }
-    return result;
-  });
-  const [activeRecord,setActiveRecord]=useState(transfer.recordIds[0]||"");
-  const selectedLocation=locations[activeRecord];
+  const [location,setLocation]=useState<ReceptionLocation>(()=>({
+    archiveZone:"Archivo de concentración",
+    room:"Sótano",shelf:"",level:"",physicalSection:"",
+    position:"",locationBox:"",locationNotes:"",
+  }));
   const updateLocation=(key:keyof ReceptionLocation,value:string)=>{
-    setLocations(current=>({...current,[activeRecord]:{...current[activeRecord],[key]:value}}));
+    setLocation(current=>({...current,[key]:value}));
     setError("");
   };
   return (
@@ -1232,20 +1221,14 @@ function ReceptionForm({
             setError("Describe las diferencias encontradas.");
             return;
           }
-          if(status==="Recibida"){
-            if(included.length!==transfer.recordIds.length){
-              setError("No se cargaron todos los expedientes. Recarga la página antes de guardar.");return;
-            }
-            for(const id of transfer.recordIds){
-              const loc=locations[id];
-              if(!loc?.archiveZone.trim()||!loc.room.trim()||!loc.shelf||!loc.level||!loc.physicalSection){
-                setActiveRecord(id);
-                setError("Completa zona, sala, estante, nivel y sección física de cada expediente antes de confirmar la recepción.");
-                return;
-              }
-            }
+          if(status==="Recibida" && (
+            !location.archiveZone.trim() || !location.room.trim() ||
+            !location.shelf || !location.level || !location.physicalSection
+          )){
+            setError("Completa zona, sala, estante, nivel y sección física. Esta ubicación se asignará a todos los expedientes de la transferencia.");
+            return;
           }
-          onSave(status,date,notes.trim(),status==="Recibida"?transfer.recordIds.map(id=>locations[id]):[]);
+          onSave(status,date,notes.trim(),status==="Recibida"?location:null);
         }}
       >
         <div className="step-heading">
@@ -1311,52 +1294,42 @@ function ReceptionForm({
         </div>
         {status==="Recibida" && <section className="surface" style={{padding:16,margin:"16px 0"}}>
           <div className="step-heading"><span><FolderArchive size={21}/></span><div>
-            <h3>Ubicar expedientes recibidos en concentración</h3>
-            <p>Esta información la captura exclusivamente el administrador durante la recepción física, no el personal de Archivo de trámite.</p>
+            <h3>Ubicación física del inventario recibido</h3>
+            <p>Captura la ubicación una sola vez. Se aplicará automáticamente a los {transfer.recordIds.length} expedientes de esta transferencia, sin repetir el formulario.</p>
           </div></div>
-          <label className="form-field"><span>Expediente a ubicar ({transfer.recordIds.length} en total)</span>
-            <select value={activeRecord} onChange={e=>{setActiveRecord(e.target.value);setError("");}}>
-              {transfer.recordIds.map((id,i)=>{
-                const rec=included.find(r=>r.id===id);
-                const loc=locations[id];
-                const complete=Boolean(loc?.archiveZone&&loc?.room&&loc?.shelf&&loc?.level&&loc?.physicalSection);
-                return <option key={id} value={id}>{i+1}. {rec?.recordNumber||id}{complete?" ✓":""}</option>;
-              })}
-            </select>
-          </label>
-          {selectedLocation && <div className="record-form-grid" style={{marginTop:16}}>
+          <div className="record-form-grid" style={{marginTop:16}}>
             <label className="form-field"><span>Archivo o zona *</span>
-              <input required maxLength={160} value={selectedLocation.archiveZone} onChange={e=>updateLocation("archiveZone",e.target.value)}/>
+              <input required maxLength={160} value={location.archiveZone} onChange={e=>updateLocation("archiveZone",e.target.value)}/>
             </label>
             <label className="form-field"><span>Lugar / sala *</span>
-              <input required maxLength={150} value={selectedLocation.room} onChange={e=>updateLocation("room",e.target.value)}/>
+              <input required maxLength={150} value={location.room} onChange={e=>updateLocation("room",e.target.value)}/>
             </label>
             <label className="form-field"><span>Estante *</span>
-              <select required value={selectedLocation.shelf} onChange={e=>updateLocation("shelf",e.target.value)}>
+              <select required value={location.shelf} onChange={e=>updateLocation("shelf",e.target.value)}>
                 <option value="">Seleccionar</option>{Array.from({length:25},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </label>
             <label className="form-field"><span>Nivel *</span>
-              <select required value={selectedLocation.level} onChange={e=>updateLocation("level",e.target.value)}>
+              <select required value={location.level} onChange={e=>updateLocation("level",e.target.value)}>
                 <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </label>
             <label className="form-field"><span>Sección física *</span>
-              <select required value={selectedLocation.physicalSection} onChange={e=>updateLocation("physicalSection",e.target.value)}>
+              <select required value={location.physicalSection} onChange={e=>updateLocation("physicalSection",e.target.value)}>
                 <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </label>
-            <label className="form-field"><span>Caja</span>
-              <input maxLength={60} value={selectedLocation.locationBox} onChange={e=>updateLocation("locationBox",e.target.value)}/>
+            <label className="form-field"><span>Caja o referencia</span>
+              <input maxLength={60} value={location.locationBox} onChange={e=>updateLocation("locationBox",e.target.value)}/>
             </label>
             <label className="form-field"><span>Posición</span>
-              <input maxLength={45} value={selectedLocation.position} onChange={e=>updateLocation("position",e.target.value.toUpperCase())}/>
+              <input maxLength={45} value={location.position} onChange={e=>updateLocation("position",e.target.value.toUpperCase())}/>
             </label>
             <label className="form-field record-field--wide"><span>Observaciones de ubicación</span>
-              <textarea rows={2} value={selectedLocation.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
+              <textarea rows={2} value={location.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
             </label>
-          </div>}
-          <p className="catalog-note">No se registra la recepción como completa hasta que todos los expedientes cuenten con ubicación física.</p>
+          </div>
+          <p className="catalog-note">La recepción y la ubicación compartida se guardarán juntas en MySQL. Ningún expediente requiere captura individual.</p>
         </section>}
         {error && <div role="alert" className="validation-summary">{error}</div>}
         <div className="reception-rule">
@@ -1518,10 +1491,10 @@ export default function TransfersPanel({
       }
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
   };
-  const saveReception=async(status:ReceptionStatus,date:string,notes:string,locations:ReceptionLocation[])=>{
+  const saveReception=async(status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>{
     if(!selected)return;
     try{
-      const updated=await transferApi.receive(selected.id,status,date,notes,locations);
+      const updated=await transferApi.receive(selected.id,status,date,notes,location);
       saveTransferState(updated);
       try{
         if(status==="Recibida"){
@@ -1556,7 +1529,6 @@ export default function TransfersPanel({
         onBack={() => setView("detail")}
         onSave={saveReception}
         transfer={selected}
-        records={records}
       />
     );
 

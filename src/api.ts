@@ -50,7 +50,7 @@ export const transferApi={
  areaApprove:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/approve-area',{method:'POST',body:'{}'})).transfer,
  observe:async(id:string,observation:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/observe',{method:'POST',body:JSON.stringify({observation})})).transfer,
  accept:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/accept',{method:'POST',body:'{}'})).transfer,
- receive:async(id:string,status:ReceptionStatus,date:string,notes:string,locations:ReceptionLocation[])=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/reception',{method:'POST',body:JSON.stringify({status,date,notes,locations})})).transfer,
+ receive:async(id:string,status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/reception',{method:'POST',body:JSON.stringify({status,date,notes,location})})).transfer,
 };
 
 export const concentrationApi={
@@ -147,4 +147,4 @@ export const adminCatalogApi={
  }),
 };
 
-export type ReceptionLocation={id:string;archiveZone:string;room:string;shelf:string;level:string;physicalSection:string;position:string;locationBox:string;locationNotes:string};
+export type ReceptionLocation={archiveZone:string;room:string;shelf:string;level:string;physicalSection:string;position:string;locationBox:string;locationNotes:string};
