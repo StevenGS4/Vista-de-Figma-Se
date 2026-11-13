@@ -847,7 +847,7 @@ function ControlStep({
           <input
             onChange={(event) => update("openDate", event.target.value)}
             type="date"
-            style={{maxWidth:205}}
+            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.openDate}
           />
         </Field>
@@ -860,7 +860,7 @@ function ControlStep({
             min={active.openDate}
             onChange={(event) => update("closeDate", event.target.value)}
             type="date"
-            style={{maxWidth:205}}
+            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.closeDate}
           />
         </Field>
@@ -869,7 +869,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("filesCount", event.target.value)}
             type="number"
-            style={{maxWidth:155}}
+            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.filesCount}
           />
         </Field>
@@ -878,7 +878,7 @@ function ControlStep({
             min="1"
             onChange={(event) => update("foliosCount", event.target.value)}
             type="number"
-            style={{maxWidth:155}}
+            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.foliosCount}
           />
         </Field>
@@ -932,7 +932,7 @@ function ControlStep({
               );
             }}
             type="number"
-            style={{maxWidth:120}}
+            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.currentValidity}
           />
         </Field>
@@ -952,7 +952,7 @@ function ControlStep({
               );
             }}
             type="number"
-            style={{maxWidth:120}}
+            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.concentrationValidity}
           />
         </Field>
