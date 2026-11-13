@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -977,143 +977,6 @@ function ControlStep({
   );
 }
 
-function ReviewStep({ drafts, isAdmin }: { drafts: ArchivalRecord[]; isAdmin: boolean }) {
-  const displayNumber = (record: ArchivalRecord) =>
-    (isAdmin || /^REG-\d+$/.test(record.id))
-      ? record.recordNumber
-      : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear()));
-  const header = drafts[0];
-  const incomplete = drafts.filter(
-    (record) =>
-      !(
-        (isAdmin ? record.recordNumber : record.cadidoCode) &&
-        record.title &&
-        record.openDate &&
-        record.foliosCount
-      ),
-  );
-  return (
-    <>
-      <StepHeading
-        description="Vista previa antes de registrar en MySQL. Puedes regresar a corregir cualquier dato sin perder la captura."
-        icon={<CheckCircle2 size={21} />}
-        title="Revisión y guardado"
-      />
-      <div className="inventory-review-summary">
-        <section className="review-header-block">
-          <h4>A. Encabezado del inventario</h4>
-          <div className="transfer-summary-grid">
-            <div>
-              <span>Identificador</span>
-              <strong>{header.inventoryId}</strong>
-            </div>
-            <div>
-              <span>Unidad administrativa</span>
-              <strong>{header.administrativeUnit}</strong>
-            </div>
-            <div>
-              <span>Área generadora</span>
-              <strong>{areaName(header.areaId)}</strong>
-            </div>
-            <div>
-              <span>Responsable</span>
-              <strong>{header.responsible}</strong>
-            </div>
-            <div>
-              <span>Cargo</span>
-              <strong>{header.responsiblePosition}</strong>
-            </div>
-            <div>
-              <span>Fondo</span>
-              <strong>{header.fund}</strong>
-            </div>
-            <div>
-              <span>Sección</span>
-              <strong>{sectionName(header.cadidoSectionId)}</strong>
-            </div>
-            <div>
-              <span>Serie</span>
-              <strong>{seriesName(header.cadidoSeriesId)}</strong>
-            </div>
-            <div><span>Paginación</span><strong>Automática en exportación Excel</strong></div>
-          </div>
-        </section>
-        <section className="review-records-block">
-          <div className="section-heading">
-            <div>
-              <h2>B. Expedientes registrados</h2>
-              <p>Una fila por expediente individual.</p>
-            </div>
-            <div className="review-counts">
-              <span>
-                <strong>{drafts.length}</strong> total
-              </span>
-              <span>
-                <strong>{drafts.length - incomplete.length}</strong> completas
-              </span>
-              <span>
-                <strong>{incomplete.length}</strong> pendientes
-              </span>
-            </div>
-          </div>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Consecutivo</th>
-                  <th>Caja</th>
-                  <th>Expediente</th>
-                  <th>CADIDO</th>
-                  <th>Asunto / descripción</th>
-                  <th>Fechas apertura / cierre</th>
-                  <th>Legajos / folios</th>
-                  <th>Soporte</th>
-                  <th>Valor documental</th>
-                  <th>Vigencia T / C / Total</th>
-                  <th>Observaciones</th>
-                  <th>Validación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drafts.map((record) => {
-                  const errors = [
-                    !(isAdmin ? record.recordNumber : record.cadidoCode) && "número",
-                    !record.title && "asunto",
-                    !record.openDate && "apertura",
-                    !record.foliosCount && "folios",
-                  ].filter(Boolean);
-                  return (
-                    <tr key={record.id}>
-                      <td>{record.consecutive}</td>
-                      <td>{record.boxNumber || "—"}</td>
-                      <td>{displayNumber(record)}</td>
-                      <td>{record.cadidoCode} · {record.cadidoYear || "Edición vigente"}</td>
-                      <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
-                      <td>{record.openDate || "—"} / {record.closeDate || "Abierto"}</td>
-                      <td>{record.filesCount} / {record.foliosCount || "—"}</td>
-                      <td>{record.supportType}</td>
-                      <td>{record.documentaryValues.join(", ") || "—"}</td>
-                      <td>{record.currentValidity} / {record.concentrationValidity} / {Number(record.currentValidity)+Number(record.concentrationValidity)} años</td>
-                      <td>{record.observations || "—"}</td>
-                      <td>
-                        {errors.length ? (
-                          <span className="field-error">Falta: {errors.join(", ")}</span>
-                        ) : (
-                          <Badge>Completa</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </>
-  );
-}
-
 function InventoryForm({
   existing,
   onCancel,
@@ -1315,9 +1178,8 @@ function InventoryForm({
     setDrafts((current) => current.filter((item) => item.id !== id));
     if (activeId === id) setActiveId(drafts.find((item) => item.id !== id)?.id ?? drafts[0].id);
   };
-  const save = (event: FormEvent) => {
-    event.preventDefault();
-    // Nunca guardar por Enter en los pasos de captura: únicamente desde revisión.
+  const save = () => {
+    // Solo el botón explícito de confirmación en la vista previa guarda en MySQL.
     if (currentStep !== 3) return;
     const invalidStep = [0, 1, 2].find((step) => !validateStep(step));
     if (invalidStep !== undefined) {
@@ -1359,11 +1221,7 @@ function InventoryForm({
         </span>
       </div>
       <Progress current={currentStep} maxVisited={maxVisited} onStep={setCurrentStep} />
-      <form className="surface record-wizard" onSubmit={save}
-        onKeyDown={event => {
-          if (currentStep !== 3 && event.key === "Enter" &&
-              event.target instanceof HTMLInputElement) event.preventDefault();
-        }}>
+      <div className="surface record-wizard">
         <div className="record-wizard__content">
           {currentStep === 0 && (
             <HeaderStep
@@ -1396,7 +1254,29 @@ function InventoryForm({
               update={updateAll}
             />
           )}
-          {currentStep === 3 && <ReviewStep drafts={drafts} isAdmin={isAdmin} />}
+          {currentStep === 3 && (
+            <>
+              <StepHeading
+                description="Este es el inventario completo tal como aparecerá al pulsar Ver después de registrarlo. Aún no se ha guardado."
+                icon={<CheckCircle2 size={21}/>}
+                title="Paso 4 · Vista previa del inventario"
+              />
+              <InventoryDetail
+                preview
+                inventory={drafts.map(record=>({
+                  ...record,
+                  recordNumber: isAdmin || /^REG-\d+$/.test(record.id) ? record.recordNumber :
+                    previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
+                  totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
+                }))}
+                isAdmin={isAdmin}
+                canEdit={false}
+                onBack={()=>setCurrentStep(2)}
+                onEdit={()=>setCurrentStep(2)}
+              />
+              <p className="catalog-note" role="status">Vista previa sin guardar. El número archivístico definitivo lo asigna MySQL al confirmar.</p>
+            </>
+          )}
 
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
@@ -1425,14 +1305,14 @@ function InventoryForm({
                 <ArrowRight size={17} />
               </Button>
             ) : (
-              <Button className="button--primary" type="submit">
+              <Button className="button--primary" onClick={save}>
                 <Check size={17} />
                 Confirmar y guardar en MySQL
               </Button>
             )}
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -1443,12 +1323,14 @@ function InventoryDetail({
   inventory,
   onBack,
   onEdit,
+  preview = false,
 }: {
   canEdit: boolean;
   isAdmin: boolean;
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
+  preview?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -1458,23 +1340,23 @@ function InventoryDetail({
     const query = search.toLowerCase();
     return (
       !query ||
-      record.recordNumber.toLowerCase().includes(query) ||
-      record.title.toLowerCase().includes(query)
+      String(record.recordNumber || "").toLowerCase().includes(query) ||
+      String(record.title || "").toLowerCase().includes(query)
     );
   });
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   return (
     <div className="record-detail-page">
-      <button className="text-button" onClick={onBack}>
+      {!preview && <button className="text-button" onClick={onBack}>
         <ArrowLeft size={17} />
         Volver al listado
-      </button>
+      </button>}
       <div className="surface inventory-detail-header">
         <div className="section-heading">
           <div>
             <span className="section-kicker">Encabezado del inventario</span>
-            <h2>{header.inventoryId}</h2>
+            <h2>{preview ? "Vista previa · " : ""}{header.inventoryId}</h2>
             <p>
               {areaName(header.areaId)} · {formatDate(header.inventoryDate)}
             </p>
@@ -1564,13 +1446,13 @@ function InventoryDetail({
                   <td>
                     <span className="cadido-code">{record.cadidoCode}</span>
                   </td>
-                  <td>{record.title}</td>
+                  <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
                   <td>{record.filesCount} / {record.foliosCount}</td>
                   <td>{record.supportType}</td>
-                  <td>{record.documentaryValues.join(", ")}</td>
+                  <td>{Array.isArray(record.documentaryValues) ? record.documentaryValues.join(", ") : "—"}</td>
                   <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años</td>
-                  <td>{!isAdmin && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
+                  <td>{(preview || !isAdmin) && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
                     <Badge wine={record.stage === "Archivo de concentración"}>{record.stage}</Badge>
