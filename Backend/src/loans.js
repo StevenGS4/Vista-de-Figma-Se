@@ -23,8 +23,12 @@ const findActiveUser=async(id,areaCode)=>{
  return rows[0] && (!areaCode || rows[0].areaCode===areaCode) ? rows[0] : null;
 };
 const isLoanStaff=async(id)=>{
- const [rows]=await pool.execute(`SELECT 1 AS valid FROM usuario_roles ur
- JOIN roles r ON r.id=ur.rol_id WHERE ur.usuario_id=? AND r.codigo IN ('PRESTAMOS','ADMIN') LIMIT 1`,[id]);
+ const [rows]=await pool.execute(`SELECT 1 AS valid FROM usuarios u JOIN areas a ON a.id=u.area_id
+ WHERE u.id=? AND u.estado='ACTIVO' AND a.activo=1 AND
+ (LOWER(a.nombre) LIKE '%concentraci%' OR EXISTS(
+   SELECT 1 FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id
+   WHERE ur.usuario_id=u.id AND r.codigo IN ('PRESTAMOS','ADMIN')))
+ LIMIT 1`,[id]);
  return rows.length>0;
 };
 
@@ -91,8 +95,9 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
   guard(req.auth.user);
   const [rows]=await pool.query(`SELECT u.id, CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS name,
   a.codigo AS areaId,
-  EXISTS(SELECT 1 FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id
-   WHERE ur.usuario_id=u.id AND r.codigo IN ('PRESTAMOS','ADMIN')) AS canDeliver
+  (LOWER(a.nombre) LIKE '%concentraci%' OR EXISTS(
+   SELECT 1 FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id
+   WHERE ur.usuario_id=u.id AND r.codigo IN ('PRESTAMOS','ADMIN'))) AS canDeliver
   FROM usuarios u JOIN areas a ON a.id=u.area_id
   WHERE u.estado='ACTIVO' AND a.activo=1 ORDER BY a.nombre,u.nombres,u.apellido_paterno`);
   res.set('Cache-Control','private, no-store');
