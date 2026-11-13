@@ -208,7 +208,7 @@ function fillSummary(sheet,records,location){
   const boxes=new Set(records.map(r=>String(r.boxNumber||'').trim()).filter(Boolean));
   const electronic=records.filter(r=>['ELECTRONICO','MIXTO'].includes(normalize(r.supportType))).length;
   const replacements=new Map([
-    ['22','1'],['23',String(records.length)],
+    ['22',String(Math.max(1,Math.ceil(records.length/11)))],['23',String(records.length)],
     ['24',years.length?String(Math.min(...years)):'SIN DATO'],
     ['25',years.length?String(Math.max(...years)):'SIN DATO'],
     ['26',String(boxes.size)],['29',String(electronic)],
