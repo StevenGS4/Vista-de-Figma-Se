@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
-import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -47,7 +46,6 @@ const steps = [
   { label: "Datos generales del inventario", icon: Files },
   { label: "Expedientes y clasificación archivística", icon: FolderTree },
   { label: "Control documental", icon: ClipboardCheck },
-  { label: "Ubicación física", icon: Warehouse },
   { label: "Revisión y guardado", icon: CheckCircle2 },
 ];
 
@@ -147,7 +145,7 @@ function Progress({
   return (
     <div className="wizard-progress">
       <div className="wizard-progress__bar">
-        <span style={{ width: `${(current / 4) * 100}%` }} />
+        <span style={{ width: `${(current / 3) * 100}%` }} />
       </div>
       {steps.map((step, index) => {
         const Icon = step.icon;
@@ -981,143 +979,6 @@ function ControlStep({
   );
 }
 
-function LocationStep({
-  active,
-  drafts,
-  errors,
-  isAdmin,
-  onCopy,
-  onSelect,
-  update,
-}: {
-  active: ArchivalRecord;
-  drafts: ArchivalRecord[];
-  errors: Errors;
-  isAdmin: boolean;
-  onCopy: () => void;
-  onSelect: (id: string) => void;
-  update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
-}) {
-  const locked = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
-  const [otherRoom,setOtherRoom] = useState(active.room!=="" && active.room.toLowerCase()!=="sótano" && active.room.toLowerCase()!=="sotano");
-  return (
-    <>
-      <StepHeading
-        description="Cada expediente conserva su propia ubicación; puedes reutilizar la anterior."
-        icon={<MapPin size={21} />}
-        title="Ubicación física"
-      />
-      <div className="record-selector-strip">
-        {drafts.map((record) => (
-          <button
-            className={record.id === active.id ? "is-selected" : ""}
-            key={record.id}
-            onClick={() => onSelect(record.id)}
-            type="button"
-          >
-            <span>{record.consecutive || "—"}</span>
-            <strong>{record.recordNumber || "Nueva fila"}</strong>
-            {record.shelf ? <Check size={14} /> : <AlertCircle size={14} />}
-          </button>
-        ))}
-      </div>
-      <div className="location-layout">
-        <fieldset className="record-form-grid" disabled={locked}>
-          <Field
-            className="record-field--wide"
-            label="Procedencia: Archivo de trámite del área"
-            required
-          >
-            <input disabled value={`Archivo de trámite — ${areaName(active.areaId)}`} />
-          </Field>
-          <Field error={errors.room} label="Lugar de resguardo" required>
-            {!isAdmin && <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <input type="checkbox" aria-label="Otro lugar de resguardo" checked={otherRoom} onChange={event=>{
-                setOtherRoom(event.target.checked);
-                if(!event.target.checked)update("room","Sótano");
-                else if(active.room==="Sótano")update("room","");
-              }}/> Otro lugar de resguardo
-            </div>}
-            <input disabled={!isAdmin&&!otherRoom} onChange={(event) => update("room", event.target.value)}
-              value={!isAdmin&&!otherRoom?"Sótano":active.room} />
-          </Field>
-          <Field error={errors.shelf} label="Estante" required>
-            <select onChange={(event) => update("shelf", event.target.value)} value={active.shelf}>
-              <option value="">Selecciona</option>
-              {Array.from({ length: 25 }, (_, index) => String(index + 1)).map((item) => (
-                <option key={item} value={item}>
-                  Estante {item}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            error={errors.level}
-            hint="Los niveles se cuentan de abajo hacia arriba."
-            label="Nivel"
-            required
-          >
-            <select onChange={(event) => update("level", event.target.value)} value={active.level}>
-              <option value="">Selecciona</option>
-              {[1, 2, 3, 4].map((item) => (
-                <option key={item}> {item}</option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            error={errors.physicalSection}
-            hint="De izquierda a derecha; no es la sección CADIDO."
-            label="Sección física"
-            required
-          >
-            <select
-              onChange={(event) => update("physicalSection", event.target.value)}
-              value={active.physicalSection}
-            >
-              <option value="">Selecciona</option>
-              {[1, 2, 3, 4].map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Caja">
-            <input
-              onChange={(event) => update("locationBox", event.target.value)}
-              value={active.locationBox}
-            />
-          </Field>
-          <Field label="Posición alfanumérica">
-            <input
-              onChange={(event) => update("position", event.target.value.toUpperCase())}
-              value={active.position}
-            />
-          </Field>
-          <Field className="record-field--wide" label="Observaciones de ubicación">
-            <textarea
-              onChange={(event) => update("locationNotes", event.target.value)}
-              rows={3}
-              value={active.locationNotes}
-            />
-          </Field>
-          {drafts.indexOf(active) > 0 && (
-            <Button className="button--secondary" onClick={onCopy}>
-              <MapPin size={16} /> Reutilizar ubicación anterior
-            </Button>
-          )}
-        </fieldset>
-        <LocationShelf level={active.level} section={active.physicalSection} />
-      </div>
-      <div className="location-summary">
-        <MapPin size={18} />
-        <span>
-          <small>Indicador visual de ubicación</small>
-          <strong>{locationSummary(active)}</strong>
-        </span>
-      </div>
-    </>
-  );
-}
-
 function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
   const header = drafts[0];
   const incomplete = drafts.filter(
@@ -1217,7 +1078,6 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
                     !record.title && "asunto",
                     !record.openDate && "apertura",
                     !record.foliosCount && "folios",
-                    !record.shelf && "ubicación",
                   ].filter(Boolean);
                   return (
                     <tr key={record.id}>
@@ -1289,7 +1149,7 @@ function InventoryForm({
         recordYear:String(new Date().getFullYear()),
         recordNumber: "",
         archiveAddress:TRAMITE_ADDRESS,
-        room:"Sótano",
+        room:"",
         archiveZone: isAdmin ? "" : `Archivo de trámite — ${areaName(user.areaId)}`,
         supportType: "Físico",
         createdBy: user.id,
@@ -1389,12 +1249,6 @@ function InventoryForm({
       if (record.currentValidity === "") next.currentValidity = "Captura la vigencia.";
       if (record.concentrationValidity === "") next.concentrationValidity = "Captura la vigencia.";
     }
-    if (step === 3) {
-      if (!record.room.trim()) next.room = "Captura el lugar de resguardo.";
-      if (!record.shelf) next.shelf = "Selecciona el estante.";
-      if (!record.level) next.level = "Selecciona el nivel.";
-      if (!record.physicalSection) next.physicalSection = "Selecciona la sección física.";
-    }
     return next;
   };
   const validateStep = (step: number) => {
@@ -1410,7 +1264,7 @@ function InventoryForm({
   };
   const next = () => {
     if (!validateStep(currentStep)) return;
-    const value = Math.min(4, currentStep + 1);
+    const value = Math.min(3, currentStep + 1);
     setCurrentStep(value);
     setMaxVisited((current) => Math.max(current, value));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1455,7 +1309,7 @@ function InventoryForm({
   };
   const save = (event: FormEvent) => {
     event.preventDefault();
-    const invalidStep = [0, 1, 2, 3].find((step) => !validateStep(step));
+    const invalidStep = [0, 1, 2].find((step) => !validateStep(step));
     if (invalidStep !== undefined) {
       setCurrentStep(invalidStep);
       setMaxVisited((current) => Math.max(current, invalidStep));
@@ -1466,32 +1320,11 @@ function InventoryForm({
         ...record,
         recordNumber: isAdmin || /^REG-\d+$/.test(record.id) ? record.recordNumber.trim().toUpperCase() :
           previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
-        room: !isAdmin && !record.room ? "Sótano" : record.room,
+        room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
         archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
         initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
         totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
       })),
-    );
-  };
-  const copyLocation = () => {
-    const index = drafts.findIndex((item) => item.id === active.id);
-    const previous = drafts[index - 1];
-    if (!previous) return;
-    setDrafts((current) =>
-      current.map((record) =>
-        record.id === active.id
-          ? {
-              ...record,
-              room: previous.room,
-              shelf: previous.shelf,
-              level: previous.level,
-              physicalSection: previous.physicalSection,
-              position: previous.position,
-              locationBox: previous.locationBox,
-              locationNotes: previous.locationNotes,
-            }
-          : record,
-      ),
     );
   };
 
@@ -1549,19 +1382,8 @@ function InventoryForm({
               update={updateAll}
             />
           )}
-          {currentStep === 3 && (
-            <LocationStep
-              key={active.id}
-              active={active}
-              drafts={drafts}
-              errors={errors}
-              isAdmin={isAdmin}
-              onCopy={copyLocation}
-              onSelect={setActiveId}
-              update={updateAll}
-            />
-          )}
-          {currentStep === 4 && <ReviewStep drafts={drafts} />}
+          {currentStep === 3 && <ReviewStep drafts={drafts} />}
+
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
               <AlertCircle size={17} />
@@ -1583,7 +1405,7 @@ function InventoryForm({
                 Anterior
               </Button>
             )}
-            {currentStep < 4 ? (
+            {currentStep < 3 ? (
               <Button className="button--primary" onClick={next}>
                 Continuar
                 <ArrowRight size={17} />
