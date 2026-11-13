@@ -630,7 +630,7 @@ function LoanForm({
           </button>
           <h2>Registrar préstamo</h2>
           <p>
-            La solicitud y autorización se realizaron fuera del sistema; registra la entrega física.
+            Registra el préstamo y la entrega física. La autorización queda vinculada a tu cuenta.
           </p>
         </div>
         <span className="record-mode">
