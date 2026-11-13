@@ -745,7 +745,7 @@ function ExpedientsStep({
               const year=event.target.value;
               update("recordYear",year);
             }} />
-        </Field>}
+        </Field>
         <Field error={errors.recordNumber} label="Número de expediente" required>
           <input
             maxLength={110}
