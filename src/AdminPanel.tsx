@@ -589,7 +589,7 @@ function UsersList({
       <div className="table-titlebar">
         <div>
           <h2>Usuarios registrados</h2>
-          <p>{users.length} cuentas en el catálogo de demostración</p>
+          <p>{users.length} cuentas registradas</p>
         </div>
         <Button className="button--primary" onClick={onCreate}>
           <Plus size={17} />
