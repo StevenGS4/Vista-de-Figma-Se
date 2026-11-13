@@ -6954,7 +6954,7 @@
 
 /* Inicio: saludo y actividad verificada; mantiene la apariencia institucional. */
 .home-greeting { margin: 0 0 18px; padding: 4px 1px; }
-.home-greeting h3 { color: var(--green-950); font-size: clamp(19px,2vw,25px); font-weight: 700; }
+.home-greeting h3 { color: var(--green-950); font-size: clamp(38px,4vw,50px); font-weight: 700; line-height: 1.15; letter-spacing: -0.035em; }
 .home-greeting p { margin-top: 4px; color: var(--gray-600); font-size: 12px; }
 .home-activity-button { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .home-activity-button:hover:not(:disabled) { background: var(--gray-50); }
