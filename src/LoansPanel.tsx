@@ -88,6 +88,7 @@ function recordFor(records: ArchivalRecord[], id: string) {
 const loanRecordIds = (loan: ArchivalLoan) => loan.recordIds ?? [loan.recordId];
 
 function LoanTray({
+  initialSearch = "",
   canCreate,
   canReturn,
   loans,
@@ -95,6 +96,7 @@ function LoanTray({
   onOpen,
   records,
 }: {
+  initialSearch?: string;
   canCreate: boolean;
   canReturn: boolean;
   loans: ArchivalLoan[];
@@ -102,9 +104,14 @@ function LoanTray({
   onOpen: (loan: ArchivalLoan, action?: "return" | "history") => void;
   records: ArchivalRecord[];
 }) {
-  const [filter, setFilter] = useState<LoanFilter>("Activos");
-  const [search, setSearch] = useState("");
-  const [searched, setSearched] = useState(false);
+  const [filter, setFilter] = useState<LoanFilter>(() => {
+    const selected=loans.find(item=>item.folio===initialSearch);
+    if(!selected)return "Activos";
+    const state=effectiveLoanStatus(selected);
+    return state==="Devuelto"?"Devueltos":state==="Vencido"?"Vencidos":"Activos";
+  });
+  const [search, setSearch] = useState(initialSearch);
+  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
   const [activeActions, setActiveActions] = useState<string | null>(null);
   const pageSize = 5;
@@ -1127,6 +1134,7 @@ function LoanHistory({
 }
 
 export default function LoansPanel({
+  initialSearch = "",
   currentUser,
   loans,
   onLoansChange,
@@ -1134,6 +1142,7 @@ export default function LoansPanel({
   permissions,
   records,
 }: {
+  initialSearch?: string;
   currentUser: UserRecord;
   loans: ArchivalLoan[];
   onLoansChange: (loans: ArchivalLoan[]) => void;
@@ -1302,6 +1311,7 @@ export default function LoansPanel({
         </div>
       )}
       <LoanTray
+        initialSearch={initialSearch}
         canCreate={canCreate}
         canReturn={canReturn}
         loans={loans}
