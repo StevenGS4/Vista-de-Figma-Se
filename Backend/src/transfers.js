@@ -2,6 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
+import { validateReceptionLocations } from './reception-locations.js';
 import {
  transferStates,canSubmitTransfer,canApproveArea,canReviewAdmin,
  canReceiveTransfer,canViewTransfer,uniqueInventoryFolios
@@ -259,10 +260,25 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   if(date<isoDate(t.aceptada_en))throw problem('La recepción no puede ser anterior a la aceptación');
   const [latest]=await conn.execute('SELECT estado FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1',[id]);
   if(latest[0]?.estado==='RECIBIDA')throw problem('La recepción física ya está registrada',409);
+  if(state==='Recibida'){
+   const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
+     JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+     WHERE ti.transferencia_id=? ORDER BY e.id FOR UPDATE`,[id]);
+   let locations;
+   try{locations=validateReceptionLocations(req.body?.locations,linked.map(row=>row.id));}
+   catch(error){throw problem(error.message);}
+   for(const loc of locations){
+     const [updated]=await conn.execute(`UPDATE expedientes SET archivo_zona=?,lugar_resguardo=?,estante=?,nivel=?,
+       seccion_fisica=?,posicion=?,caja_ubicacion=?,notas_ubicacion=? WHERE id=? AND etapa='CONCENTRACION'`,
+       [loc.archiveZone,loc.room,loc.shelf,loc.level,loc.physicalSection,
+        loc.position,loc.locationBox,loc.locationNotes,loc.id]);
+     if(updated.affectedRows!==1)throw problem('La transferencia contiene un expediente que no está en concentración',409);
+   }
+  }
   await conn.execute('INSERT INTO recepciones(transferencia_id,fecha,responsable_id,estado,observaciones) VALUES (?,?,?,?,?)',
    [id,date+' 12:00:00',user.id,state==='Recibida'?'RECIBIDA':'DIFERENCIAS',note||null]);
-  await addHistory(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIA',note||'Recepción física cotejada');
-  await audit(conn,user,id,'RECEPCION',{estado:state});
+  await addHistory(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIA',note||(state==='Recibida'?'Recepción física cotejada y ubicaciones asignadas por el administrador':'Diferencias pendientes'));
+  await audit(conn,user,id,'RECEPCION',{estado:state,ubicaciones:state==='Recibida'?req.body.locations.length:0});
   await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });

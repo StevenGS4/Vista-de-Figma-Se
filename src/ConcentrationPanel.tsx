@@ -727,8 +727,7 @@ export default function ConcentrationPanel({
     return record.areaId === currentUser.areaId && record.createdBy === currentUser.id;
   });
   const canEditLocation =
-    (role === "Encargado de préstamos / Control archivístico" ||
-      role === "Administrador / Coordinador") &&
+    role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
   const canViewDetail = role !== "Encargado de área";
 

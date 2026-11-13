@@ -78,6 +78,12 @@ concentrationRouter.put('/expedientes/:id/ubicacion',async(req,res,next)=>{
   if(found[0].etapa!=='CONCENTRACION'||found[0].inventory_state!=='CONCENTRACION'||
     found[0].transfer_state!=='ACEPTADA')
     throw fail('No se puede asignar ubicación antes de aceptar la transferencia',409);
+  const [[physical]]=await conn.execute(`SELECT r.estado FROM recepciones r
+    JOIN transferencia_inventarios ti ON ti.transferencia_id=r.transferencia_id
+    JOIN expedientes e ON e.inventario_id=ti.inventario_id
+    WHERE e.id=? ORDER BY r.id DESC LIMIT 1`,[id]);
+  if(physical?.estado!=='RECIBIDA')
+    throw fail('Primero confirma la recepción física y asigna la ubicación desde Transferencias',409);
   // La etapa y la disponibilidad jamás se actualizan desde esta ruta.
   await conn.execute(`UPDATE expedientes SET archivo_zona=?,lugar_resguardo=?,estante=?,nivel=?,
     seccion_fisica=?,posicion=?,caja_ubicacion=?,notas_ubicacion=? WHERE id=?`,

@@ -176,10 +176,7 @@ function rowFields(r,inventoryId,serieId,userId){
   anios_tramite:num(r.currentValidity,'vigencia trámite'),
   anios_concentracion:num(r.concentrationValidity,'vigencia concentración'),
   domicilio_resguardo:text(r.archiveAddress,350)||null,
-  lugar_resguardo:text(r.room,150)||null,estante:nullableNum(r.shelf,'estante',1,25),
-  nivel:nullableNum(r.level,'nivel',1,4),seccion_fisica:nullableNum(r.physicalSection,'sección física',1,4),
-  posicion:text(r.position,45)||null,caja_ubicacion:text(r.locationBox,60)||null,
-  notas_ubicacion:text(r.locationNotes,50000)||null,observaciones:text(r.observations,50000)||null,
+  observaciones:text(r.observations,50000)||null,
   creado_por:userId,
  };
 }

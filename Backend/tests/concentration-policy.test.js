@@ -21,8 +21,8 @@ test('consulta limitada por etapa, área y creador',()=>{
  assert.equal(canReadConcentrationRecord(clerk,record),true);
  assert.equal(concentrationScope({...admin,mustChangePassword:true}),null);
 });
-test('solo responsable de concentración y administrador actualizan ubicación',()=>{
- assert.equal(canEditConcentrationLocation(clerk),true);
+test('solo el administrador actualiza ubicación después de la recepción',()=>{
+ assert.equal(canEditConcentrationLocation(clerk),false);
  assert.equal(canEditConcentrationLocation(admin),true);
  assert.equal(canEditConcentrationLocation(manager),false);
  assert.equal(canEditConcentrationLocation(person),false);
