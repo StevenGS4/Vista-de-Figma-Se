@@ -17,6 +17,7 @@ export type ArchivalLoan = {
   mode?: "Expediente individual" | "Inventario completo";
   requestingAreaId: string;
   requesterName: string;
+  requesterUserId?: string;
   loanDate: string;
   expectedReturnDate: string;
   authorizedBy: string;
