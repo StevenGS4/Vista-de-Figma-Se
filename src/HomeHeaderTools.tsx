@@ -6,9 +6,10 @@ import type { DocumentaryTransfer } from "./transfers";
 import type { ArchivalLoan } from "./loans";
 import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
 
-export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onRefresh}:{
+export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh}:{
  user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:ArchivalLoan[];
  allowed:HomeModule[];onNavigate:(id:HomeModule)=>void;onSearchRecord:(record:ArchivalRecord)=>void;
+ onSearchFolio:(module:"transferencias"|"prestamos",folio:string)=>void;
  onRefresh:()=>Promise<void>;
 }) {
  const [searchOpen,setSearchOpen]=useState(false);
@@ -64,8 +65,8 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
       {results.map(record=><button type="button" key={record.id} onClick={()=>{onSearchRecord(record);setSearchOpen(false);setQuery("");}}>
         <FileText size={17}/><span><b>{record.recordNumber}</b><small>{record.title} · {record.stage}</small></span>
       </button>)}
-      {transferMatches.map(t=><button type="button" key={t.id} onClick={()=>{onNavigate("transferencias");setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{t.folio}</b><small>Transferencia · {t.status}</small></span></button>)}
-      {loanMatches.map(l=><button type="button" key={l.id} onClick={()=>{onNavigate("prestamos");setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{l.folio}</b><small>Préstamo · {l.status}</small></span></button>)}
+      {transferMatches.map(t=><button type="button" key={t.id} onClick={()=>{onSearchFolio("transferencias",t.folio);setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{t.folio}</b><small>Transferencia · {t.status}</small></span></button>)}
+      {loanMatches.map(l=><button type="button" key={l.id} onClick={()=>{onSearchFolio("prestamos",l.folio);setSearchOpen(false);setQuery("");}}><FileText size={17}/><span><b>{l.folio}</b><small>Préstamo · {l.status}</small></span></button>)}
     </div>
   </div>}
   {notificationsOpen && <div className="header-popover header-popover--notifications home-header-popover">
