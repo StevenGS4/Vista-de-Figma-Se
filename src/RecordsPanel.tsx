@@ -1267,13 +1267,25 @@ function InventoryForm({
     const base = emptyRecord();
     const inventoryId = `INV-TR-${String(groupInventories(records).length + 1).padStart(3, "0")}`;
     const area = areas.find((item) => item.id === user.areaId);
+    const assignedYear=[...new Set(cadidoSeries.filter(x=>x.enabledAreaIds.includes(user.areaId)).map(x=>x.year).filter(Boolean))]
+      .sort((a,b)=>Number(b)-Number(a))[0] || String(new Date().getFullYear());
     return [
       {
         ...base,
         id: `DRAFT-${Date.now()}`,
         inventoryId,
         areaId: isAdmin ? "" : user.areaId,
-        responsible: isAdmin ? "" : (area?.manager ?? fullName(user)),
+        responsible: isAdmin ? "" : ((area?.manager && area.manager!=="Sin asignar") ? area.manager : ""),
+        responsiblePosition: isAdmin ? "" : `Encargado del área de ${area?.name || areaName(user.areaId)}`,
+        inventoryDate: localDate(),
+        initialSheetNumber:"1",
+        fund:"SEMARNAT Nayarit",
+        administrativeUnit:"Oficina de Representación de SEMARNAT en Nayarit",
+        cadidoYear:assignedYear,
+        recordYear:String(new Date().getFullYear()),
+        recordNumber: "",
+        archiveAddress:TRAMITE_ADDRESS,
+        room:"Sótano",
         archiveZone: isAdmin ? "" : `Archivo de trámite — ${areaName(user.areaId)}`,
         supportType: "Físico",
         createdBy: user.id,
@@ -1303,6 +1315,7 @@ function InventoryForm({
       "cadidoSectionId",
       "cadidoSeriesId",
       "cadidoCode",
+      "cadidoYear",
       "initialSheetNumber",
     ];
     setDrafts((current) =>
@@ -1344,8 +1357,10 @@ function InventoryForm({
       if (!record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
       if (drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
-      if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
-      if (
+      if (!isAdmin && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
+        next.recordYear="Selecciona un año válido (1900–2100).";
+      if (isAdmin && !record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
+      if (isAdmin &&
         records.some(
           (item) =>
             item.id !== record.id &&
@@ -1410,11 +1425,16 @@ function InventoryForm({
           "cadidoSectionId",
           "cadidoSeriesId",
           "cadidoCode",
+          "cadidoYear",
           "initialSheetNumber",
         ].map((key) => [key, header[key as keyof ArchivalRecord]]),
       ),
       id: `DRAFT-${Date.now()}`,
       consecutive: String(nextConsecutive),
+      recordYear:String(new Date().getFullYear()),
+      recordNumber: "",
+      room:"Sótano",
+      archiveAddress:TRAMITE_ADDRESS,
       createdBy: user.id,
       supportType: "Físico",
       archiveZone: `Archivo de trámite — ${areaName(header.areaId)}`,
@@ -1438,7 +1458,11 @@ function InventoryForm({
     onSave(
       drafts.map((record) => ({
         ...record,
-        recordNumber: record.recordNumber.trim().toUpperCase(),
+        recordNumber: isAdmin ? record.recordNumber.trim().toUpperCase() :
+          previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
+        room: !isAdmin && !record.room ? "Sótano" : record.room,
+        archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
+        initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
         totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
       })),
     );
@@ -1648,7 +1672,7 @@ function InventoryDetail({
           </div>
           <div>
             <span>Hoja</span>
-            <strong>Hoja {header.initialSheetNumber} de N</strong>
+            <strong>La numeración de hojas se calculará al exportar</strong>
           </div>
         </div>
       </div>
@@ -1701,7 +1725,7 @@ function InventoryDetail({
                   <td>{record.supportType}</td>
                   <td>{record.documentaryValues.join(", ")}</td>
                   <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años</td>
-                  <td>{locationSummary(record)}</td>
+                  <td>{record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
                     <Badge wine={record.stage === "Archivo de concentración"}>{record.stage}</Badge>
