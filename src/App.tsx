@@ -167,8 +167,18 @@ function hasModulePermission(id: ModuleId, role: Role, permissions: string[]) {
 }
 
 function InstitutionalMarks({ inverse = false }: { inverse?: boolean }) {
+  if (inverse) return (
+    <div className="institutional-marks institutional-marks--inverse" aria-label="Logotipos institucionales">
+      <img className="institutional-logo institutional-logo--gobierno"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/blpronyvdxik5tlnlups.png"
+        alt="Gobierno de México" loading="lazy" />
+      <img className="institutional-logo institutional-logo--semarnat"
+        src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/vl2lpdq6r8yhsfksdvif.webp"
+        alt="SEMARNAT" loading="lazy" />
+    </div>
+  );
   return (
-    <div className={`institutional-marks ${inverse ? "institutional-marks--inverse" : ""}`}>
+    <div className="institutional-marks">
       <div
         aria-label="Espacio reservado para logotipo oficial del Gobierno de México"
         className="mark-slot"
@@ -528,7 +538,10 @@ function Sidebar({
         className={`sidebar ${collapsed ? "sidebar--collapsed" : ""} ${mobileOpen ? "is-open" : ""}`}
       >
         <div className="sidebar__top">
-          <div className="sidebar__monogram">SCA</div>
+          <div className="sidebar__monogram">
+            <img src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570907/wunnlrrfjovxbqopkewo.jpg"
+              alt="Identidad del Sistema de Control Archivístico" />
+          </div>
           {!collapsed && (
             <div className="sidebar__title">
               <strong>Control Archivístico</strong>
