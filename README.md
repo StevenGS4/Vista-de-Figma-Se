@@ -1,3 +1,4 @@
 # Vista-de-Figma-Se
 
-APRTE 1
+Parte 1
+Parte 2
