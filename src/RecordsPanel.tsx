@@ -13,13 +13,11 @@ import {
   FilePlus2,
   Files,
   FolderTree,
-  MapPin,
   Pencil,
   Plus,
   Search,
   ShieldCheck,
   Trash2,
-  Warehouse,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
