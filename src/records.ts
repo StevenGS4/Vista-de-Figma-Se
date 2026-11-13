@@ -21,6 +21,7 @@ export type ArchivalRecord = {
   cadidoSectionId: string;
   cadidoSeriesId: string;
   cadidoCode: string;
+  cadidoYear?: string;
   openDate: string;
   closeDate: string;
   filesCount: string;
