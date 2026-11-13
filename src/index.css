@@ -7034,3 +7034,34 @@
 @media (max-width: 620px) {
   .loan-selection-filters { grid-template-columns: minmax(0,1fr); padding: 12px 15px; }
 }
+
+/* Identidad gráfica del menú lateral; sin cuadros ni líneas punteadas. */
+.sidebar__monogram {
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+}
+.sidebar__monogram img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sidebar__institution .institutional-marks--inverse {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.sidebar__institution .institutional-logo {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: 42px;
+  object-fit: contain;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
