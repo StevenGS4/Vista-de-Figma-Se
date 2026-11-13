@@ -73,7 +73,8 @@ export default function AdminAreasPanel(){
    await adminCatalogApi.saveSeries(selected.id,year,chosen);
    const rows=await adminCatalogApi.series(year,selected.id);setSeries(rows);
    setChosen(rows.filter(x=>x.enabled).map(x=>x.id));
-   const catalog=await tramiteApi.catalog();setCadidoCatalog(catalog.sections,catalog.series);
+   try{const catalog=await tramiteApi.catalog();setCadidoCatalog(catalog.sections,catalog.series);}
+   catch{setSuccess("Asignación guardada en MySQL. Recarga la página para actualizar los selectores.");return;}
    setSuccess("Asignación guardada en MySQL. Los expedientes históricos permanecen intactos.");
   }catch(e){setError(e instanceof Error?e.message:"Error asignando series");}
   finally{setSaving(false);}
