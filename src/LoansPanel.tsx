@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Archive,
@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
-import { loanApi, concentrationApi } from "./api";
+import { loanApi, concentrationApi, type LoanEligibleUser } from "./api";
 import { ArchivalLoan, effectiveLoanStatus, todayIso } from "./loans";
 import { ArchivalRecord, locationSummary } from "./records";
 
@@ -485,11 +485,10 @@ function RecordSelector({
 
 type LoanFormData = {
   requestingAreaId: string;
-  requesterName: string;
+  requesterUserId: string;
   loanDate: string;
   expectedReturnDate: string;
-  authorizedBy: string;
-  deliveredBy: string;
+  delivererUserId: string;
   receivedBy: string;
   observations: string;
 };
@@ -572,14 +571,32 @@ function LoanForm({
   const record = records[0];
   const [form, setForm] = useState<LoanFormData>({
     requestingAreaId: "",
-    requesterName: "",
+    requesterUserId: "",
     loanDate: todayIso(),
     expectedReturnDate: offsetDate(14),
-    authorizedBy: "",
-    deliveredBy: fullName(currentUser),
+    delivererUserId: "",
     receivedBy: "",
     observations: "",
   });
+  const [staff, setStaff] = useState<LoanEligibleUser[]>([]);
+  const [staffError, setStaffError] = useState("");
+  const [staffLoading, setStaffLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    loanApi.eligibleUsers().then(users => {
+      if (!alive) return;
+      setStaff(users);
+      setForm(current => ({
+        ...current,
+        delivererUserId: users.some(u => u.id === currentUser.id && u.canDeliver) ? currentUser.id : ""
+      }));
+    }).catch(error => {
+      if (alive) setStaffError(error instanceof Error ? error.message : "No fue posible consultar el personal");
+    }).finally(() => { if (alive) setStaffLoading(false); });
+    return () => { alive = false; };
+  }, [currentUser.id]);
+  const requesterOptions = staff.filter(user => user.areaId === form.requestingAreaId);
+  const delivererOptions = staff.filter(user => user.canDeliver);
   const [errors, setErrors] = useState<Partial<Record<keyof LoanFormData, string>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -590,13 +607,15 @@ function LoanForm({
   const validate = () => {
     const next: Partial<Record<keyof LoanFormData, string>> = {};
     if (!form.requestingAreaId) next.requestingAreaId = "Selecciona el área solicitante.";
-    if (!form.requesterName.trim()) next.requesterName = "Ingresa el nombre del solicitante.";
+    if (!staff.length || staffError || staffLoading) next.requesterUserId = "No se pudo cargar el catálogo del personal.";
+    else if (!requesterOptions.some(user => user.id === form.requesterUserId))
+      next.requesterUserId = "Selecciona un empleado activo del área solicitante.";
     if (!form.loanDate) next.loanDate = "Captura la fecha del préstamo.";
     if (!form.expectedReturnDate) next.expectedReturnDate = "Captura la fecha prevista.";
     else if (form.loanDate && form.expectedReturnDate < form.loanDate)
       next.expectedReturnDate = "La devolución prevista no puede ser anterior al préstamo.";
-    if (!form.authorizedBy.trim()) next.authorizedBy = "Ingresa la persona que autoriza.";
-    if (!form.deliveredBy.trim()) next.deliveredBy = "Ingresa la persona que entrega.";
+    if (!delivererOptions.some(user => user.id === form.delivererUserId))
+      next.delivererUserId = "Selecciona quién entrega, del personal autorizado.";
     if (!form.receivedBy.trim()) next.receivedBy = "Ingresa la persona que recibe.";
     setErrors(next);
     return !Object.keys(next).length;
@@ -686,11 +705,16 @@ function LoanForm({
               <p>Personas responsables y periodo previsto de consulta.</p>
             </div>
           </div>
+          {staffError && <div className="validation-summary" role="alert">No se pudo consultar el personal: {staffError}</div>}
+          {staffLoading && <p className="field-hint">Cargando empleados activos desde MySQL…</p>}
           <div className="record-form-grid">
             <LoanField error={errors.requestingAreaId} label="Área solicitante" required>
               <select
                 value={form.requestingAreaId}
-                onChange={(event) => update("requestingAreaId", event.target.value)}
+                onChange={(event) => {
+                  setForm(current => ({ ...current, requestingAreaId: event.target.value, requesterUserId: "" }));
+                  setErrors(current => ({ ...current, requestingAreaId: undefined, requesterUserId: undefined }));
+                }}
               >
                 <option value="">Selecciona un área</option>
                 {areas.map((area) => (
@@ -700,11 +724,15 @@ function LoanForm({
                 ))}
               </select>
             </LoanField>
-            <LoanField error={errors.requesterName} label="Nombre del solicitante" required>
-              <input
-                value={form.requesterName}
-                onChange={(event) => update("requesterName", event.target.value)}
-              />
+            <LoanField error={errors.requesterUserId} label="Persona solicitante" required>
+              <select
+                value={form.requesterUserId}
+                onChange={(event) => update("requesterUserId", event.target.value)}
+                disabled={!form.requestingAreaId || staffLoading || Boolean(staffError)}
+              >
+                <option value="">{!form.requestingAreaId ? "Selecciona primero el área" : "Selecciona un empleado del área"}</option>
+                {requesterOptions.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+              </select>
             </LoanField>
             <LoanField error={errors.loanDate} label="Fecha del préstamo" required>
               <input
@@ -725,17 +753,18 @@ function LoanForm({
                 onChange={(event) => update("expectedReturnDate", event.target.value)}
               />
             </LoanField>
-            <LoanField error={errors.authorizedBy} label="Persona que autoriza" required>
-              <input
-                value={form.authorizedBy}
-                onChange={(event) => update("authorizedBy", event.target.value)}
-              />
+            <LoanField label="Persona que autoriza (sesión actual)">
+              <input value={fullName(currentUser)} readOnly disabled />
             </LoanField>
-            <LoanField error={errors.deliveredBy} label="Persona que entrega" required>
-              <input
-                value={form.deliveredBy}
-                onChange={(event) => update("deliveredBy", event.target.value)}
-              />
+            <LoanField error={errors.delivererUserId} label="Persona que entrega" required>
+              <select
+                value={form.delivererUserId}
+                onChange={(event) => update("delivererUserId", event.target.value)}
+                disabled={staffLoading || Boolean(staffError)}
+              >
+                <option value="">Selecciona quién entrega el expediente</option>
+                {delivererOptions.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+              </select>
             </LoanField>
             <LoanField error={errors.receivedBy} label="Persona que recibe" required>
               <input
@@ -1169,7 +1198,8 @@ export default function LoansPanel({
     try{
       const created=await loanApi.create({
         mode:selectedMode,recordIds:selectedRecords.map(r=>r.id),
-        requestingAreaId:data.requestingAreaId,requesterName:data.requesterName,
+        requestingAreaId:data.requestingAreaId,requesterUserId:data.requesterUserId,
+        delivererUserId:data.delivererUserId,
         loanDate:data.loanDate,expectedReturnDate:data.expectedReturnDate,
         receivedBy:data.receivedBy,observations:data.observations,
       });
