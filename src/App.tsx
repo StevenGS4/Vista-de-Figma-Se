@@ -605,6 +605,7 @@ function Header({
   allowed,
   onNavigate,
   onSearchRecord,
+  onRefresh,
 }: {
   active: ModuleId;
   records: ArchivalRecord[];
@@ -613,6 +614,7 @@ function Header({
   allowed: ModuleId[];
   onNavigate: (id: ModuleId) => void;
   onSearchRecord: (record: ArchivalRecord) => void;
+  onRefresh: () => Promise<void>;
   onChangePassword: () => void;
   onLogout: () => void;
   onMenu: () => void;
@@ -636,7 +638,7 @@ function Header({
       </div>
       <div className="app-header__actions">
         <HomeHeaderTools user={user} role={role} records={records} transfers={transfers} loans={loans}
-          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} />
+          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onRefresh={onRefresh} />
         <span className="header-divider" />
         <div className="profile-menu">
           <button className="profile-trigger" onClick={() => setProfileOpen((current) => !current)}>
@@ -834,8 +836,22 @@ function Application({
     if (!allowed.includes(active)) setActive("inicio");
   }, [active, allowed, currentUser.roles, role]);
 
+  const refreshHomeEvents = async () => {
+    if (currentUser.mustChangePassword) return;
+    const operations: Promise<unknown>[] = [];
+    if (currentUser.roles.some(r => r === "Personal de área" || r === "Encargado de área" || r === "Administrador / Coordinador"))
+      operations.push(transferApi.list().then(onTransfersChange));
+    if (currentUser.roles.some(r => r === "Encargado de préstamos / Control archivístico" || r === "Administrador / Coordinador"))
+      operations.push(loanApi.list().then(onLoansChange));
+    const results = await Promise.allSettled(operations);
+    results.forEach(result => { if (result.status === "rejected") console.error("No fue posible actualizar avisos:", result.reason); });
+  };
   const navigate = (id: ModuleId) => {
-    if (allowed.includes(id)) { setGlobalQuery(""); setActive(id); }
+    if (allowed.includes(id)) {
+      setGlobalQuery("");
+      setActive(id);
+      if (id === "inicio") void refreshHomeEvents();
+    }
   };
   const openSearchResult = (record: ArchivalRecord) => {
     const target: ModuleId = record.stage === "Archivo de concentración" ? "concentracion" : "tramite";
@@ -886,6 +902,7 @@ function Application({
           allowed={allowed}
           onNavigate={navigate}
           onSearchRecord={openSearchResult}
+          onRefresh={refreshHomeEvents}
         />
         <main className="workspace">
           {active !== "tramite" &&
