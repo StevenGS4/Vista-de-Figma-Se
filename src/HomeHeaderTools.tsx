@@ -73,7 +73,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
     <div className="home-notice-heading"><strong>Notificaciones</strong><small>{unread} sin leer</small></div>
     <div className="home-notice-items">
       {notices.length===0 && <p className="home-no-notices">No hay avisos registrados para tus funciones.</p>}
-      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);onNavigate(n.module);}}>
+      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
         <span className={"activity-item__icon activity-item__icon--"+n.color}>{seen.includes(n.id)?<Check size={15}/>:<Bell size={15}/>}</span>
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}
