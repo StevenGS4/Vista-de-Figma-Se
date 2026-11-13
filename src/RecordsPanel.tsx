@@ -741,7 +741,7 @@ function ExpedientsStep({
             value={active.boxNumber}
           />
         </Field>
-        {!isAdmin && <Field label="Año del expediente" required>
+        {!isAdmin && <Field error={errors.recordYear} label="Año del expediente" required>
           <input type="number" min="1900" max="2100" style={{maxWidth:145}}
             value={active.recordYear || String(new Date().getFullYear())}
             onChange={event=>{
