@@ -6938,3 +6938,15 @@
     white-space: nowrap;
   }
 }
+
+/* Inventarios Excel (trámite, concentración y transferencia primaria):
+   alinear todos los controles por su borde inferior sin alterar sus filtros. */
+.inventory-config-page .records-filters {
+  align-items: end;
+}
+
+.inventory-config-page .records-filters > .search-box,
+.inventory-config-page .records-filters > .filter-select {
+  height: 42px;
+  align-self: end;
+}
