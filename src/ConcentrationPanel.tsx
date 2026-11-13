@@ -85,6 +85,7 @@ function ConcentrationList({
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("");
   const [cadido, setCadido] = useState("");
+  const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
   const [searched, setSearched] = useState(false);
   const [recentOnly, setRecentOnly] = useState(false);
@@ -100,21 +101,23 @@ function ConcentrationList({
             record.recordNumber.toLowerCase().includes(query) ||
             record.title.toLowerCase().includes(query)) &&
           (!area || record.areaId === area) &&
-          (!cadido || record.cadidoSeriesId === cadido) &&
+          (!cadido || record.cadidoCode === cadido) &&
+          (!cadidoYear || record.cadidoYear === cadidoYear) &&
           (!availability || record.availability === availability) &&
           (!recentOnly || index < 5)
         );
       }),
-    [area, availability, cadido, recentOnly, records, search],
+    [area, availability, cadido, cadidoYear, recentOnly, records, search],
   );
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const hasFilters = Boolean(search || area || cadido || availability || recentOnly);
+  const hasFilters = Boolean(search || area || cadido || cadidoYear || availability || recentOnly);
 
   const clear = () => {
     setSearch("");
     setArea("");
     setCadido("");
+    setCadidoYear("");
     setAvailability("");
     setRecentOnly(false);
     setSearched(false);
@@ -184,13 +187,15 @@ function ConcentrationList({
               value={cadido}
             >
               <option value="">Todos los códigos CADIDO</option>
-              {cadidoSeries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.code} · {item.name}
-                </option>
+              {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </label>
+          <label className="filter-select"><select aria-label="Filtrar por edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);setCadido("");setPage(1);}}>
+            <option value="">Todas las ediciones CADIDO</option>
+            {[...new Set(records.map(r=>r.cadidoYear).filter(Boolean))].sort().map(v=><option key={v} value={v}>{v}</option>)}
+          </select></label>
           <label className="filter-select">
             <select
               aria-label="Filtrar por disponibilidad"
