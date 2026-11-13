@@ -987,8 +987,7 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
         record.recordNumber &&
         record.title &&
         record.openDate &&
-        record.foliosCount &&
-        record.shelf
+        record.foliosCount
       ),
   );
   return (
@@ -1034,10 +1033,7 @@ function ReviewStep({ drafts }: { drafts: ArchivalRecord[] }) {
               <span>Serie</span>
               <strong>{seriesName(header.cadidoSeriesId)}</strong>
             </div>
-            <div>
-              <span>Número de hoja</span>
-              <strong>Hoja {header.initialSheetNumber} de N</strong>
-            </div>
+            <div><span>Paginación</span><strong>Automática en exportación Excel</strong></div>
           </div>
         </section>
         <section className="review-records-block">
