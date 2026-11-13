@@ -44,6 +44,15 @@ try {
  await verify(12,'tramite');
  await verify(100,'tramite');
  await verify(12,'transferencia');
+ const twoInventories=[sample(1),{...sample(2),inventoryId:'INV-PRUEBA-002'}];
+ const multi=await makeOfficialTemplateWorkbook(twoInventories,'tramite');
+ const multiBytes=await multi.xlsx.writeBuffer();
+ const loadedMulti=new ExcelJS.Workbook();
+ await loadedMulti.xlsx.load(multiBytes);
+ if(loadedMulti.worksheets.length<2)fail('la exportación de varios inventarios no creó hojas independientes');
+ if(!loadedMulti.worksheets.some(sh=>contains(sh,'EXPEDIENTE DE VERIFICACIÓN 2')))
+   fail('el segundo inventario no aparece en el archivo');
+ console.log('OK varios inventarios; hojas',loadedMulti.worksheets.length);
 } catch(error) {
  console.error(error.stack||error.message);
  process.exitCode=1;
