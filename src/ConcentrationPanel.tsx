@@ -13,13 +13,13 @@ import {
   FilterX,
   FolderTree,
   MapPin,
-  MoreHorizontal,
   Pencil,
   Search,
   ShieldCheck,
   Truck,
   Warehouse,
 } from "lucide-react";
+import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas } from "./data";
 import { concentrationApi } from "./api";
 import LocationShelf from "./LocationShelf";
@@ -93,7 +93,6 @@ function ConcentrationList({
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [activeActions, setActiveActions] = useState<string | null>(null);
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
   const pageSize = 5;
 
@@ -358,26 +357,22 @@ function ConcentrationList({
                                         <td>{record.physicalSection ? `Sección ${record.physicalSection}` : "Pendiente"}</td>
                                         <td><AvailabilityBadge value={record.availability}/></td>
                                         <td>
-                                          <div className="record-actions">
-                                            <button type="button"
-                                              aria-expanded={activeActions === record.id}
-                                              aria-label={`Acciones para ${record.recordNumber}`}
-                                              onClick={() => setActiveActions(current => current === record.id ? null : record.id)}>
-                                              <MoreHorizontal size={18}/>
-                                            </button>
-                                            {activeActions === record.id && (
-                                              <div className="record-actions__menu concentration-actions-menu">
-                                                {canViewDetail && <button type="button" onClick={() => {
-                                                  setActiveActions(null);
-                                                  onView(record);
-                                                }}><Files size={16}/> Ver detalle</button>}
-                                                {canEditLocation && <button type="button" onClick={() => {
-                                                  setActiveActions(null);
-                                                  onEditLocation(record);
-                                                }}><MapPin size={15}/> Editar ubicación</button>}
-                                              </div>
-                                            )}
-                                          </div>
+                                          <RowActionsMenu
+                                            label={`Acciones para ${record.recordNumber}`}
+                                            width={178}
+                                            actions={[
+                                              ...(canViewDetail ? [{
+                                                label: "Ver detalle",
+                                                icon: <Files size={16}/>,
+                                                onSelect: () => onView(record),
+                                              }] : []),
+                                              ...(canEditLocation ? [{
+                                                label: "Editar ubicación",
+                                                icon: <MapPin size={15}/>,
+                                                onSelect: () => onEditLocation(record),
+                                              }] : []),
+                                            ]}
+                                          />
                                         </td>
                                       </tr>
                                     ))}</tbody>
