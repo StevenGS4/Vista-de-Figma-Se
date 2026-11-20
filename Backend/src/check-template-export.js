@@ -57,7 +57,10 @@ async function verify(size,kind){
  }));
  if(!matched)fail('el título no corresponde a la plantilla específica '+kind);
  const instructions=book.worksheets.find(sh=>/INSTRUCTIVO/i.test(sh.name));
- if(!instructions)fail('se perdió la hoja de instructivo '+kind);
+ if(kind==='transferencia'){
+   if(reread.worksheets.length!==1)fail('transferencia primaria debe tener una sola hoja');
+   if(instructions)fail('transferencia primaria no debe contener hojas extra de instructivo');
+ }else if(!instructions)fail('se perdió la hoja de instructivo '+kind);
  if(imagesBefore && !first.getImages().length)fail('se perdieron los logotipos');
  console.log('OK',kind,size,'expedientes; hojas',reread.worksheets.length,
   '; imágenes conservadas',first.getImages().length,'; bytes',output.length);
@@ -68,6 +71,31 @@ try {
  await verify(100,'tramite');
  await verify(1000,'tramite');
  await verify(12,'transferencia');
+ // Selección mixta: nueve expedientes de tres inventarios y varios años CADIDO.
+ const selected=Array.from({length:9},(_,i)=>({
+   ...sample(i+1),
+   inventoryId:'INV-PRUEBA-'+String(Math.floor(i/3)+1).padStart(3,'0'),
+   cadidoYear:[2026,2024,2025][i%3],
+   archiveClassificationCode:'SEMARNAT.1C.11.'+String(i+1).padStart(3,'0')+'.'+[2026,2024,2025][i%3],
+ }));
+ const consolidated=await makeOfficialTemplateWorkbook(selected,'transferencia');
+ const bytes=await consolidated.xlsx.writeBuffer();
+ const loaded=new ExcelJS.Workbook();
+ await loaded.xlsx.load(bytes);
+ if(loaded.worksheets.length!==1)fail('la relación personalizada creó pestañas extra');
+ const sheet=loaded.worksheets[0],present=[];
+ sheet.eachRow((row,r)=>row.eachCell(cell=>{
+   const txt=typeof cell.value==='string'?cell.value:String(cell.value?.text||'');
+   const m=txt.match(/EXPEDIENTE DE VERIFICACIÓN (\\d+)/);
+   if(m)present.push({row:r,number:Number(m[1])});
+ }));
+ if(present.length!==9)fail('el consolidado no contiene exactamente los nueve expedientes');
+ const expected=[2,5,8,3,6,9,1,4,7];
+ if(present.some((item,i)=>item.number!==expected[i]))
+   fail('el consolidado no está ordenado por el año de la clave CADIDO');
+ const rNum=present.map(item=>String(sheet.getRow(item.row).getCell(2).value));
+ if(rNum.some((n,i)=>n!==String(i+1)))fail('el consecutivo consolidado debe ser del 1 al 9');
+ console.log('OK transferencia primaria mixta: una hoja, nueve expedientes, orden CADIDO y consecutivos 1–9.');
  await verify(1,'concentracion');
  await verify(12,'concentracion');
  await verify(100,'concentracion');
