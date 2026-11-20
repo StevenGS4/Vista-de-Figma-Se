@@ -1,4 +1,7 @@
 import ExcelJS from 'exceljs';
+import { access } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
 
 const sample=(i)=>({
@@ -28,6 +31,10 @@ function contains(sheet,term){
   return found;
 }
 async function verify(size,kind){
+ const originals={tramite:'inventario_tramite.xlsx',concentracion:'inventario_concentracion.xlsx',transferencia:'inventario_transferencia_primaria.xlsx'};
+ const path=resolve(fileURLToPath(new URL('../plantillas/',import.meta.url)),originals[kind]);
+ try { await access(path); }
+ catch { console.log('PENDIENTE',kind,'falta subir',originals[kind]);return; }
  const records=Array.from({length:size},(_,i)=>sample(i+1));
  const book=await makeOfficialTemplateWorkbook(records,kind);
  const imagesBefore=book.worksheets[0].getImages().length;
@@ -40,6 +47,10 @@ async function verify(size,kind){
  if(!contains(first,'EXPEDIENTE DE VERIFICACIÓN '+size))fail('no se escribió el último expediente');
  if(!contains(first,'EL PRESENTE INVENTARIO CONSTA'))fail('se perdió el resumen del formato');
  if(!contains(first,'UNIDAD DE CONTROL TEST XYZ'))fail('no se completó el encabezado de unidad administrativa');
+ const headings={tramite:'TRÁMITE',concentracion:'CONCENTRACIÓN',transferencia:'TRANSFERENCÍA PRIMARÍA'};
+ if(!contains(first,headings[kind]))fail('el título no corresponde a la plantilla específica '+kind);
+ const instructions=book.worksheets.find(sh=>/INSTRUCTIVO/i.test(sh.name));
+ if(!instructions)fail('se perdió la hoja de instructivo '+kind);
  if(imagesBefore && !first.getImages().length)fail('se perdieron los logotipos');
  console.log('OK',kind,size,'expedientes; hojas',reread.worksheets.length,
   '; imágenes conservadas',first.getImages().length,'; bytes',output.length);
@@ -50,6 +61,9 @@ try {
  await verify(100,'tramite');
  await verify(1000,'tramite');
  await verify(12,'transferencia');
+ await verify(1,'concentracion');
+ await verify(12,'concentracion');
+ await verify(100,'concentracion');
  const twoInventories=[sample(1),{...sample(2),inventoryId:'INV-PRUEBA-002'}];
  const multi=await makeOfficialTemplateWorkbook(twoInventories,'tramite');
  const multiBytes=await multi.xlsx.writeBuffer();
