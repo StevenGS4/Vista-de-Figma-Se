@@ -23,6 +23,7 @@ import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
 import RowActionsMenu from "./RowActionsMenu";
 import TramiteTrash from "./TramiteTrash";
+import { useConfirmAction } from "./useConfirmAction";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -996,6 +997,7 @@ function InventoryForm({
   existing,
   onCancel,
   onDeleteInventory,
+  onDeleteRecords,
   onSave,
   records,
   role,
@@ -1003,7 +1005,8 @@ function InventoryForm({
 }: {
   existing: ArchivalRecord[];
   onCancel: () => void;
-  onDeleteInventory: (folio: string) => void;
+  onDeleteInventory: (folio: string) => Promise<void>;
+  onDeleteRecords: (folio: string, ids: string[]) => Promise<boolean>;
   onSave: (records: ArchivalRecord[]) => void;
   records: ArchivalRecord[];
   role: Role;
@@ -1052,6 +1055,14 @@ function InventoryForm({
   const [currentStep, setCurrentStep] = useState(editing ? 1 : 0);
   const [maxVisited, setMaxVisited] = useState(editing ? 1 : 0);
   const [errors, setErrors] = useState<Errors>({});
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const { confirm, dialog } = useConfirmAction();
+  useEffect(() => {
+    if (!actionMessage) return;
+    const timer=window.setTimeout(()=>setActionMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  }, [actionMessage]);
   const active = drafts.find((item) => item.id === activeId) ?? drafts[0];
   const header = drafts[0];
   const headerLocked = existing.some(
@@ -1193,14 +1204,39 @@ function InventoryForm({
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
   };
-  const removePreviewRows = (ids: string[]) => {
-    if (ids.length >= drafts.length) {
-      window.alert("Para eliminar todos los expedientes utiliza Eliminar archivo de trámite completo.");
-      return;
+  const removePreviewRows = async (ids: string[]) => {
+    const selected = drafts.filter(item => ids.includes(item.id));
+    if (!selected.length) return;
+    const all = selected.length === drafts.length;
+    const confirmed = await confirm({
+      title: all ? "Eliminar archivo de trámite completo" : "Eliminar expediente",
+      message: all
+        ? "Has seleccionado el último expediente del archivo. Se moverá también el inventario completo a la papelera por 60 días. ¿Deseas continuar?"
+        : "¿Eliminar " + selected.length + " expediente(s)? Los registros guardados pasarán a la papelera durante 60 días.",
+      confirmText: all ? "Mover inventario a papelera" : "Eliminar expediente(s)",
+      danger: true,
+    });
+    if (!confirmed) return;
+    setActionError("");
+    try {
+      const persisted=selected.filter(item=>/^REG-\\d+$/.test(item.id)).map(item=>item.id);
+      if (!persisted.length && all) {
+        onCancel();
+        return;
+      }
+      if (persisted.length && editing) {
+        const inventoryGone=await onDeleteRecords(header.inventoryId,persisted);
+        if (inventoryGone) return;
+      }
+      const removeIds = new Set(ids);
+      const next = drafts.filter(item => !removeIds.has(item.id));
+      if (!next.length) { onCancel(); return; }
+      setDrafts(next);
+      if (removeIds.has(activeId))setActiveId(next[0].id);
+      setActionMessage("Expediente(s) eliminado(s) correctamente.");
+    } catch(error) {
+      setActionError(error instanceof Error?error.message:"No fue posible eliminar el expediente.");
     }
-    const chosen = new Set(ids);
-    setDrafts(current => current.filter(item => !chosen.has(item.id)));
-    if (chosen.has(activeId)) setActiveId(drafts.find(item => !chosen.has(item.id))?.id ?? "");
   };
   const addRowFromPreview = () => {
     // El encabezado y los expedientes capturados permanecen en memoria.
@@ -1211,11 +1247,7 @@ function InventoryForm({
     setMaxVisited((current) => Math.max(current, 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const removeRow = (id: string) => {
-    if (!window.confirm("¿Quitar esta fila no transferida del inventario?")) return;
-    setDrafts((current) => current.filter((item) => item.id !== id));
-    if (activeId === id) setActiveId(drafts.find((item) => item.id !== id)?.id ?? drafts[0].id);
-  };
+  const removeRow = (id: string) => { void removePreviewRows([id]); };
   const save = () => {
     // Solo el botón explícito de confirmación en la vista previa guarda en MySQL.
     if (currentStep !== 3) return;
@@ -1315,11 +1347,20 @@ function InventoryForm({
                 allowDelete={!editing || canDeleteExisting}
                 onDeletePreviewRows={removePreviewRows}
                 onDeleteWhole={() => {
-                  if (!window.confirm(editing
-                    ? "¿Enviar el archivo de trámite completo a la papelera? Podrás restaurarlo."
-                    : "¿Descartar el inventario sin guardar y todos sus expedientes?")) return;
-                  if (editing) onDeleteInventory(header.inventoryId);
-                  else onCancel();
+                  void (async()=>{
+                    const approved=await confirm({
+                      title:"Eliminar archivo de trámite completo",
+                      message:editing
+                        ? "Se enviará este archivo completo a la papelera durante 60 días. ¿Confirmas?"
+                        : "Se descartarán todos los expedientes del borrador sin guardar. ¿Confirmas?",
+                      confirmText:"Eliminar archivo de trámite",danger:true,
+                    });
+                    if(!approved)return;
+                    if(editing) {
+                      try{await onDeleteInventory(header.inventoryId);}
+                      catch(error){setActionError(error instanceof Error?error.message:"No se pudo eliminar el archivo.");}
+                    }else onCancel();
+                  })();
                 }}
               />
               <div className="inventory-preview-add-row">
@@ -1336,6 +1377,8 @@ function InventoryForm({
             </>
           )}
 
+          {actionError && <div className="validation-summary" role="alert"><AlertCircle size={17}/>{actionError}</div>}
+          {actionMessage && <div className="toast record-toast" role="status"><Check size={17}/>{actionMessage}</div>}
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
               <AlertCircle size={17} />
@@ -1371,6 +1414,7 @@ function InventoryForm({
           </div>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }
@@ -1501,11 +1545,6 @@ function InventoryDetail({
               onClick={()=>{setSelectionMode(false);setSelectedRows([]);}}>Cancelar</button>
             <button type="button" className="button button--secondary danger-text" disabled={!selectedRows.length}
               onClick={()=>{
-                if (selectedRows.length>=inventory.length) {
-                  window.alert("Para eliminar todos los expedientes utiliza la acción Eliminar archivo de trámite completo.");
-                  return;
-                }
-                if (!window.confirm("¿Quitar los "+selectedRows.length+" expediente(s) seleccionados? Los ya guardados pasarán a la papelera al confirmar los cambios.")) return;
                 onDeletePreviewRows?.(selectedRows);
                 setSelectedRows([]);
                 setSelectionMode(false);
