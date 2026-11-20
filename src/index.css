@@ -7888,3 +7888,66 @@
   .tramite-preview-tools { width: 100%; justify-content: flex-start; }
   .tramite-preview-selection { align-items: flex-start; }
 }
+
+/* Confirmación institucional centrada: sustituye los diálogos del navegador. */
+.archive-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(6 34 30 / 66%);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.archive-confirm-dialog {
+  width: min(100%, 440px);
+  padding: 26px 28px 23px;
+  border: 1px solid #d6d8d0;
+  border-top: 4px solid #9b2247;
+  border-radius: 17px;
+  background: #fdfbf7;
+  box-shadow: 0 26px 70px rgb(0 27 22 / 26%);
+  color: #163e36;
+}
+.archive-confirm-dialog__top { display: flex; align-items: center; justify-content: space-between; }
+.archive-confirm-dialog__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: #f5e5ea;
+  color: #9b2247;
+}
+.archive-confirm-dialog__close {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #61736b;
+  cursor: pointer;
+}
+.archive-confirm-dialog h3 { margin: 19px 0 10px; font-size: 19px; line-height: 1.3; }
+.archive-confirm-dialog p { margin: 0; line-height: 1.7; color: #53665c; font-size: 13px; }
+.archive-confirm-dialog__buttons { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 27px; }
+.archive-confirm-dialog__danger {
+  border: 1px solid #611232;
+  border-radius: 9px;
+  background: #611232;
+  color: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.archive-confirm-dialog__danger:hover { background: #9b2247; border-color: #9b2247; }
+.archive-confirm-dialog__close:focus-visible,
+.archive-confirm-dialog__danger:focus-visible { outline: 3px solid #b59045; outline-offset: 3px; }
+@media (max-width: 540px) {
+  .archive-confirm-dialog { padding: 21px 18px; }
+  .archive-confirm-dialog__buttons .button { flex: 1; }
+}
