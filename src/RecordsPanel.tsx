@@ -1219,7 +1219,7 @@ function InventoryForm({
     if (!confirmed) return;
     setActionError("");
     try {
-      const persisted=selected.filter(item=>/^REG-\\d+$/.test(item.id)).map(item=>item.id);
+      const persisted=selected.filter(item=>/^REG-\d+$/.test(item.id)).map(item=>item.id);
       if (!persisted.length && all) {
         onCancel();
         return;
