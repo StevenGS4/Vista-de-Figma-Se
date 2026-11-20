@@ -13,6 +13,7 @@ import { catalogsRouter } from './catalogs.js';
 import { adminCatalogRouter } from './admin-catalog.js';
 import { exportsRouter } from './exports.js';
 import { homeRouter } from './home.js';
+import { startTrashRetention } from './trash-retention.js';
 
 const app=express();
 const port=Number(process.env.PORT||3001);
@@ -43,6 +44,7 @@ app.use((err,_req,res,_next)=>{
  res.status(err.status||500).json({error:err.status?err.message:'Error interno del servidor'});
 });
 const server=app.listen(port,'127.0.0.1',()=>console.log(`Backend SEMARNAT escuchando en http://localhost:${port}`));
-const close=()=>server.close(async()=>{await pool.end();process.exit(0);});
+const stopRetention=startTrashRetention();
+const close=()=>{stopRetention();server.close(async()=>{await pool.end();process.exit(0);});};
 process.on('SIGINT',close);
 process.on('SIGTERM',close);
