@@ -40,6 +40,11 @@ export const tramiteApi = {
   remove:(folio:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
   trash:async()=>((await request<{records:ArchivalRecord[]}>('/api/tramite/papelera')).records),
   removeRecord:(folio:string,id:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio)+'/expedientes/'+encodeURIComponent(id),{method:'DELETE',body:'{}'}),
+  removeRecords:(folio:string,recordIds:string[])=>
+    request<{ok:boolean,inventoryDeleted:boolean,removed:number}>(
+      '/api/tramite/inventarios/'+encodeURIComponent(folio)+'/expedientes',
+      {method:'DELETE',body:JSON.stringify({recordIds})},
+    ),
   restoreInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio)+'/restaurar',{method:'POST',body:'{}'}),
   restoreRecord:(id:string)=>request<{ok:boolean}>('/api/tramite/papelera/expedientes/'+encodeURIComponent(id)+'/restaurar',{method:'POST',body:'{}'}),
   purgeInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
