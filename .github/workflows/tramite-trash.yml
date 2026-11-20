@@ -40,6 +40,10 @@ jobs:
         run: npm install --no-save --package-lock=false --no-audit --no-fund
       - name: Regression - Concentration has distinct archival records
         working-directory: Backend
+        env:
+          DB_HOST: localhost
+          DB_USER: test_only
+          DB_NAME: mock_db
         run: node src/test-concentration-distinct.js
       - name: Install frontend packages
         run: npm install --no-audit --no-fund
