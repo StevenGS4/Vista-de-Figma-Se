@@ -86,7 +86,7 @@ try {
  const sheet=loaded.worksheets[0],present=[];
  sheet.eachRow((row,r)=>row.eachCell(cell=>{
    const txt=typeof cell.value==='string'?cell.value:String(cell.value?.text||'');
-   const m=txt.match(/EXPEDIENTE DE VERIFICACIÓN (\\d+)/);
+   const m=txt.match(/EXPEDIENTE DE VERIFICACIÓN (\d+)/);
    if(m)present.push({row:r,number:Number(m[1])});
  }));
  if(present.length!==9)fail('el consolidado no contiene exactamente los nueve expedientes: '+JSON.stringify(present));
