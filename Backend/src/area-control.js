@@ -73,7 +73,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
   const [target]=await pool.execute(`SELECT u.id, a.codigo AS areaCode
     FROM usuarios u JOIN areas a ON a.id=u.area_id WHERE u.id=?`,[id]);
   if(!target.length)throw err('Usuario no encontrado',404);
-  if(!ctx.admin&&(target[0].areaCode!==ctx.area||id===ctx.userId))throw err('Solo puedes consultar empleados de tu área',403);
+  if(!ctx.admin&&(target[0].areaCode!==ctx.area||id===ctx.userId))throw err('Usuario fuera de tu área o cuenta propia del encargado',403);
   const users=await userSummary(pool,ctx,ctx.admin?target[0].areaCode:'');
   const summary=users.find(x=>Number(x.id)===id);
   if(!summary)throw err('Usuario no encontrado',404);
