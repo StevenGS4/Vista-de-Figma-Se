@@ -8159,3 +8159,28 @@
 .primary-builder__hint{margin:0;padding:13px 18px;color:#576e5f;font-size:11px;line-height:1.6}
 @media(max-width:1020px){.primary-builder__filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.primary-builder__filters{grid-template-columns:1fr}.primary-builder__wide{grid-column:span 1}.primary-builder__stats{grid-template-columns:1fr}.primary-builder__controls .search-box{width:100%}.primary-builder__inventory-head{flex-wrap:wrap}.primary-builder__inventory-head .button{width:100%}}
+
+/* Prestamos: seguimiento y acciones del formulario. */
+.loan-detail-grid + .record-detail-group {
+  margin-top: 14px;
+}
+
+.loan-detail-page > .record-detail-group > .table-scroll {
+  display: block;
+  overflow-x: auto;
+}
+
+.loan-detail-hero {
+  flex-wrap: wrap;
+}
+
+.loan-detail-hero > div:nth-child(2) {
+  min-width: min(180px, 100%);
+}
+
+.loan-form > .concentration-location-form__footer,
+.return-form > .concentration-location-form__footer {
+  margin-inline: 0;
+  flex-wrap: wrap;
+  padding-inline: clamp(14px, 3vw, 24px);
+}
