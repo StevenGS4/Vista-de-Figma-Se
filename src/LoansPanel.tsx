@@ -16,7 +16,6 @@ import {
   History,
   Inbox,
   MapPin,
-  MoreHorizontal,
   PackageCheck,
   Plus,
   RotateCcw,
@@ -26,6 +25,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { loanApi, concentrationApi, type LoanEligibleUser } from "./api";
 import { ArchivalLoan, effectiveLoanStatus, todayIso } from "./loans";
@@ -113,7 +113,6 @@ function LoanTray({
   const [search, setSearch] = useState(initialSearch);
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
-  const [activeActions, setActiveActions] = useState<string | null>(null);
   const pageSize = 5;
   const filtered = useMemo(
     () =>
@@ -271,34 +270,21 @@ function LoanTray({
                       <LoanStatusBadge loan={loan} />
                     </td>
                     <td>
-                      <div className="record-actions">
-                        <button
-                          aria-label={`Acciones para ${loan.folio}`}
-                          onClick={() =>
-                            setActiveActions((current) => (current === loan.id ? null : loan.id))
-                          }
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-                        {activeActions === loan.id && (
-                          <div className="record-actions__menu loan-actions-menu">
-                            <button onClick={() => onOpen(loan)}>
-                              <Eye size={16} />
-                              Ver seguimiento
-                            </button>
-                            {active && canReturn && (
-                              <button onClick={() => onOpen(loan, "return")}>
-                                <RotateCcw size={15} />
-                                Registrar devolución
-                              </button>
-                            )}
-                            <button onClick={() => onOpen(loan, "history")}>
-                              <History size={15} />
-                              Ver historial
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowActionsMenu
+                        label={`Acciones para ${loan.folio}`}
+                        width={200}
+                        actions={[
+                          { label: "Ver seguimiento", icon: <Eye size={16}/>,
+                            onSelect: () => onOpen(loan) },
+                          ...(active && canReturn ? [{
+                            label: "Registrar devolución",
+                            icon: <RotateCcw size={15}/>,
+                            onSelect: () => onOpen(loan, "return"),
+                          }] : []),
+                          { label: "Ver historial", icon: <History size={15}/>,
+                            onSelect: () => onOpen(loan, "history") },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
