@@ -5,6 +5,7 @@ on:
       - feature/integracion-validacion-etapa-7
     paths:
       - 'Backend/src/tramite.js'
+      - 'Backend/src/test-concentration-distinct.js'
       - 'Backend/src/trash-retention.js'
       - 'Backend/src/server.js'
       - 'Backend/src/transfers.js'
@@ -34,6 +35,12 @@ jobs:
           node --check Backend/src/transfers.js
           node --check Backend/src/exports.js
           node --check Backend/src/loans.js
+      - name: Install backend packages
+        working-directory: Backend
+        run: npm install --no-save --package-lock=false --no-audit --no-fund
+      - name: Regression - Concentration has distinct archival records
+        working-directory: Backend
+        run: node src/test-concentration-distinct.js
       - name: Install frontend packages
         run: npm install --no-audit --no-fund
       - name: Validate frontend TypeScript
