@@ -43,6 +43,8 @@ export default function AdminDisposalsPanel() {
   const [filter, setFilter] = useState({ search: "", area: "", user: "" });
   const [selected, setSelected] = useState<DisposalInventory | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<{ administrator: string; folioSuffix: string } | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -75,6 +77,23 @@ export default function AdminDisposalsPanel() {
       value => value.toLocaleLowerCase("es-MX").includes(filter.search)
     ))
   );
+
+  async function openDraft(item: DisposalInventory) {
+    setError("");
+    setNotice("");
+    setDraftLoading(true);
+    try {
+      const result = await disposalApi.draft(item.folio);
+      setDraft(result);
+      setFields(result.fields);
+      setStep(1);
+      setSelected(item);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "No se pudo preparar el acta.");
+    } finally {
+      setDraftLoading(false);
+    }
+  }
 
   function cancel() {
     if (busy) return;
@@ -176,9 +195,7 @@ export default function AdminDisposalsPanel() {
                   <td><strong>{item.folio}</strong></td>
                   <td>{item.area}</td><td>{item.userName}</td><td>{item.date}</td><td>{item.total}</td>
                   <td>
-                    <button className="button button--danger-outline" type="button" onClick={() => {
-                      setFields({}); setStep(1); setError(""); setNotice(""); setSelected(item);
-                    }}><Trash2 size={16} />Dar de baja</button>
+                    <button className="button button--danger-outline" type="button" disabled={draftLoading} onClick={() => void openDraft(item)}><Trash2 size={16} />Dar de baja</button>
                   </td>
                 </tr>
               ))}</tbody>
@@ -212,6 +229,16 @@ export default function AdminDisposalsPanel() {
               </div>
               <div className="modal__body">
                 <p className="modal__intro">Inventario <strong>{selected.folio}</strong> · {selected.total} expedientes</p>
+                <div className="form-grid">
+                  <label className="form-field"><span>Área productora</span><input readOnly value={selected.area} /></label>
+                  <label className="form-field"><span>Registró el inventario</span><input readOnly value={selected.userName} /></label>
+                  <label className="form-field"><span>Administrador que registra la baja</span><input readOnly value={draft?.administrator ?? ""} /></label>
+                  <label className="form-field"><span>Folio interno del acta</span>
+                    <input readOnly value={draft && fields.fecha_acta_extendida
+                      ? "BAJA-" + fields.fecha_acta_extendida.slice(0, 4) + "-" + draft.folioSuffix : ""} />
+                  </label>
+                </div>
+                {step === 1 && <p className="modal__intro">Revisa los datos sugeridos y completa los folios y fechas de los documentos del AGN con los originales.</p>}
                 {step === 1 ? fieldGroups.map(group => (
                   <fieldset key={group.title} className="form-grid" style={{ border: 0, padding: 0, minWidth: 0 }}>
                     <legend style={{ fontWeight: 600, marginBottom: 8 }}>{group.title}</legend>

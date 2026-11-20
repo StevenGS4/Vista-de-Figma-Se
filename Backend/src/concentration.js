@@ -1,7 +1,6 @@
 import express from 'express';
 import { pool } from './config/database.js';
 import { requireAuth, requireAdmin } from './auth.js';
-import { randomUUID } from 'node:crypto';
 import { buildDisposalAct } from './disposal-act.js';
 import { readRecords } from './tramite.js';
 import { concentrationScope,canEditConcentrationLocation,parseLocation } from './concentration-policy.js';
@@ -126,6 +125,49 @@ concentrationRouter.get('/bajas', requireAdmin, async (req, res, next) => {
  } catch (error) { next(error); }
 });
 
+const draftClock = new Intl.DateTimeFormat('en-CA', {
+ timeZone: 'America/Mazatlan', year: 'numeric', month: '2-digit', day: '2-digit',
+ hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+});
+
+const disposalFolio = (id, year) => 'BAJA-' + year + '-' + String(id).padStart(6, '0');
+const adminName = user => [user.firstName, user.paternalName, user.maternalName].filter(Boolean).join(' ');
+
+function commonValue(records, selector) {
+ const values = new Set(records.map(record => String(selector(record) || '').trim()));
+ return values.size === 1 ? [...values][0] : '';
+}
+
+concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res, next) => {
+ try {
+  const [[inventory]] = await pool.execute(
+   "SELECT id FROM inventarios WHERE folio=? AND estado='CONCENTRACION' AND deleted_at IS NULL",
+   [req.params.folio]
+  );
+  if (!inventory) throw fail('El inventario ya no está disponible para baja', 409);
+  const records = await readRecords(pool, "WHERE i.id=? AND e.etapa='CONCENTRACION'", [inventory.id]);
+  if (!records.length) throw fail('El inventario no tiene expedientes activos en Concentración', 409);
+  const clock = Object.fromEntries(draftClock.formatToParts(new Date()).map(part => [part.type, part.value]));
+  const date = [clock.year, clock.month, clock.day].join('-');
+  const address = commonValue(records, record => record.archiveAddress);
+  const allBoxesKnown = records.every(record => String(record.locationBox || record.boxNumber || '').trim());
+  const boxes = new Set(records.map(record => JSON.stringify([
+   record.archiveAddress, record.room, record.locationBox || record.boxNumber
+  ])));
+  res.set('Cache-Control', 'private, no-store').json({
+   administrator: adminName(req.auth.user),
+   folioSuffix: String(inventory.id).padStart(6, '0'),
+   fields: {
+    fecha_acta_extendida: date,
+    hora_inicio: clock.hour + ':' + clock.minute,
+    fecha_cierre_extendida: date,
+    sede_y_domicilio: address,
+    total_cajas: allBoxesKnown ? String(boxes.size) : '',
+   },
+  });
+ } catch (error) { next(error); }
+});
+
 concentrationRouter.post('/bajas/:folio', requireAdmin, async (req, res, next) => {
  let conn;
  try {
@@ -168,8 +210,8 @@ concentrationRouter.post('/bajas/:folio', requireAdmin, async (req, res, next) =
   }
   const records = await readRecords(conn, 'WHERE i.id=?', [inventory.id]);
   if (records.length !== active.length) throw fail('El anexo no coincide con el inventario completo', 409);
-  values.folio_acta = 'BAJA-' + randomUUID().toUpperCase();
-  values.administrador_nombre = [user.firstName, user.paternalName, user.maternalName].filter(Boolean).join(' ');
+  values.folio_acta = disposalFolio(inventory.id, req.body.fields.fecha_acta_extendida.slice(0, 4));
+  values.administrador_nombre = adminName(user);
   values.fecha_hora_generacion = generatedDate.format(new Date());
   const file = await buildDisposalAct(values, records);
 

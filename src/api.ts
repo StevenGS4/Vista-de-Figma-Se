@@ -251,6 +251,9 @@ export type DisposalInventory = {folio:string; area:string; userId:string; userN
 
 export const disposalApi = {
  list:()=>request<{inventories:DisposalInventory[]}>('/api/concentracion/bajas'),
+ draft:(folio:string)=>request<{administrator:string; folioSuffix:string; fields:Record<string,string>}>(
+  '/api/concentracion/bajas/'+encodeURIComponent(folio)+'/borrador',
+ ),
  async confirm(folio:string, fields:Record<string,string>) {
   const response=await fetch(API_BASE+'/api/concentracion/bajas/'+encodeURIComponent(folio),{
    method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
