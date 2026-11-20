@@ -335,18 +335,12 @@ function ConcentrationList({
                                   <table className="data-table concentration-archive-summary" aria-label="Datos generales del inventario">
                                     <thead><tr>
                                       <th>Identificador</th>
-                                      <th>Unidad administrativa</th>
-                                      <th>Área generadora</th>
-                                      <th>Fondo</th>
                                       <th>Sección</th>
                                       <th>Serie</th>
-                                      <th>Fecha</th>
+                                      <th>Fecha de elaboración</th>
                                     </tr></thead>
                                     <tbody><tr>
                                       <td><strong>{header.inventoryId}</strong></td>
-                                      <td>{header.administrativeUnit || "Sin registro"}</td>
-                                      <td>{areaName(header.areaId)}</td>
-                                      <td>{header.fund || "Sin registro"}</td>
                                       <td>{sectionName(header.cadidoSectionId)}</td>
                                       <td>{seriesName(header.cadidoSeriesId)}</td>
                                       <td>{formatDate(header.inventoryDate)}</td>
