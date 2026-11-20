@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, ReactNode, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -770,6 +770,11 @@ export default function ConcentrationPanel({
   const [view, setView] = useState<PanelView>("list");
   const [selected, setSelected] = useState<ArchivalRecord | null>(null);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!message.startsWith("Ubicación física actualizada")) return;
+    const timer=window.setTimeout(()=>setMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  },[message]);
   const concentrationRecords = records.filter((record) => {
     if (record.stage !== "Archivo de concentración") return false;
     if (
@@ -792,7 +797,6 @@ export default function ConcentrationPanel({
       setSelected(saved);
       setView("detail");
       setMessage("Ubicación física actualizada correctamente.");
-      window.setTimeout(()=>setMessage(""),3000);
     } catch(error) {
       const message=error instanceof Error?error.message:"No fue posible guardar la ubicación.";
       setMessage(message);
