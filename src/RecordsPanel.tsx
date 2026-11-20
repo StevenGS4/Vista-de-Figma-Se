@@ -1443,6 +1443,14 @@ function InventoryDetail({
   const [search, setSearch] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  useEffect(() => {
+    if (!selectedRows.length) return;
+    const liveIds=new Set(inventory.map(item=>item.id));
+    if (selectedRows.every(id=>!liveIds.has(id))) {
+      setSelectedRows([]);
+      setSelectionMode(false);
+    }
+  }, [inventory, selectedRows]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const header = inventory[0];
@@ -1545,9 +1553,7 @@ function InventoryDetail({
               onClick={()=>{setSelectionMode(false);setSelectedRows([]);}}>Cancelar</button>
             <button type="button" className="button button--secondary danger-text" disabled={!selectedRows.length}
               onClick={()=>{
-                onDeletePreviewRows?.(selectedRows);
-                setSelectedRows([]);
-                setSelectionMode(false);
+                void onDeletePreviewRows?.(selectedRows);
               }}><Trash2 size={15}/> Eliminar seleccionados</button>
           </div>
         </div>}
