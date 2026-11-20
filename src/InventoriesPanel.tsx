@@ -98,13 +98,7 @@ function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }
           );
         })}
       </div>
-      <div className="inventory-info">
-        <ShieldCheck size={18} />
-        <span>
-          <strong>Exportación desde MySQL</strong>La descarga XLSX no cambia expedientes,
-          transferencias ni etapas.
-        </span>
-      </div>
+
     </>
   );
 }
@@ -259,7 +253,7 @@ function InventoryList({
             <FileSpreadsheet size={18} />
             <span>
               <strong>{visible.length} inventarios · {visible.reduce((sum, group) => sum + group.records.length, 0)} expedientes</strong>
-              Relación automática basada en la fecha de elaboración; generar o consultar este reporte no cambia etapas.
+              Consulta la relación de inventarios seleccionados.
             </span>
           </div>
         )}
@@ -403,7 +397,7 @@ function Preview({
       {downloaded && (
         <div className="success-banner" role="status">
           <Check size={17} />
-          El XLSX fue generado desde MySQL sin modificar los registros.
+          Descarga completada correctamente.
         </div>
       )}
       <section className="surface institutional-inventory-preview">
