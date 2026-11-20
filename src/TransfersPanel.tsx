@@ -1010,10 +1010,16 @@ function RequestDetail({
           <ReceptionBadge status={transfer.receptionStatus} />
           <div className="reception-summary__data">
             <span>
-              Fecha: <b>{formatDate(transfer.receptionDate)}</b>
+              Fecha de recepción: <b>{formatDate(transfer.receptionDate)}</b>
             </span>
             <span>
-              Responsable: <b>{userName(users, transfer.receptionResponsible)}</b>
+              Responsable de recepción: <b>{transfer.receptionResponsible
+                ? (transfer.receptionResponsibleName || userName(users, transfer.receptionResponsible))
+                : "Pendiente de recepción física"}</b>
+            </span>
+            <span>
+              Aceptada por: <b>{transfer.reviewerName ||
+                (transfer.reviewerId ? userName(users, transfer.reviewerId) : "Pendiente")}</b>
             </span>
           </div>
           {canReceive && transfer.receptionStatus !== "Recibida" && (
