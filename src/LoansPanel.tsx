@@ -1227,6 +1227,11 @@ export default function LoansPanel({
   const [selectedMode, setSelectedMode] = useState<"INDIVIDUAL" | "INVENTARIO_COMPLETO">("INDIVIDUAL");
   const [selectedLoan, setSelectedLoan] = useState<ArchivalLoan | null>(null);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!/registrado correctamente|devolución completada|devolución parcial registrada/i.test(message)) return;
+    const timer=window.setTimeout(()=>setMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  },[message]);
   const canCreate = permissions.includes("register-loans");
   const canReturn = permissions.includes("register-returns");
 
