@@ -55,7 +55,7 @@ export function periodBounds(filter){
  if(filter.period==='fortnight'){
   const month=Math.ceil(filter.block/2)-1;
   const first=filter.block%2===1;
-  return [iso(filter.year,month,first?1:16),iso(filter.year,month,first?15:0)];
+  return [iso(filter.year,month,first?1:16),first?iso(filter.year,month,15):iso(filter.year,month+1,0)];
  }
  const size={month:1,bimester:2,trimester:3,fourmonth:4,semester:6}[filter.period];
  if(!size)throw error('Periodo inválido');
