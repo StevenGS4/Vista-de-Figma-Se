@@ -47,6 +47,7 @@ import {
 import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan } from "./loans";
 import HomeDashboard from "./HomeDashboard";
+import GuidedTour from "./GuidedTour";
 import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
@@ -586,6 +587,7 @@ function Sidebar({
             return (
               <button
                 className={active === id ? "is-active" : ""}
+                data-tour-module={id}
                 key={id}
                 onClick={() => {
                   onNavigate(id);
@@ -1050,6 +1052,7 @@ function Application({
             <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
           )}
         </main>
+        <GuidedTour key={active} module={active} />
       </div>
     </div>
   );
