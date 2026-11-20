@@ -6,6 +6,7 @@ on:
     paths:
       - 'Backend/src/tramite.js'
       - 'Backend/src/area-control.js'
+      - 'Backend/src/test-area-control-access.js'
       - 'Backend/src/test-concentration-distinct.js'
       - 'Backend/src/trash-retention.js'
       - 'Backend/src/server.js'
@@ -52,6 +53,14 @@ jobs:
           DB_NAME: mock_db
           JWT_SECRET: mock-only-test-secret-not-for-production-2026
         run: node src/test-concentration-distinct.js
+      - name: Security regression - area manager cannot read another area
+        working-directory: Backend
+        env:
+          DB_HOST: localhost
+          DB_USER: test_only
+          DB_NAME: mock_db
+          JWT_SECRET: mock-only-test-secret-not-for-production-2026
+        run: node src/test-area-control-access.js
       - name: Install frontend packages
         run: npm install --no-audit --no-fund
       - name: Validate frontend TypeScript
