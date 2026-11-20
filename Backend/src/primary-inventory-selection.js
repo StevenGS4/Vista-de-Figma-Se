@@ -7,7 +7,7 @@ const error=(message,status=400)=>Object.assign(new Error(message),{status});
 const numeric=(value,min,max)=>Number.isInteger(Number(value))&&Number(value)>=min&&Number(value)<=max;
 const datePattern=/^\d{4}-\d{2}-\d{2}$/;
 const dateValid=s=>typeof s==='string'&&datePattern.test(s)&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
-const allowedPeriods=['all','week','fortnight','month','bimester','trimester','fourmonth','semester','year','custom'];
+const allowedPeriods=['all','week','twoweeks','fortnight','month','bimester','trimester','fourmonth','semester','year','custom'];
 const allowedStage=['tramite','concentracion','ambos'];
 const allowedDates=['inventory','opening','transfer'];
 const allowedSelection=['all','inventories','records','mixed'];
@@ -24,7 +24,7 @@ export function normalizePrimarySelection(body={}){
   throw error('Tipo de filtro inválido');
  const year=body.year==null||body.year===''?null:Number(body.year);
  const block=body.block==null||body.block===''?null:Number(body.block);
- const ranges={week:53,fortnight:24,month:12,bimester:6,trimester:4,fourmonth:3,semester:2,year:1};
+ const ranges={week:53,twoweeks:27,fortnight:24,month:12,bimester:6,trimester:4,fourmonth:3,semester:2,year:1};
  if(period!=='all'&&period!=='custom'&&!numeric(year,1900,2200))throw error('Selecciona un año válido');
  if(ranges[period]&&!numeric(block??1,1,ranges[period]))throw error('Periodo fuera de rango');
  const from=body.from||'',to=body.to||'';
@@ -51,6 +51,13 @@ export function periodBounds(filter){
   start.setUTCDate(start.getUTCDate()-(day-1)+7*(filter.block-1));
   const end=new Date(start);end.setUTCDate(end.getUTCDate()+6);
   return [start.toISOString().slice(0,10),end.toISOString().slice(0,10)];
+ }
+ if(filter.period==='twoweeks'){
+  const start=new Date(Date.UTC(filter.year,0,1));
+  start.setUTCDate(start.getUTCDate()+14*(filter.block-1));
+  const end=new Date(start);end.setUTCDate(end.getUTCDate()+13);
+  const last=iso(filter.year,12,0);
+  return [start.toISOString().slice(0,10),end.toISOString().slice(0,10)>last?last:end.toISOString().slice(0,10)];
  }
  if(filter.period==='fortnight'){
   const month=Math.ceil(filter.block/2)-1;
