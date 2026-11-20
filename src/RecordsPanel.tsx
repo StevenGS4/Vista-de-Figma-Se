@@ -1624,6 +1624,24 @@ export default function RecordsPanel({
           record.areaId === user.areaId && (isAreaManager || record.createdBy === user.id),
       );
   const selected = authorized.filter((record) => record.inventoryId === selectedId);
+  const deleteInventory = async (id: string) => {
+    try {
+      await tramiteApi.remove(id);
+      onRecordsChange(records.filter(record => record.inventoryId !== id));
+      setSelectedId("");
+      setView("list");
+      setMessage("Archivo de trámite movido a la papelera.");
+    } catch(error) {
+      window.alert(error instanceof Error ? error.message : "No fue posible mover el inventario a la papelera.");
+    }
+  };
+  const refreshTrash = async () => {
+    const fresh=await tramiteApi.list();
+    onRecordsChange([
+      ...records.filter(record => record.stage === "Archivo de concentración"),
+      ...fresh,
+    ]);
+  };
   const save = async (rows: ArchivalRecord[]) => {
     try {
       const editing = selected.length > 0;
@@ -1637,6 +1655,9 @@ export default function RecordsPanel({
       window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
     }
   };
+  if (view === "trash") {
+    return <TramiteTrash onBack={() => setView("list")} onChange={refreshTrash}/>;
+  }
   if (view === "form")
     return (
       <InventoryForm
@@ -1645,6 +1666,7 @@ export default function RecordsPanel({
           setSelectedId("");
           setView("list");
         }}
+        onDeleteInventory={(folio)=>void deleteInventory(folio)}
         onSave={save}
         records={records}
         role={role}
@@ -1696,16 +1718,11 @@ export default function RecordsPanel({
           setSelectedId(id);
           setView("form");
         }}
-        onDelete={async (id) => {
-          if (!window.confirm(`¿Eliminar el inventario ${id} sin movimientos históricos?`)) return;
-          try {
-            await tramiteApi.remove(id);
-            onRecordsChange(records.filter((record) => record.inventoryId !== id));
-            setMessage("Inventario eliminado correctamente.");
-          } catch(error) {
-            window.alert(error instanceof Error ? error.message : "No fue posible eliminar el inventario.");
-          }
+        onDelete={(id) => {
+          if (!window.confirm(`¿Mover el inventario ${id} y sus expedientes a la papelera de reciclaje? Podrás restaurarlo.`)) return;
+          void deleteInventory(id);
         }}
+        onTrash={() => setView("trash")}
         onOpen={(id) => {
           setSelectedId(id);
           setView("detail");
