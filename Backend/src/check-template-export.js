@@ -34,7 +34,7 @@ async function verify(size,kind){
  const originals={tramite:'inventario_tramite.xlsx',concentracion:'inventario_concentracion.xlsx',transferencia:'inventario_transferencia_primaria.xlsx'};
  const path=resolve(fileURLToPath(new URL('../plantillas/',import.meta.url)),originals[kind]);
  try { await access(path); }
- catch { console.log('PENDIENTE',kind,'falta subir',originals[kind]);return; }
+ catch { fail('falta la plantilla '+originals[kind]); }
  const records=Array.from({length:size},(_,i)=>sample(i+1));
  const book=await makeOfficialTemplateWorkbook(records,kind);
  const imagesBefore=book.worksheets[0].getImages().length;
@@ -47,8 +47,15 @@ async function verify(size,kind){
  if(!contains(first,'EXPEDIENTE DE VERIFICACIÓN '+size))fail('no se escribió el último expediente');
  if(!contains(first,'EL PRESENTE INVENTARIO CONSTA'))fail('se perdió el resumen del formato');
  if(!contains(first,'UNIDAD DE CONTROL TEST XYZ'))fail('no se completó el encabezado de unidad administrativa');
- const headings={tramite:'TRÁMITE',concentracion:'CONCENTRACIÓN',transferencia:'TRANSFERENCÍA PRIMARÍA'};
- if(!contains(first,headings[kind]))fail('el título no corresponde a la plantilla específica '+kind);
+ const normalizeText=text=>String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ const required={tramite:'TRAMITE',concentracion:'CONCENTRACION',transferencia:'TRANSFERENCIA'};
+ let matched=false;
+ first.eachRow(row=>row.eachCell(cell=>{
+   const v=cell.value;
+   const text=typeof v==='string'?v:v?.richText?.map(p=>p.text||'').join('')||String(v?.text||'');
+   if(normalizeText(text).includes(required[kind]))matched=true;
+ }));
+ if(!matched)fail('el título no corresponde a la plantilla específica '+kind);
  const instructions=book.worksheets.find(sh=>/INSTRUCTIVO/i.test(sh.name));
  if(!instructions)fail('se perdió la hoja de instructivo '+kind);
  if(imagesBefore && !first.getImages().length)fail('se perdieron los logotipos');
