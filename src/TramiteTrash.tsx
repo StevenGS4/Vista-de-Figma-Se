@@ -7,6 +7,12 @@ import { useConfirmAction } from "./useConfirmAction";
 
 type TrashItem = { kind: "inventory" | "record"; key: string; folio: string; date: string; records: ArchivalRecord[] };
 const day = (value: string) => value ? value.slice(0, 10) : "Sin fecha";
+const expiryLabel = (value: string) => {
+  const parsed = new Date(String(value || "").replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return "Fecha de eliminación no disponible";
+  parsed.setDate(parsed.getDate() + 60);
+  return parsed.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+};
 const dateLabel = (value: string) => {
   if (value === "Sin fecha") return value;
   const parsed = new Date(value + "T12:00:00");
@@ -144,7 +150,7 @@ export default function TramiteTrash({
                     <small>{inventory
                       ? item.records.length+" expediente(s): "+item.records.map(r=>r.recordNumber).join(", ")
                       : first.title}</small>
-                    <small>Caducidad: {dateLabel(day(new Date(new Date(item.date.replace(" ", "T")).getTime()+60*86400000).toISOString()))}</small>
+                    <small>Eliminación automática a partir del {expiryLabel(item.date)}, salvo restricciones documentales.</small>
                   </div>
                   <RowActionsMenu label={"Acciones para "+(inventory?item.folio:first.recordNumber)}
                     actions={[
