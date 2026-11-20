@@ -38,6 +38,13 @@ export const tramiteApi = {
     })).records;
   },
   remove:(folio:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
+  trash:async()=>((await request<{records:ArchivalRecord[]}>('/api/tramite/papelera')).records),
+  removeRecord:(folio:string,id:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio)+'/expedientes/'+encodeURIComponent(id),{method:'DELETE',body:'{}'}),
+  restoreInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio)+'/restaurar',{method:'POST',body:'{}'}),
+  restoreRecord:(id:string)=>request<{ok:boolean}>('/api/tramite/papelera/expedientes/'+encodeURIComponent(id)+'/restaurar',{method:'POST',body:'{}'}),
+  purgeInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
+  purgeRecord:(id:string)=>request<{ok:boolean}>('/api/tramite/papelera/expedientes/'+encodeURIComponent(id),{method:'DELETE',body:'{}'}),
+  emptyTrash:()=>request<{ok:boolean}>('/api/tramite/papelera',{method:'DELETE',body:'{}'}),
 };
 
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
