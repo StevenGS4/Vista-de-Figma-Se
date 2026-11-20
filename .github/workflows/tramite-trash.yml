@@ -5,11 +5,14 @@ on:
       - feature/integracion-validacion-etapa-7
     paths:
       - 'Backend/src/tramite.js'
+      - 'Backend/src/trash-retention.js'
+      - 'Backend/src/server.js'
       - 'Backend/src/transfers.js'
       - 'Backend/src/exports.js'
       - 'Backend/src/loans.js'
       - 'Backend/sql/011_papelera_archivistica.sql'
       - 'src/TramiteTrash.tsx'
+      - 'src/useConfirmAction.tsx'
       - 'src/RecordsPanel.tsx'
       - 'src/records.ts'
       - 'src/api.ts'
@@ -26,6 +29,8 @@ jobs:
       - name: Validate backend JavaScript syntax
         run: |
           node --check Backend/src/tramite.js
+          node --check Backend/src/trash-retention.js
+          node --check Backend/src/server.js
           node --check Backend/src/transfers.js
           node --check Backend/src/exports.js
           node --check Backend/src/loans.js
