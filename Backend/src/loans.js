@@ -124,10 +124,6 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
 loansRouter.post('/',async(req,res,next)=>{
  try{
   const user=req.auth.user;guard(user);
-  const completeInventory=loanRows[0].modalidad==='INVENTARIO_COMPLETO';
-  const conditions=req.body?.conditions;
-  if(completeInventory && ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
-   throw fail('Indica el estado de cada expediente recibido');
   // El SP confirma el préstamo; verificar la migración ANTES de invocarlo.
   const [migration]=await pool.execute(`SELECT 1 AS ready FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='prestamos'
