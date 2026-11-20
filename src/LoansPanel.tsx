@@ -748,7 +748,7 @@ function LoanForm({
             </div>
           </div>
           {staffError && <div className="validation-summary" role="alert">No se pudo consultar el personal: {staffError}</div>}
-          {staffLoading && <p className="field-hint">Cargando empleados activos desde MySQL…</p>}
+          {staffLoading && <p className="field-hint">Cargando personal autorizado…</p>}
           <div className="record-form-grid">
             <LoanField error={errors.requestingAreaId} label="Área solicitante" required>
               <select
@@ -1258,7 +1258,7 @@ export default function LoansPanel({
         onRecordsChange(records.map(row=>selectedIds.has(row.id)?{...row,availability:"Prestado"}:row));
       }
       setSelectedRecords([]);
-      setMessage(created.folio+" quedó registrado en MySQL.");
+      setMessage(created.folio+" registrado correctamente.");
       setView("list");
     }catch(error){
       const message=error instanceof Error?error.message:"No se pudo registrar el préstamo.";
@@ -1284,7 +1284,7 @@ export default function LoansPanel({
       }
       setSelectedLoan(updated);
       setMessage(updated.status==="Devuelto"
-        ?"Todos los expedientes fueron devueltos a MySQL."
+        ?"Devolución completada correctamente."
         :"Devolución parcial registrada. El préstamo permanece activo.");
       setView("detail");
     }catch(error){
