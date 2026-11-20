@@ -226,6 +226,10 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   const [pending]=await pool.execute('SELECT expediente_id FROM prestamo_expedientes WHERE prestamo_id=? AND devuelto_en IS NULL',[id]);
   const wanted=new Set(pending.map(x=>Number(x.expediente_id)));
   if(ids.some(x=>!wanted.has(x)))throw fail('Uno o más expedientes ya fueron devueltos o no pertenecen al préstamo',409);
+  const completeInventory=loanRows[0].modalidad==='INVENTARIO_COMPLETO';
+  const conditions=req.body?.conditions;
+  if(completeInventory && ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
+   throw fail('Indica el estado de cada expediente recibido');
   // El SP confirma y libera cada expediente sin tocar su etapa archivística.
   // Cada devolución individual es atómica; si alguna falla, se informa
   // y el usuario puede consultar el préstamo actualizado antes de reintentar.
