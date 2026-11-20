@@ -65,8 +65,13 @@ export default function AdminDisposalsPanel() {
   }, []);
 
   useEffect(() => {
-    if (selected && dialog.current && !dialog.current.open) dialog.current.showModal();
-  }, [selected]);
+    if (!selected || !dialog.current) return;
+    if (!dialog.current.open) dialog.current.showModal();
+    if (step === 2) {
+      dialog.current.scrollTop = 0;
+      dialog.current.querySelector<HTMLButtonElement>("[data-disposal-cancel]")?.focus();
+    }
+  }, [selected, step]);
 
   const areas = [...new Set(inventories.map(item => item.area))].sort();
   const users = new Map(inventories.map(item => [item.userId, item.userName]));
@@ -212,16 +217,18 @@ export default function AdminDisposalsPanel() {
       {selected && (
         <>
           <div aria-hidden="true" className="modal-backdrop" />
-          <dialog ref={dialog} className="modal" aria-labelledby="disposal-dialog-title" onCancel={event => {
+          <dialog ref={dialog} className={step === 1 ? "modal" : "archive-confirm-dialog"} aria-labelledby="disposal-dialog-title"
+            aria-describedby={step === 2 ? "disposal-confirm-description" : undefined} onCancel={event => {
             event.preventDefault();
             cancel();
-          }} style={{ position: "fixed", inset: 0, margin: "auto", padding: 0, border: 0, maxHeight: "85vh",
-            width: step === 1 ? "min(760px, 92vw)" : "min(460px, 92vw)" }}>
+          }} style={{ position: "fixed", inset: 0, margin: "auto", maxHeight: "85vh", overflowY: "auto",
+            ...(step === 1 ? { padding: 0, border: 0, width: "min(760px, 92vw)" } : { width: "min(440px, 92vw)" }) }}>
             <form onSubmit={submit}>
+              {step === 1 ? <>
               <div className="modal__header" style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--white)", borderTop: "3px solid var(--green-800)" }}>
                 <div>
                   <span>Baja documental</span>
-                  <h2 id="disposal-dialog-title">{step === 1 ? "Datos del acta" : "¿Estás seguro de que quieres dar de baja?"}</h2>
+                  <h2 id="disposal-dialog-title">Datos del acta</h2>
                 </div>
                 <button aria-label="Cerrar" className="icon-action" type="button" disabled={busy} onClick={cancel}>
                   <X size={19} />
@@ -238,7 +245,7 @@ export default function AdminDisposalsPanel() {
                       ? "BAJA-" + fields.fecha_acta_extendida.slice(0, 4) + "-" + draft.folioSuffix : ""} />
                   </label>
                 </div>
-                {step === 1 ? fieldGroups.map(group => (
+                {fieldGroups.map(group => (
                   <section key={group.title} className="surface form-section">
                     <div className="form-section__title"><h3>{group.title}</h3></div>
                     <div className="form-grid">
@@ -259,16 +266,36 @@ export default function AdminDisposalsPanel() {
                       ))}
                     </div>
                   </section>
-                )) : <p className="inline-notice">La baja se aplicará a todo el inventario y es definitiva.</p>}
+                ))}
                 {error && <p className="inline-notice" role="alert">{error}</p>}
               </div>
               <div className="modal__footer" style={{ position: "sticky", bottom: 0 }}>
                 <button className="button button--secondary" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
                 <button className="button button--danger" type="submit" disabled={busy}>
                   <Trash2 size={16} />
-                  {busy ? "Registrando…" : step === 1 ? "Dar de baja" : "Confirmar baja"}
+                  Dar de baja
                 </button>
               </div>
+              </> : <>
+                <div className="archive-confirm-dialog__top">
+                  <span className="archive-confirm-dialog__icon"><Trash2 size={22} aria-hidden="true" /></span>
+                  <button aria-label="Cerrar" className="archive-confirm-dialog__close" type="button"
+                    disabled={busy} onClick={cancel}><X size={19} /></button>
+                </div>
+                <h3 id="disposal-dialog-title">Confirmar baja documental</h3>
+                <p id="disposal-confirm-description">
+                  Se dará de baja el inventario <strong>{selected.folio}</strong> con {selected.total} expedientes.
+                  La baja es definitiva.
+                </p>
+                {error && <p role="alert" style={{ color: "var(--wine-800)", marginTop: 12 }}>{error}</p>}
+                <div className="archive-confirm-dialog__buttons">
+                  <button className="button button--secondary" type="button" data-disposal-cancel
+                    disabled={busy} onClick={cancel}>Cancelar</button>
+                  <button className="button archive-confirm-dialog__danger" type="submit" disabled={busy}>
+                    {busy ? "Registrando…" : "Confirmar baja"}
+                  </button>
+                </div>
+              </>}
             </form>
           </dialog>
         </>
