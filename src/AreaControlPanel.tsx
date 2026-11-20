@@ -19,6 +19,7 @@ export default function AreaControlPanel({ mode }: {mode:"area"|"admin"}) {
   const [areaFilter,setAreaFilter]=useState("");
   const [page,setPage]=useState(1);
   const [detailTab,setDetailTab]=useState<"inventories"|"records"|"transfers"|"activity">("inventories");
+  const [detailPage,setDetailPage]=useState(1);
   useEffect(()=>{
     let active=true;
     setLoading(true);
@@ -37,6 +38,9 @@ export default function AreaControlPanel({ mode }: {mode:"area"|"admin"}) {
     finally{setDetailLoading(false);}
   };
   const back=()=>{setChosenId("");setChosen(null);setError("");};
+  useEffect(()=>setDetailPage(1),[detailTab,chosenId]);
+  const detailTotal=chosen?(detailTab==="inventories"?chosen.inventories.length:detailTab==="records"?chosen.records.length:detailTab==="transfers"?chosen.transfers.length:chosen.activity.length):0;
+  const detailPageCount=Math.max(1,Math.ceil(detailTotal/20));
   const matches=useMemo(()=>users.filter(user=>
     [user.name,user.email,user.areaName].some(v=>v.toLowerCase().includes(query.toLowerCase().trim()))
   ),[users,query]);
@@ -83,18 +87,26 @@ export default function AreaControlPanel({ mode }: {mode:"area"|"admin"}) {
           <div className="table-scroll">
           {detailTab==="inventories"?<table className="data-table">
             <thead><tr><th>Inventario</th><th>Fecha de elaboración</th><th>Expedientes activos</th><th>Estado</th></tr></thead>
-            <tbody>{chosen.inventories.map(x=><tr key={x.id}><td><strong>{x.folio}</strong></td><td>{readableDate(x.openedAt)}</td><td>{x.recordCount}</td><td>{x.status}</td></tr>)}</tbody>
+            <tbody>{chosen.inventories.slice((detailPage-1)*20,detailPage*20).map(x=><tr key={x.id}><td><strong>{x.folio}</strong></td><td>{readableDate(x.openedAt)}</td><td>{x.recordCount}</td><td>{x.status}</td></tr>)}</tbody>
           </table>:detailTab==="records"?<table className="data-table">
             <thead><tr><th>Expediente</th><th>Asunto</th><th>Inventario</th><th>Apertura</th><th>Cierre</th><th>Etapa</th></tr></thead>
-            <tbody>{chosen.records.map(x=><tr key={x.id}><td><strong>{x.recordNumber}</strong></td><td>{x.title}</td><td>{x.inventoryFolio}</td><td>{readableDate(x.openedAt)}</td><td>{readableDate(x.closedAt)}</td><td>{x.status}</td></tr>)}</tbody>
+            <tbody>{chosen.records.slice((detailPage-1)*20,detailPage*20).map(x=><tr key={x.id}><td><strong>{x.recordNumber}</strong></td><td>{x.title}</td><td>{x.inventoryFolio}</td><td>{readableDate(x.openedAt)}</td><td>{readableDate(x.closedAt)}</td><td>{x.status}</td></tr>)}</tbody>
           </table>:detailTab==="transfers"?<table className="data-table">
             <thead><tr><th>Transferencia</th><th>Inventario</th><th>Fecha de envío</th><th>Fecha de aceptación</th><th>Estado</th></tr></thead>
-            <tbody>{chosen.transfers.map(x=><tr key={x.id+"-"+x.inventoryFolio}><td><strong>{x.folio}</strong></td><td>{x.inventoryFolio}</td><td>{readableDate(x.sentAt)}</td><td>{readableDate(x.acceptedAt)}</td><td>{statusWord(x.status)}</td></tr>)}</tbody>
+            <tbody>{chosen.transfers.slice((detailPage-1)*20,detailPage*20).map(x=><tr key={x.id+"-"+x.inventoryFolio}><td><strong>{x.folio}</strong></td><td>{x.inventoryFolio}</td><td>{readableDate(x.sentAt)}</td><td>{readableDate(x.acceptedAt)}</td><td>{statusWord(x.status)}</td></tr>)}</tbody>
           </table>:<table className="data-table">
             <thead><tr><th>Fecha y hora</th><th>Movimiento</th><th>Referencia</th><th>Origen</th></tr></thead>
-            <tbody>{chosen.activity.map(x=><tr key={x.key}><td>{displayTime(x.date)}</td><td><strong>{x.action.replace(/_/g," ")}</strong></td><td>{x.detail}</td><td>{x.source}</td></tr>)}</tbody>
+            <tbody>{chosen.activity.slice((detailPage-1)*20,detailPage*20).map(x=><tr key={x.key}><td>{displayTime(x.date)}</td><td><strong>{x.action.replace(/_/g," ")}</strong></td><td>{x.detail}</td><td>{x.source}</td></tr>)}</tbody>
           </table>}
           </div>
+          {detailTotal>20&&<div className="area-control__pagination">
+            <span>Mostrando {(detailPage-1)*20+1}–{Math.min(detailPage*20,detailTotal)} de {detailTotal}</span>
+            <div>
+              <button type="button" aria-label="Página anterior" disabled={detailPage<=1} onClick={()=>setDetailPage(p=>p-1)}><ChevronLeft size={17}/></button>
+              <span>Página {detailPage} de {detailPageCount}</span>
+              <button type="button" aria-label="Página siguiente" disabled={detailPage>=detailPageCount} onClick={()=>setDetailPage(p=>p+1)}><ChevronRight size={17}/></button>
+            </div>
+          </div>}
           {((detailTab==="inventories"&&!chosen.inventories.length)||
             (detailTab==="records"&&!chosen.records.length)||
             (detailTab==="transfers"&&!chosen.transfers.length)||
