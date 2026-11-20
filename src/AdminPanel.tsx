@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usersApi } from "./api";
+import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
 import {
   ArrowLeft,
@@ -31,7 +32,7 @@ import {
   roles,
 } from "./data";
 
-type AdminTab = "users" | "areas" | "permissions";
+type AdminTab = "users" | "areas" | "permissions" | "activity";
 type AdminView = "list" | "form" | "detail";
 type FieldErrors = Partial<Record<keyof UserFormState | "roles", string>>;
 
@@ -968,6 +969,15 @@ export default function AdminPanel({
           <SlidersHorizontal size={17} />
           Roles y permisos
         </button>
+        <button
+          aria-selected={tab === "activity"}
+          className={tab === "activity" ? "is-active" : ""}
+          onClick={() => setTab("activity")}
+          role="tab"
+        >
+          <Users size={17} />
+          Seguimiento por área
+        </button>
       </div>
 
       {toast && (
@@ -1000,6 +1010,7 @@ export default function AdminPanel({
         />
       )}
       {tab === "areas" && <AdminAreasPanel />}
+      {tab === "activity" && <AreaControlPanel mode="admin" />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />
       )}
