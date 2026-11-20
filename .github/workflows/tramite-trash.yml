@@ -5,6 +5,7 @@ on:
       - feature/integracion-validacion-etapa-7
     paths:
       - 'Backend/src/tramite.js'
+      - 'Backend/src/area-control.js'
       - 'Backend/src/test-concentration-distinct.js'
       - 'Backend/src/trash-retention.js'
       - 'Backend/src/server.js'
@@ -17,6 +18,10 @@ on:
       - 'src/RecordsPanel.tsx'
       - 'src/records.ts'
       - 'src/api.ts'
+      - 'src/App.tsx'
+      - 'src/AdminPanel.tsx'
+      - 'src/AreaControlPanel.tsx'
+      - 'src/index.css'
       - '.github/workflows/tramite-trash.yml'
   workflow_dispatch:
 jobs:
@@ -30,6 +35,7 @@ jobs:
       - name: Validate backend JavaScript syntax
         run: |
           node --check Backend/src/tramite.js
+          node --check Backend/src/area-control.js
           node --check Backend/src/trash-retention.js
           node --check Backend/src/server.js
           node --check Backend/src/transfers.js
