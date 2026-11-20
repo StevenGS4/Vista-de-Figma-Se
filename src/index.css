@@ -7726,3 +7726,43 @@
 .app-main .loan-tray {
   box-shadow: inset 0 3px 0 #a57f2c, 0 5px 22px rgb(0 47 42 / 6%);
 }
+
+/* Drawer contraído: imagen institucional y centrado real de iconos.
+   El icono único no debe heredar margin-left:auto de la flecha final. */
+.sidebar__collapsed-logo {
+  display: block;
+  width: 41px;
+  height: 41px;
+  margin-inline: auto;
+  border-radius: 11px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 4px 13px rgb(0 0 0 / 15%);
+}
+@media (min-width: 901px) {
+  .sidebar--collapsed .sidebar__nav,
+  .sidebar--collapsed .sidebar__bottom {
+    padding-inline: 10px;
+  }
+  .sidebar--collapsed .sidebar__nav button,
+  .sidebar--collapsed .sidebar__bottom button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 0;
+    width: 100%;
+  }
+  .sidebar--collapsed .sidebar__nav button > svg:first-child,
+  .sidebar--collapsed .sidebar__nav button > svg:last-child,
+  .sidebar--collapsed .sidebar__bottom button > svg {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .sidebar--collapsed .sidebar__institution {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 8px;
+  }
+}
