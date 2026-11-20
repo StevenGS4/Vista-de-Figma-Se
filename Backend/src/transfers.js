@@ -105,14 +105,14 @@ async function chooseInventories(conn,ids,user){
  // Bloquea cada inventario en orden estable para serializar solicitudes concurrentes.
  const selected=items.sort((a,b)=>a.id-b.id);
  for(const i of selected){
-  const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? FOR UPDATE',[i.id]);
+  const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? AND deleted_at IS NULL FOR UPDATE',[i.id]);
   if(locked[0]?.estado!=='TRAMITE')throw problem('Inventario ya transferido o reservado',409);
   if(i.areaCode!==user.areaId)throw problem('No puedes transferir inventarios de otra área',403);
   if(!user.roles.includes('Encargado de área')&&Number(i.creado_por)!==Number(user.id))
    throw problem('Solo puedes solicitar la transferencia de tus inventarios',403);
   const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
   SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed
-  FROM expedientes WHERE inventario_id=?`,[i.id]);
+  FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[i.id]);
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
@@ -121,7 +121,7 @@ async function chooseInventories(conn,ids,user){
  }
  // Todas las filas seleccionadas deben coincidir con la totalidad de cada inventario.
  const [allRows]=await conn.query(`SELECT e.id FROM expedientes e
- WHERE e.inventario_id IN (${selected.map(()=>'?').join(',')})`,selected.map(i=>i.id));
+ WHERE e.inventario_id IN (${selected.map(()=>'?').join(',')}) AND e.deleted_at IS NULL`,selected.map(i=>i.id));
  const desired=new Set(ids);
  if(allRows.length!==desired.size||allRows.some(r=>!desired.has(Number(r.id))))
   throw problem('La solicitud debe incluir todos los expedientes de cada inventario',400);
