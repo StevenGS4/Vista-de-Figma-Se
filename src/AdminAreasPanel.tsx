@@ -24,6 +24,11 @@ export default function AdminAreasPanel(){
  const [saving,setSaving]=useState(false);
  const [error,setError]=useState("");
  const [success,setSuccess]=useState("");
+ useEffect(() => {
+  if (!success) return;
+  const timer=window.setTimeout(()=>setSuccess(""),4000);
+  return ()=>window.clearTimeout(timer);
+ },[success]);
  const [showYear,setShowYear]=useState(false);
  const [newYear,setNewYear]=useState("");
  const [newYearName,setNewYearName]=useState("");
