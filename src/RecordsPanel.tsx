@@ -995,6 +995,7 @@ function ControlStep({
 function InventoryForm({
   existing,
   onCancel,
+  onDeleteInventory,
   onSave,
   records,
   role,
@@ -1002,12 +1003,14 @@ function InventoryForm({
 }: {
   existing: ArchivalRecord[];
   onCancel: () => void;
+  onDeleteInventory: (folio: string) => void;
   onSave: (records: ArchivalRecord[]) => void;
   records: ArchivalRecord[];
   role: Role;
   user: UserRecord;
 }) {
   const isAdmin = role === "Administrador / Coordinador";
+  const canDeleteExisting = isAdmin || role === "Encargado de área";
   const editing = existing.length > 0;
   const makeInitial = () => {
     if (editing) return existing.map(item => ({
@@ -1189,6 +1192,15 @@ function InventoryForm({
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
   };
+  const removePreviewRows = (ids: string[]) => {
+    if (ids.length >= drafts.length) {
+      window.alert("Para eliminar todos los expedientes utiliza Eliminar archivo de trámite completo.");
+      return;
+    }
+    const chosen = new Set(ids);
+    setDrafts(current => current.filter(item => !chosen.has(item.id)));
+    if (chosen.has(activeId)) setActiveId(drafts.find(item => !chosen.has(item.id))?.id ?? "");
+  };
   const addRowFromPreview = () => {
     // El encabezado y los expedientes capturados permanecen en memoria.
     // Una fila adicional se crea en el mismo inventario sin guardar ni salir.
@@ -1299,6 +1311,15 @@ function InventoryForm({
                 canEdit={false}
                 onBack={()=>setCurrentStep(2)}
                 onEdit={()=>setCurrentStep(2)}
+                allowDelete={!editing || canDeleteExisting}
+                onDeletePreviewRows={removePreviewRows}
+                onDeleteWhole={() => {
+                  if (!window.confirm(editing
+                    ? "¿Enviar el archivo de trámite completo a la papelera? Podrás restaurarlo."
+                    : "¿Descartar el inventario sin guardar y todos sus expedientes?")) return;
+                  if (editing) onDeleteInventory(header.inventoryId);
+                  else onCancel();
+                }}
               />
               <div className="inventory-preview-add-row">
                 <div>
@@ -1359,6 +1380,9 @@ function InventoryDetail({
   inventory,
   onBack,
   onEdit,
+  onDeleteWhole,
+  onDeletePreviewRows,
+  allowDelete = false,
   preview = false,
 }: {
   canEdit: boolean;
@@ -1366,9 +1390,14 @@ function InventoryDetail({
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
+  onDeleteWhole?: () => void;
+  onDeletePreviewRows?: (ids: string[]) => void;
+  allowDelete?: boolean;
   preview?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const header = inventory[0];
@@ -1445,6 +1474,15 @@ function InventoryDetail({
             <h3>Expedientes del inventario</h3>
             <p>{inventory.length} filas relacionadas sin repetir el encabezado</p>
           </div>
+          <div className="tramite-preview-tools">
+            {preview && allowDelete && <RowActionsMenu label="Acciones de la vista previa" width={250} actions={[
+              {label:"Eliminar expediente",icon:<Trash2 size={16}/>,onSelect:()=>{
+                setSelectionMode(true);
+                setSelectedRows([]);
+              }},
+              {label:"Eliminar archivo de trámite completo",icon:<Trash2 size={16}/>,danger:true,
+                onSelect:()=>onDeleteWhole?.()},
+            ]}/>}
           <label className="search-box">
             <Search size={16} />
             <input
@@ -1453,11 +1491,37 @@ function InventoryDetail({
               value={search}
             />
           </label>
+          </div>
         </div>
+        {preview && selectionMode && <div className="tramite-preview-selection">
+          <span>{selectedRows.length} expediente(s) seleccionados. Las bajas guardadas se harán efectivas al confirmar y guardar.</span>
+          <div>
+            <button type="button" className="button button--secondary"
+              onClick={()=>{setSelectionMode(false);setSelectedRows([]);}}>Cancelar</button>
+            <button type="button" className="button button--secondary danger-text" disabled={!selectedRows.length}
+              onClick={()=>{
+                if (selectedRows.length>=inventory.length) {
+                  window.alert("Para eliminar todos los expedientes utiliza la acción Eliminar archivo de trámite completo.");
+                  return;
+                }
+                if (!window.confirm("¿Quitar los "+selectedRows.length+" expediente(s) seleccionados? Los ya guardados pasarán a la papelera al confirmar los cambios.")) return;
+                onDeletePreviewRows?.(selectedRows);
+                setSelectedRows([]);
+                setSelectionMode(false);
+              }}><Trash2 size={15}/> Eliminar seleccionados</button>
+          </div>
+        </div>}
         <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
+                {preview && selectionMode && <th>
+                  <input type="checkbox" aria-label="Seleccionar todos los expedientes de esta página"
+                    checked={rows.length > 0 && rows.every(r=>selectedRows.includes(r.id))}
+                    onChange={e=>setSelectedRows(e.target.checked
+                      ? [...new Set([...selectedRows,...rows.map(r=>r.id)])]
+                      : selectedRows.filter(id=>!rows.some(r=>r.id===id)))} />
+                </th>}
                 <th>Consecutivo</th>
                 <th>Caja</th>
                 <th>Número de expediente</th>
@@ -1476,6 +1540,12 @@ function InventoryDetail({
             <tbody>
               {rows.map((record) => (
                 <tr key={record.id}>
+                  {preview && selectionMode && <td>
+                    <input type="checkbox" aria-label={`Seleccionar expediente ${record.recordNumber}`}
+                      checked={selectedRows.includes(record.id)}
+                      onChange={e=>setSelectedRows(current=>e.target.checked
+                        ? [...current,record.id]:current.filter(id=>id!==record.id))} />
+                  </td>}
                   <td>{record.consecutive}</td>
                   <td>{record.boxNumber}</td>
                   <td>{record.recordNumber}</td>
