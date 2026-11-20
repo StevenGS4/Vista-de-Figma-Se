@@ -12,6 +12,8 @@ on:
       - 'Backend/src/server.js'
       - 'Backend/src/transfers.js'
       - 'Backend/src/exports.js'
+      - 'Backend/src/primary-inventory-selection.js'
+      - 'Backend/src/test-primary-inventory-selection.js'
       - 'Backend/src/loans.js'
       - 'Backend/sql/011_papelera_archivistica.sql'
       - 'src/TramiteTrash.tsx'
@@ -19,6 +21,8 @@ on:
       - 'src/RecordsPanel.tsx'
       - 'src/records.ts'
       - 'src/api.ts'
+      - 'src/InventoriesPanel.tsx'
+      - 'src/PrimaryTransferBuilder.tsx'
       - 'src/App.tsx'
       - 'src/AdminPanel.tsx'
       - 'src/AreaControlPanel.tsx'
@@ -41,6 +45,7 @@ jobs:
           node --check Backend/src/server.js
           node --check Backend/src/transfers.js
           node --check Backend/src/exports.js
+          node --check Backend/src/primary-inventory-selection.js
           node --check Backend/src/loans.js
       - name: Install backend packages
         working-directory: Backend
@@ -61,6 +66,14 @@ jobs:
           DB_NAME: mock_db
           JWT_SECRET: mock-only-test-secret-not-for-production-2026
         run: node src/test-area-control-access.js
+      - name: Regression - primary inventory filters and role boundaries
+        working-directory: Backend
+        env:
+          DB_HOST: localhost
+          DB_USER: test_only
+          DB_NAME: mock_db
+          JWT_SECRET: mock-only-test-secret-not-for-production-2026
+        run: node src/test-primary-inventory-selection.js
       - name: Install frontend packages
         run: npm install --no-audit --no-fund
       - name: Validate frontend TypeScript
