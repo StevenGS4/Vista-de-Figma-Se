@@ -32,22 +32,31 @@ const isLoanStaff=async(id)=>{
  return rows.length>0;
 };
 
+const returnConditions = new Set(['GOOD', 'ISSUE']);
+const conditionLabel = { GOOD: 'Buen estado', ISSUE: 'Con incidencias' };
+const conditionFromNotes = (notes) => (
+ notes?.startsWith('Estado al recibir: Buen estado.') ? 'GOOD' :
+ notes?.startsWith('Estado al recibir: Con incidencias.') ? 'ISSUE' : ''
+);
+
 async function oneLoan(id) {
- const [rows]=await pool.execute(`SELECT p.id,p.folio,p.modalidad,a.codigo AS areaCode,
+ const [rows]=await pool.execute(`SELECT p.id,p.folio,p.modalidad,i.folio AS inventoryFolio,a.codigo AS areaCode,
   p.solicitante_nombre,p.solicitante_usuario_id,p.fecha_prestamo,p.fecha_prevista,p.cerrado_en,p.estado,p.observaciones,
   p.recibido_por_nombre,
   CONCAT_WS(' ',ua.nombres,ua.apellido_paterno,ua.apellido_materno) AS autorizado_nombre,
   CONCAT_WS(' ',ue.nombres,ue.apellido_paterno,ue.apellido_materno) AS entregado_nombre
   FROM prestamos p JOIN areas a ON a.id=p.area_solicitante_id
+  LEFT JOIN inventarios i ON i.id=p.inventario_id
   JOIN usuarios ua ON ua.id=p.autorizado_por JOIN usuarios ue ON ue.id=p.entregado_por
   WHERE p.id=?`,[id]);
  if(!rows.length)return null;
  const p=rows[0];
- const [items]=await pool.execute(`SELECT pe.expediente_id,
+ const [items]=await pool.execute(`SELECT pe.expediente_id,e.numero_expediente,e.titulo_asunto,e.codigo_clasificacion,
   DATE_FORMAT(pe.devuelto_en,'%Y-%m-%d') AS returnedDate,
   pe.observaciones_devolucion,
   CONCAT_WS(' ',ud.nombres,ud.apellido_paterno,ud.apellido_materno) AS returnedBy
   FROM prestamo_expedientes pe
+  JOIN expedientes e ON e.id=pe.expediente_id
   LEFT JOIN usuarios ud ON ud.id=pe.recibido_devolucion_por
   WHERE pe.prestamo_id=? ORDER BY pe.expediente_id`,[id]);
  const [movements]=await pool.execute(`SELECT ph.id,ph.expediente_id,ph.accion,ph.detalle,
@@ -60,6 +69,12 @@ async function oneLoan(id) {
  return {
   id:'LOAN-'+p.id,folio:p.folio,recordId:'REG-'+items[0]?.expediente_id,
   recordIds:remaining.map(x=>'REG-'+x.expediente_id),
+  inventoryFolio:p.inventoryFolio||'',
+  items:p.modalidad==='INVENTARIO_COMPLETO'?items.map(x=>({
+   id:'REG-'+x.expediente_id,number:x.numero_expediente,title:x.titulo_asunto,
+   classification:x.codigo_clasificacion||'',returnedDate:x.returnedDate||'',
+   condition:x.returnedDate?conditionFromNotes(x.observaciones_devolucion):''
+  })):undefined,
   deliveredRecordIds:items.map(x=>'REG-'+x.expediente_id),
   mode:p.modalidad==='INVENTARIO_COMPLETO'?'Inventario completo':'Expediente individual',
   requestingAreaId:p.areaCode,requesterName:p.solicitante_nombre,
@@ -109,6 +124,10 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
 loansRouter.post('/',async(req,res,next)=>{
  try{
   const user=req.auth.user;guard(user);
+  const completeInventory=loanRows[0].modalidad==='INVENTARIO_COMPLETO';
+  const conditions=req.body?.conditions;
+  if(completeInventory && ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
+   throw fail('Indica el estado de cada expediente recibido');
   // El SP confirma el préstamo; verificar la migración ANTES de invocarlo.
   const [migration]=await pool.execute(`SELECT 1 AS ready FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='prestamos'
@@ -198,7 +217,7 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   try{ids=parseReturnItems(req.body?.recordIds);}catch(e){throw fail(e.message);}
   const date=req.body?.date;
   if(!validDate(date)||date!==await mysqlToday())throw fail('La devolución se registra con la fecha real actual');
-  const [loanRows]=await pool.execute('SELECT estado,DATE_FORMAT(fecha_prestamo,\'%Y-%m-%d\') AS loanDate FROM prestamos WHERE id=?',[id]);
+  const [loanRows]=await pool.execute('SELECT estado,modalidad,DATE_FORMAT(fecha_prestamo,\'%Y-%m-%d\') AS loanDate FROM prestamos WHERE id=?',[id]);
   if(!loanRows.length)throw fail('Préstamo no encontrado',404);
   if(loanRows[0].estado!=='ACTIVO')throw fail('El préstamo ya está cerrado',409);
   if(date<loanRows[0].loanDate)throw fail('La devolución no puede anteceder al préstamo');
@@ -215,16 +234,21 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
    try{
     await pool.query('CALL sp_devolver_expediente(?,?,?)',[id,expId,user.id]);
     completed.push(expId);
-    if(notes) await pool.execute(
+    if(completeInventory || notes) {
+     const condition=completeInventory ? 'Estado al recibir: '+conditionLabel[conditions['REG-'+expId]]+'. ' : '';
+     const observation=condition+(notes?notes+' | ':'')+'Recibido físicamente por: '+receiver;
+     await pool.execute(
       'UPDATE prestamo_expedientes SET observaciones_devolucion=? WHERE prestamo_id=? AND expediente_id=?',
-      [notes+' | Recibido físicamente por: '+receiver,id,expId]);
+      [observation,id,expId]);
+    }
    }catch(error){
     return res.status(409).json({error:'Se devolvieron '+completed.length+
       ' expediente(s). La operación se detuvo: '+error.message+'. Recarga para verificar el estado.'});
    }
   }
   await pool.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds:completed.map(x=>'REG-'+x),receivedBy:receiver})]);
+    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds:completed.map(x=>'REG-'+x),receivedBy:receiver,
+     ...(completeInventory ? {conditions:Object.fromEntries(completed.map(x=>['REG-'+x,conditions['REG-'+x]]))} : {})})]);
   res.json({loan:await oneLoan(id)});
  }catch(e){next(e);}
 });
