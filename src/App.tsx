@@ -51,6 +51,7 @@ import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
+const AreaControlPanel = lazy(() => import("./AreaControlPanel"));
 const ConcentrationPanel = lazy(() => import("./ConcentrationPanel"));
 const InventoriesPanel = lazy(() => import("./InventoriesPanel"));
 const LoansPanel = lazy(() => import("./LoansPanel"));
@@ -64,6 +65,7 @@ type ModuleId =
   | "transferencias"
   | "prestamos"
   | "inventarios"
+  | "control-area"
   | "administracion";
 
 const roleAccess: Record<ModuleId, Role[]> = {
@@ -92,6 +94,7 @@ const roleAccess: Record<ModuleId, Role[]> = {
     "Encargado de préstamos / Control archivístico",
     "Administrador / Coordinador",
   ],
+  "control-area": ["Encargado de área"],
   administracion: ["Administrador / Coordinador"],
 };
 
@@ -132,6 +135,12 @@ const modules = {
     description: "Generación de inventarios con la información archivística registrada.",
     icon: Download,
   },
+  "control-area": {
+    label: "Control de área",
+    short: "Control de área",
+    description: "Consulta del personal, inventarios, transferencias y actividades de tu área.",
+    icon: Users,
+  },
   administracion: {
     label: "Administración",
     short: "Administración",
@@ -152,6 +161,7 @@ const moduleOrder = Object.keys(modules) as ModuleId[];
 
 function hasModulePermission(id: ModuleId, role: Role, permissions: string[]) {
   if (id === "inicio") return true;
+  if (id === "control-area") return role === "Encargado de área" && permissions.includes("view-records");
   if (id === "tramite" || id === "concentracion") return permissions.includes("view-records");
   if (id === "transferencias") {
     if (role === "Personal de área") return permissions.includes("prepare-transfers");
@@ -1023,6 +1033,8 @@ function Application({
                 transfers={transfers}
               />
             </Suspense>
+          ) : active === "control-area" && role === "Encargado de área" ? (
+            <Suspense fallback={moduleFallback}><AreaControlPanel mode="area"/></Suspense>
           ) : active === "administracion" &&
             role === "Administrador / Coordinador" &&
             currentPermissions.includes("manage-users") ? (
@@ -1035,7 +1047,7 @@ function Application({
               />
             </Suspense>
           ) : (
-            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion">} />
+            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
           )}
         </main>
       </div>
