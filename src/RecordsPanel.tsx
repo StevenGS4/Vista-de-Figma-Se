@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -1530,6 +1530,11 @@ export default function RecordsPanel({
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
   const isAdmin = role === "Administrador / Coordinador";
   const isAreaManager = role === "Encargado de área";
   const authorized = isAdmin
@@ -1548,7 +1553,6 @@ export default function RecordsPanel({
       setSelectedId("");
       setView("list");
       setMessage("Inventario guardado correctamente.");
-      window.setTimeout(()=>setMessage(""),3000);
     } catch(error) {
       window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
     }
