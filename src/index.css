@@ -7637,7 +7637,7 @@
 
 /* Gama de trabajo sobria: verde petróleo, piedra y marfil.
    Solo módulos internos; conserva login, drawer, badges de estado y vista previa. */
-.app-main .surface {
+.app-main .surface:not(.institutional-inventory-preview) {
   border-color: #aebfb5;
   background: #f4f4f0;
 }
