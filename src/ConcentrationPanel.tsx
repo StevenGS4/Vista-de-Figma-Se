@@ -100,7 +100,12 @@ function ConcentrationList({
   // No mezclamos expedientes de inventarios diferentes aunque compartan CADIDO.
   const inventories = useMemo(() => {
     const grouped = new Map<string, ArchivalRecord[]>();
+    // La llave de un expediente es su ID persistente. Incluso si una respuesta
+    // futura trae filas repetidas por una relación SQL, nunca mostrar copias.
+    const seen = new Set<string>();
     for (const record of records) {
+      if (seen.has(record.id)) continue;
+      seen.add(record.id);
       const key = record.inventoryId;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(record);
