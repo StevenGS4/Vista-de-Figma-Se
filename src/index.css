@@ -8068,3 +8068,45 @@
   .area-control__filters .search-box {min-width:100%;}
   .area-control__pagination {align-items:flex-start;flex-direction:column;}
 }
+
+/* Recepción física: formulario a la izquierda y croquis reactivo a la derecha.
+   Reutiliza LocationShelf, igual que en las ubicaciones de Concentración. */
+.reception-location-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(275px, 0.82fr);
+  align-items: start;
+  gap: 22px;
+  margin-top: 16px;
+}
+.reception-location-fields {
+  min-width: 0;
+  margin-top: 0;
+}
+.reception-location-layout .shelf-diagram {
+  width: 100%;
+  min-width: 0;
+  border-color: #b9c8bd;
+  background: #f6f7f3;
+}
+.reception-location-layout .shelf-row > span {
+  min-width: 0;
+}
+.reception-location-fields .reception-box-locked,
+.reception-location-fields input:disabled {
+  background: #e3e7e2;
+  border-color: #b3bdb6;
+  color: #44574d;
+  cursor: not-allowed;
+  opacity: 1;
+}
+.reception-box-note {
+  display: block;
+  margin-top: 5px;
+  color: #586b60;
+  font-size: 10px;
+  line-height: 1.5;
+}
+@media (max-width: 1050px) {
+  .reception-location-layout { grid-template-columns: 1fr; }
+  .reception-location-layout .shelf-diagram { max-width: 460px; }
+}
