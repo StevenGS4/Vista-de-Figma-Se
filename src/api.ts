@@ -84,7 +84,7 @@ export const concentrationApi={
  },
 };
 
-import type { ArchivalLoan } from './loans';
+import type { ArchivalLoan, LoanReturnCondition } from './loans';
 export type LoanEligibleUser={id:string;name:string;areaId:string;canDeliver:boolean};
 export type NewLoanPayload={
  mode:'INDIVIDUAL'|'INVENTARIO_COMPLETO';
@@ -103,9 +103,9 @@ export const loanApi={
  create:async(payload:NewLoanPayload)=>(await request<{loan:ArchivalLoan}>('/api/prestamos',{
   method:'POST',body:JSON.stringify(payload)
  })).loan,
- returnItems:async(id:string,recordIds:string[],date:string,receivedBy:string,notes:string)=>
+ returnItems:async(id:string,recordIds:string[],date:string,receivedBy:string,notes:string,conditions?:Record<string,LoanReturnCondition>)=>
   (await request<{loan:ArchivalLoan}>('/api/prestamos/'+encodeURIComponent(id)+'/returns',{
-    method:'POST',body:JSON.stringify({recordIds,date,receivedBy,notes})
+    method:'POST',body:JSON.stringify({recordIds,date,receivedBy,notes,conditions})
   })).loan,
 };
 
@@ -245,4 +245,24 @@ export const primaryTransferApi={
   link.remove();
   window.setTimeout(()=>URL.revokeObjectURL(link.href),30000);
  }
+};
+
+export type DisposalInventory = {folio:string; area:string; userId:string; userName:string; date:string; total:number};
+
+export const disposalApi = {
+ list:()=>request<{inventories:DisposalInventory[]}>('/api/concentracion/bajas'),
+ draft:(folio:string)=>request<{administrator:string; folioSuffix:string; fields:Record<string,string>}>(
+  '/api/concentracion/bajas/'+encodeURIComponent(folio)+'/borrador',
+ ),
+ async confirm(folio:string, fields:Record<string,string>) {
+  const response=await fetch(API_BASE+'/api/concentracion/bajas/'+encodeURIComponent(folio),{
+   method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({confirm:true,fields}),
+  });
+  if(!response.ok){
+   const data=await response.json().catch(()=>({}));
+   throw new Error(data.error || 'No se pudo registrar la baja documental.');
+  }
+  return response.blob();
+ },
 };

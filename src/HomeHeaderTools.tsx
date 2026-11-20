@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { homeApi, type LoanNotice } from "./api";
-import { Bell, Check, FileText, Search } from "lucide-react";
+import { Bell, BookOpen, Check, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
 import type { DocumentaryTransfer } from "./transfers";
 import type { ArchivalLoan } from "./loans";
 import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
 
-export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh}:{
+export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh,manualOpen,onManual}:{
  user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:ArchivalLoan[];
  allowed:HomeModule[];onNavigate:(id:HomeModule)=>void;onSearchRecord:(record:ArchivalRecord)=>void;
  onSearchFolio:(module:"transferencias"|"prestamos",folio:string)=>void;
  onRefresh:()=>Promise<void>;
+ manualOpen:boolean;onManual:()=>void;
 }) {
  const [searchOpen,setSearchOpen]=useState(false);
  const [notificationsOpen,setNotificationsOpen]=useState(false);
@@ -66,6 +67,8 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
    ? loans.filter(l=>l.folio.toLowerCase().includes(query.trim().toLowerCase())).slice(0,4) : [];
  return <>
   <button aria-label="Búsqueda global" aria-expanded={searchOpen} className="header-icon" onClick={()=>{setSearchOpen(!searchOpen);setNotificationsOpen(false);}}><Search size={19}/></button>
+  <button type="button" aria-label="Manual de usuario" title="Manual de usuario" aria-pressed={manualOpen} className="header-icon"
+    onClick={()=>{setSearchOpen(false);setNotificationsOpen(false);onManual();}}><BookOpen size={19}/></button>
   <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen){void onRefresh();void homeApi.loanNotices().then(setPersonalLoanNotices).catch(error=>console.error("Avisos no disponibles:",error));}setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
    <Bell size={19}/>{unread>0 && <i/>}
   </button>

@@ -47,6 +47,8 @@ import {
 import { ArchivalRecord, setCadidoCatalog } from "./records";
 import { ArchivalLoan } from "./loans";
 import HomeDashboard from "./HomeDashboard";
+import GuidedTour from "./GuidedTour";
+import UserManualPanel from "./UserManualPanel";
 import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
@@ -586,6 +588,7 @@ function Sidebar({
             return (
               <button
                 className={active === id ? "is-active" : ""}
+                data-tour-module={id}
                 key={id}
                 onClick={() => {
                   onNavigate(id);
@@ -635,6 +638,8 @@ function Header({
   onSearchRecord,
   onSearchFolio,
   onRefresh,
+  manualOpen,
+  onManual,
 }: {
   active: ModuleId;
   records: ArchivalRecord[];
@@ -645,6 +650,8 @@ function Header({
   onSearchRecord: (record: ArchivalRecord) => void;
   onSearchFolio: (module: "transferencias" | "prestamos", folio: string) => void;
   onRefresh: () => Promise<void>;
+  manualOpen: boolean;
+  onManual: () => void;
   onChangePassword: () => void;
   onLogout: () => void;
   onMenu: () => void;
@@ -668,7 +675,8 @@ function Header({
       </div>
       <div className="app-header__actions">
         <HomeHeaderTools user={user} role={role} records={records} transfers={transfers} loans={loans}
-          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onSearchFolio={onSearchFolio} onRefresh={onRefresh} />
+          allowed={allowed} onNavigate={onNavigate} onSearchRecord={onSearchRecord} onSearchFolio={onSearchFolio} onRefresh={onRefresh}
+          manualOpen={manualOpen} onManual={onManual} />
         <span className="header-divider" />
         <div className="profile-menu">
           <button className="profile-trigger" onClick={() => setProfileOpen((current) => !current)}>
@@ -844,6 +852,7 @@ function Application({
   rolePermissions: Record<Role, string[]>;
 }) {
   const [active, setActive] = useState<ModuleId>("inicio");
+  const [manualOpen, setManualOpen] = useState(false);
   const [role, setRole] = useState<Role>(currentUser.roles[0]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -878,6 +887,7 @@ function Application({
   };
   const navigate = (id: ModuleId) => {
     if (allowed.includes(id)) {
+      setManualOpen(false);
       setGlobalQuery("");
       setActive(id);
       if (id === "inicio") void refreshHomeEvents();
@@ -886,12 +896,14 @@ function Application({
   const openSearchResult = (record: ArchivalRecord) => {
     const target: ModuleId = record.stage === "Archivo de concentración" ? "concentracion" : "tramite";
     if (!allowed.includes(target)) return;
+    setManualOpen(false);
     setGlobalQuery(record.recordNumber);
     setActive(target);
   };
 
   const openFolio = (module: "transferencias" | "prestamos", folio: string) => {
     if (!allowed.includes(module)) return;
+    setManualOpen(false);
     setGlobalQuery(folio);
     setActive(module);
   };
@@ -939,8 +951,10 @@ function Application({
           onSearchRecord={openSearchResult}
           onSearchFolio={openFolio}
           onRefresh={refreshHomeEvents}
+          manualOpen={manualOpen}
+          onManual={() => setManualOpen(open => !open)}
         />
-        <main className="workspace">
+        <main className={manualOpen ? "workspace workspace--manual" : "workspace"}>
           {active !== "tramite" &&
             active !== "concentracion" &&
             active !== "transferencias" &&
@@ -1049,6 +1063,11 @@ function Application({
           ) : (
             <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
           )}
+          {manualOpen && (
+            <UserManualPanel key={role} role={role} modules={allowed} permissions={currentPermissions}
+              onClose={() => setManualOpen(false)} />
+          )}
+          <GuidedTour key={manualOpen ? "manual" : active} module={manualOpen ? "manual" : active} />
         </main>
       </div>
     </div>

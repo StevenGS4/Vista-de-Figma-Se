@@ -8,11 +8,24 @@ export type LoanMovement = {
   detail: string;
 };
 
+export type LoanReturnCondition = "GOOD" | "ISSUE";
+
+export type LoanItem = {
+  id: string;
+  number: string;
+  title: string;
+  classification: string;
+  returnedDate: string;
+  condition: LoanReturnCondition | "";
+};
+
 export type ArchivalLoan = {
   id: string;
   folio: string;
   recordId: string;
   recordIds?: string[];
+  inventoryFolio?: string;
+  items?: LoanItem[];
   deliveredRecordIds?: string[];
   mode?: "Expediente individual" | "Inventario completo";
   requestingAreaId: string;

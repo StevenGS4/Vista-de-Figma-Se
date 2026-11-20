@@ -28,7 +28,7 @@ import {
 import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { loanApi, concentrationApi, type LoanEligibleUser } from "./api";
-import { ArchivalLoan, effectiveLoanStatus, todayIso } from "./loans";
+import { ArchivalLoan, effectiveLoanStatus, todayIso, type LoanReturnCondition } from "./loans";
 import { ArchivalRecord, locationSummary } from "./records";
 
 type PanelView = "list" | "select" | "form" | "detail" | "return" | "history";
@@ -866,9 +866,10 @@ function LoanDetail({
   onBack: () => void;
   onHistory: () => void;
   onReturn: () => void;
-  record: ArchivalRecord;
+  record?: ArchivalRecord;
 }) {
   const status = effectiveLoanStatus(loan);
+  const inventoryLoan = loan.mode === "Inventario completo";
   return (
     <div className="loan-detail-page">
       <button className="text-button" onClick={onBack}>
@@ -883,7 +884,7 @@ function LoanDetail({
           <span>Préstamo físico</span>
           <h2>{loan.folio}</h2>
           <p>
-            {record.recordNumber} · {record.title}
+            {inventoryLoan ? loan.inventoryFolio || "Inventario completo" : `${record?.recordNumber} · ${record?.title}`}
           </p>
         </div>
         <LoanStatusBadge loan={loan} />
@@ -909,7 +910,7 @@ function LoanDetail({
         </div>
       )}
       <div className="loan-detail-grid">
-        <section className="record-detail-group">
+        {record && !inventoryLoan && <section className="record-detail-group">
           <h3>
             <Files size={17} />
             Expediente
@@ -923,7 +924,7 @@ function LoanDetail({
             <DetailField label="Ubicación de origen" value={locationSummary(record)} />
             <DetailField label="Etapa archivística" value={record.stage} />
           </div>
-        </section>
+        </section>}
         <section className="record-detail-group">
           <h3>
             <CalendarClock size={17} />
@@ -961,6 +962,23 @@ function LoanDetail({
           </div>
         </section>
       </div>
+      {inventoryLoan && (
+        <section className="record-detail-group">
+          <h3><Files size={17} /> Expedientes prestados ({loan.items?.length ?? 0})</h3>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead><tr><th>Expediente</th><th>Clave CADIDO</th><th>Asunto</th><th>Devolución</th><th>Estado al recibir</th></tr></thead>
+              <tbody>{loan.items?.map(item => (
+                <tr key={item.id}>
+                  <td>{item.number}</td><td>{item.classification}</td><td>{item.title}</td>
+                  <td>{item.returnedDate ? formatDate(item.returnedDate) : "Pendiente"}</td>
+                  <td>{item.condition === "GOOD" ? "Buen estado" : item.condition === "ISSUE" ? "Con incidencias" : "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <div className="record-rule-note">
         <ShieldCheck size={18} />
         <span>
@@ -974,10 +992,12 @@ function LoanDetail({
 
 function ReturnConfirmModal({
   complete,
+  busy,
   onCancel,
   onConfirm,
 }: {
   complete: boolean;
+  busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -998,10 +1018,10 @@ function ReturnConfirmModal({
           La etapa permanecerá en Archivo de concentración.
         </div>
         <div className="modal__footer">
-          <Button className="button--secondary" onClick={onCancel}>
+          <Button className="button--secondary" disabled={busy} onClick={onCancel}>
             Cancelar
           </Button>
-          <Button className="button--primary" onClick={onConfirm}>
+          <Button className="button--primary" disabled={busy} onClick={onConfirm}>
             <Check size={17} />
             Confirmar devolución
           </Button>
@@ -1012,7 +1032,6 @@ function ReturnConfirmModal({
 }
 
 function ReturnForm({
-  allRecords,
   currentUser,
   loan,
   onBack,
@@ -1022,15 +1041,20 @@ function ReturnForm({
   currentUser: UserRecord;
   loan: ArchivalLoan;
   onBack: () => void;
-  onSave: (date: string, receivedBy: string, notes: string, returnedIds: string[]) => void;
-  allRecords: ArchivalRecord[];
-  record: ArchivalRecord;
+  onSave: (date: string, receivedBy: string, notes: string, returnedIds: string[], conditions?: Record<string, LoanReturnCondition>) => Promise<void>;
+  record?: ArchivalRecord;
 }) {
   const [date, setDate] = useState(todayIso());
   const [receivedBy, setReceivedBy] = useState(fullName(currentUser));
   const [notes, setNotes] = useState("");
-  const [returnedIds, setReturnedIds] = useState<string[]>(loanRecordIds(loan));
-  const [errors, setErrors] = useState<{ date?: string; receivedBy?: string }>({});
+  const inventoryLoan = loan.mode === "Inventario completo";
+  const pendingIds = loanRecordIds(loan);
+  const pendingItems = loan.items?.filter(item => pendingIds.includes(item.id)) ?? [];
+  const [returnedIds, setReturnedIds] = useState<string[]>([]);
+  const [conditions, setConditions] = useState<Record<string, LoanReturnCondition>>({});
+  const [saving, setSaving] = useState(false);
+  const selectedIds = inventoryLoan ? returnedIds.filter(id => pendingIds.includes(id)) : pendingIds;
+  const [errors, setErrors] = useState<{ date?: string; receivedBy?: string; items?: string }>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   return (
     <div className="return-page">
@@ -1042,7 +1066,7 @@ function ReturnForm({
           </button>
           <h2>Registrar devolución</h2>
           <p>
-            {loan.folio} · {record.recordNumber}
+            {loan.folio} · {inventoryLoan ? loan.inventoryFolio || "Inventario completo" : record?.recordNumber}
           </p>
         </div>
         <LoanStatusBadge loan={loan} />
@@ -1051,11 +1075,14 @@ function ReturnForm({
         className="surface return-form"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
-          const next: { date?: string; receivedBy?: string } = {};
+          const next: { date?: string; receivedBy?: string; items?: string } = {};
           if (!date) next.date = "Captura la fecha real de devolución.";
           else if (date < loan.loanDate)
             next.date = "La devolución no puede ser anterior a la fecha del préstamo.";
           if (!receivedBy.trim()) next.receivedBy = "Ingresa la persona que recibe.";
+          if (inventoryLoan && !selectedIds.length) next.items = "Marca al menos un expediente recibido.";
+          else if (inventoryLoan && selectedIds.some(id => !conditions[id]))
+            next.items = "Indica el estado de cada expediente marcado.";
           setErrors(next);
           if (!Object.keys(next).length) setConfirmOpen(true);
         }}
@@ -1069,7 +1096,7 @@ function ReturnForm({
               {loan.requesterName} · previsto {formatDate(loan.expectedReturnDate)}
             </small>
           </div>
-          <span className="record-id">{record.recordNumber}</span>
+          <span className="record-id">{inventoryLoan ? loan.inventoryFolio || "Inventario completo" : record?.recordNumber}</span>
         </div>
         <div className="record-form-grid return-fields">
           <LoanField error={errors.date} label="Fecha real de devolución" required>
@@ -1087,33 +1114,39 @@ function ReturnForm({
             <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
           </LoanField>
         </div>
-        {allRecords.length > 1 && (
-          <div className="eligible-list">
-            <strong>Expedientes recibidos físicamente</strong>
-            {allRecords.map((item) => (
-              <label className={returnedIds.includes(item.id) ? "is-selected" : ""} key={item.id}>
-                <input
-                  checked={returnedIds.includes(item.id)}
-                  onChange={() =>
-                    setReturnedIds((current) =>
-                      current.includes(item.id)
-                        ? current.filter((id) => id !== item.id)
-                        : [...current, item.id],
-                    )
-                  }
-                  type="checkbox"
-                />
-                <span className="check-control">
-                  {returnedIds.includes(item.id) && <Check size={14} />}
-                </span>
-                <span><strong>{item.recordNumber}</strong><small>{item.title}</small></span>
-              </label>
-            ))}
-            <small>
-              Si falta algún expediente, el préstamo conjunto permanecerá activo únicamente para
-              los pendientes.
-            </small>
-          </div>
+        {inventoryLoan && (
+          <section className="form-section">
+            <div className="form-section__title"><h3>Recepción por expediente</h3></div>
+            <p>{selectedIds.length} de {pendingItems.length} expedientes pendientes marcados como recibidos.</p>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead><tr><th>Recibido</th><th>Expediente</th><th>Asunto</th><th>Estado al recibir</th></tr></thead>
+                <tbody>{pendingItems.map(item => {
+                  const checked = selectedIds.includes(item.id);
+                  return (
+                    <tr key={item.id}>
+                      <td><input type="checkbox" aria-label={`Recibido ${item.number}`} checked={checked}
+                        onChange={() => setReturnedIds(current => checked
+                          ? current.filter(id => id !== item.id) : [...current, item.id])} /></td>
+                      <td>{item.number}</td><td>{item.title}</td>
+                      <td><label className="filter-select">
+                        <select aria-label={`Estado de ${item.number}`} disabled={!checked}
+                          value={checked ? conditions[item.id] ?? "" : ""} onChange={event => {
+                            const value = event.target.value as LoanReturnCondition;
+                            setConditions(current => ({ ...current, [item.id]: value }));
+                          }}>
+                          <option value="">Selecciona el estado</option>
+                          <option value="GOOD">Buen estado</option>
+                          <option value="ISSUE">Con incidencias</option>
+                        </select>
+                      </label></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+            {errors.items && <p className="inline-notice" role="alert">{errors.items}</p>}
+          </section>
         )}
         <div className="concentration-location-form__footer">
           <Button className="button--secondary" onClick={onBack}>
@@ -1127,9 +1160,19 @@ function ReturnForm({
       </form>
       {confirmOpen && (
         <ReturnConfirmModal
-          complete={returnedIds.length === loanRecordIds(loan).length}
-          onCancel={() => setConfirmOpen(false)}
-          onConfirm={() => onSave(date, receivedBy.trim(), notes.trim(), returnedIds)}
+          complete={selectedIds.length === pendingIds.length}
+          busy={saving}
+          onCancel={() => { if (!saving) setConfirmOpen(false); }}
+          onConfirm={async () => {
+            if (saving) return;
+            setSaving(true);
+            try {
+              await onSave(date, receivedBy.trim(), notes.trim(), selectedIds, inventoryLoan ? conditions : undefined);
+            } finally {
+              setSaving(false);
+              setConfirmOpen(false);
+            }
+          }}
         />
       )}
     </div>
@@ -1271,10 +1314,10 @@ export default function LoansPanel({
       window.alert(message);
     }
   };
-  const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[])=>{
+  const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[],conditions?:Record<string,LoanReturnCondition>)=>{
     if(!selectedLoan)return;
     try{
-      const updated=await loanApi.returnItems(selectedLoan.id,returnedIds,date,receivedBy,notes);
+      const updated=await loanApi.returnItems(selectedLoan.id,returnedIds,date,receivedBy,notes,conditions);
       onLoansChange(loans.map(l=>l.id===updated.id?updated:l));
       const updatedRecords=await concentrationApi.list().catch(error=>{
         console.error("Devolución confirmada; no se pudo actualizar la consulta:",error);
@@ -1334,10 +1377,10 @@ export default function LoansPanel({
 
   if (view === "return" && selectedLoan) {
     const record = recordFor(records, selectedLoan.recordId);
-    if (record)
+    if (record || selectedLoan.mode === "Inventario completo")
       return (
         <ReturnForm
-          allRecords={records.filter((item) => loanRecordIds(selectedLoan).includes(item.id))}
+          key={selectedLoan.id}
           currentUser={currentUser}
           loan={selectedLoan}
           onBack={() => setView("detail")}
@@ -1355,7 +1398,7 @@ export default function LoansPanel({
 
   if (view === "detail" && selectedLoan) {
     const record = recordFor(records, selectedLoan.recordId);
-    if (record)
+    if (record || selectedLoan.mode === "Inventario completo")
       return (
         <>
           {message && (
