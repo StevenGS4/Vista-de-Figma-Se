@@ -22,6 +22,7 @@ import {
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
 import RowActionsMenu from "./RowActionsMenu";
+import TramiteTrash from "./TramiteTrash";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -30,7 +31,7 @@ import {
   locationSummary,
 } from "./records";
 
-type View = "list" | "form" | "detail";
+type View = "list" | "form" | "detail" | "trash";
 type Errors = Partial<Record<keyof ArchivalRecord, string>>;
 const TRAMITE_ADDRESS = "Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit";
 const localDate = () => {
@@ -187,6 +188,7 @@ function InventoryList({
   onEdit,
   onDelete,
   onOpen,
+  onTrash,
   protectedRecordIds,
   records,
 }: {
@@ -198,6 +200,7 @@ function InventoryList({
   onEdit: (inventoryId: string) => void;
   onDelete: (inventoryId: string) => void;
   onOpen: (inventoryId: string) => void;
+  onTrash: () => void;
   protectedRecordIds: Set<string>;
   records: ArchivalRecord[];
 }) {
@@ -257,7 +260,12 @@ function InventoryList({
             <h3>Listado de inventarios</h3>
             <p>{inventories.length} inventarios autorizados en esta sesión</p>
           </div>
-          <span className="demo-label">Archivos activos</span>
+          <div className="tramite-list-tools">
+            {canDelete && <RowActionsMenu label="Acciones de archivo de trámite" actions={[
+              {label:"Papelera de reciclaje",icon:<Trash2 size={16}/>,onSelect:onTrash},
+            ]}/>}
+            <span className="demo-label">Archivos activos</span>
+          </div>
         </div>
         <div className="records-filters inventory-list-filters">
           <label className="search-box records-search">
@@ -630,6 +638,7 @@ function RowPicker({
                 record.recordNumber &&
                 record.title &&
                 record.openDate &&
+                record.closeDate &&
                 record.foliosCount &&
                 record.shelf,
               );
@@ -855,8 +864,8 @@ function ControlStep({
         </Field>
         <Field
           error={errors.closeDate}
-          hint="Puede quedar pendiente si el expediente continúa abierto."
-          label="Cierre"
+          label="Fecha de cierre"
+          required
         >
           <input
             min={active.openDate}
@@ -1115,7 +1124,8 @@ function InventoryForm({
     }
     if (step === 2) {
       if (!record.openDate) next.openDate = "Captura la apertura.";
-      if (record.closeDate && record.closeDate < record.openDate)
+      if (!record.closeDate) next.closeDate = "Captura la fecha de cierre.";
+      else if (record.closeDate < record.openDate)
         next.closeDate = "El cierre es anterior a la apertura.";
       if (!record.filesCount || Number(record.filesCount) < 1)
         next.filesCount = "Captura los legajos.";
