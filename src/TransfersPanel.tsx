@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Archive,
@@ -1413,6 +1413,11 @@ export default function TransfersPanel({
   const [returnOpen, setReturnOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!/enviada para visto bueno|devuelta con observaciones|visto bueno registrado|transferencia aceptada|recepción registrada/i.test(message)) return;
+    const timer=window.setTimeout(()=>setMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  },[message]);
   const canReceive =
     role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
