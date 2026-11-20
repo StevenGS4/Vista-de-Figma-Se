@@ -6,7 +6,7 @@ const manager={id:'12',areaId:'AREA-ONE',roles:['Encargado de área'],mustChange
 const admin={id:'1',areaId:'ADMIN',roles:['Administrador / Coordinador'],mustChangePassword:false};
 const employee={id:'3',areaId:'AREA-ONE',roles:['Personal de área'],mustChangePassword:false};
 
-assert.deepEqual(scope(manager),{admin:false,area:'AREA-ONE'});
+assert.deepEqual(scope(manager),{admin:false,area:'AREA-ONE',userId:12});
 assert.deepEqual(scope(admin),{admin:true});
 assert.throws(()=>scope(employee),{status:403});
 assert.throws(()=>scope({...manager,mustChangePassword:true}),{status:403});
