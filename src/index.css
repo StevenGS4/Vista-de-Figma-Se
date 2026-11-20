@@ -7951,3 +7951,40 @@
   .archive-confirm-dialog { padding: 21px 18px; }
   .archive-confirm-dialog__buttons .button { flex: 1; }
 }
+
+/* Concentración: datos archivísticos de encabezado, sin exponer
+   ubicación física en el listado expandible de expedientes. */
+.concentration-archive-summary-scroll {
+  margin-bottom: 14px;
+  border: 1px solid #ccd6cd;
+  border-radius: 9px;
+  background: #f8f8f4;
+}
+.concentration-archive-summary {
+  width: 100%;
+  min-width: 930px;
+  border-collapse: collapse;
+}
+.concentration-archive-summary th {
+  background: #dce4dc;
+  color: #465b51;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+}
+.concentration-archive-summary td {
+  background: #f8f8f4;
+  color: #243f36;
+  font-size: 11px;
+  line-height: 1.55;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.concentration-archive-summary th,
+.concentration-archive-summary td {
+  padding: 12px 13px;
+  border-right: 1px solid #d6ded7;
+}
+.concentration-archive-summary th:last-child,
+.concentration-archive-summary td:last-child { border-right: 0; }
