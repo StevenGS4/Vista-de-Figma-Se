@@ -204,14 +204,15 @@ export default function GuidedTour({ module }: { module: string }) {
     }]);
   };
 
+  const helpButton = (
+    <button type="button" className="guided-tour-help" title="Ayuda guiada" aria-label="Abrir ayuda guiada" onClick={start}>
+      <CircleHelp size={22} aria-hidden="true" />
+    </button>
+  );
+
   return (
     <>
-      {createPortal(
-        <button type="button" className="guided-tour-help" title="Ayuda guiada" aria-label="Abrir ayuda guiada" onClick={start}>
-          <CircleHelp size={22} aria-hidden="true" />
-        </button>,
-        nativeModal ?? document.body,
-      )}
+      {nativeModal ? createPortal(helpButton, nativeModal) : helpButton}
       {active && createPortal(
         <dialog ref={dialog} className="guided-tour" aria-labelledby="guided-tour-title" aria-describedby="guided-tour-description"
           onCancel={event => { event.preventDefault(); close(); }}

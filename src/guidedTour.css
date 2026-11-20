@@ -1,6 +1,7 @@
 .guided-tour-help {
-  position: fixed;
-  inset: auto auto max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  position: sticky;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  margin-top: 16px;
   z-index: 150;
   display: grid;
   width: 42px;
@@ -16,8 +17,8 @@
 .guided-tour-help:hover {
   background: var(--green-800, #1e5b4f);
 }
-.app-shell .sidebar__bottom {
-  padding-bottom: calc(62px + env(safe-area-inset-bottom));
+dialog[open] > .guided-tour-help {
+  margin: 12px;
 }
 .guided-tour {
   position: fixed;

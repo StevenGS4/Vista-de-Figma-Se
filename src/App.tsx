@@ -1051,8 +1051,8 @@ function Application({
           ) : (
             <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
           )}
+          <GuidedTour key={active} module={active} />
         </main>
-        <GuidedTour key={active} module={active} />
       </div>
     </div>
   );
