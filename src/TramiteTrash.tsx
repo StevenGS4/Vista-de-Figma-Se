@@ -3,6 +3,7 @@ import { ArrowLeft, ArchiveRestore, CalendarDays, Files, FolderTree, Search, Tra
 import { tramiteApi } from "./api";
 import type { ArchivalRecord } from "./records";
 import RowActionsMenu from "./RowActionsMenu";
+import { useConfirmAction } from "./useConfirmAction";
 
 type TrashItem = { kind: "inventory" | "record"; key: string; folio: string; date: string; records: ArchivalRecord[] };
 const day = (value: string) => value ? value.slice(0, 10) : "Sin fecha";
@@ -25,6 +26,7 @@ export default function TramiteTrash({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const { confirm, dialog } = useConfirmAction();
 
   const load = async () => {
     setLoading(true);
@@ -71,7 +73,15 @@ export default function TramiteTrash({
   });
 
   const perform = async (prompt: string, fn: () => Promise<unknown>, success: string) => {
-    if (busy || !window.confirm(prompt)) return;
+    if (busy) return;
+    const agreed = await confirm({
+      title: prompt.includes("DEFINITIVAMENTE") ? "Eliminación definitiva" :
+        prompt.startsWith("¿Restaurar") ? "Restaurar elemento" : "Confirmar operación",
+      message: prompt,
+      danger: prompt.includes("DEFINITIVAMENTE"),
+      confirmText: prompt.startsWith("¿Restaurar") ? "Restaurar" : "Confirmar",
+    });
+    if (!agreed) return;
     setBusy(true); setError("");
     try {
       await fn();
@@ -93,7 +103,7 @@ export default function TramiteTrash({
             <ArrowLeft size={17}/> Volver a archivos activos
           </button>
           <h2>Papelera de reciclaje</h2>
-          <p>Inventarios y expedientes retirados, agrupados por fecha. Pueden restaurarse mientras permanezcan en la papelera.</p>
+          <p>Inventarios y expedientes retirados, agrupados por fecha. Permanecen 60 días desde su última eliminación; después se depuran automáticamente si no tienen restricciones documentales.</p>
         </div>
         <button
           type="button"
@@ -134,6 +144,7 @@ export default function TramiteTrash({
                     <small>{inventory
                       ? item.records.length+" expediente(s): "+item.records.map(r=>r.recordNumber).join(", ")
                       : first.title}</small>
+                    <small>Caducidad: {dateLabel(day(new Date(new Date(item.date.replace(" ", "T")).getTime()+60*86400000).toISOString()))}</small>
                   </div>
                   <RowActionsMenu label={"Acciones para "+(inventory?item.folio:first.recordNumber)}
                     actions={[
@@ -155,6 +166,7 @@ export default function TramiteTrash({
             </div>
           ))}
       </section>
+      {dialog}
     </div>
   );
 }
