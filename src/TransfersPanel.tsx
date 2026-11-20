@@ -20,7 +20,6 @@ import {
   Inbox,
   ListChecks,
   MessageSquareText,
-  MoreHorizontal,
   PackageCheck,
   Plus,
   RotateCcw,
@@ -31,6 +30,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, fullName } from "./data";
 import { transferApi, tramiteApi, concentrationApi, ReceptionLocation } from "./api";
 import { ArchivalRecord } from "./records";
@@ -130,7 +130,6 @@ function TransferTray({
   const [search, setSearch] = useState(initialSearch);
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
-  const [activeActions, setActiveActions] = useState<string | null>(null);
   const pageSize = 5;
   const visibleByRole = useMemo(() => {
     if (role === "Administrador / Coordinador") return transfers;
@@ -273,46 +272,28 @@ function TransferTray({
                     </td>
                     <td>{userName(users, transfer.reviewerId)}</td>
                     <td>
-                      <div className="record-actions">
-                        <button
-                          aria-label={`Acciones para ${transfer.folio}`}
-                          onClick={() =>
-                            setActiveActions((current) =>
-                              current === transfer.id ? null : transfer.id,
-                            )
-                          }
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-                        {activeActions === transfer.id && (
-                          <div className="record-actions__menu transfer-actions-menu">
-                            <button onClick={() => onOpen(transfer)}>
-                              <Eye size={16} />
-                              Ver solicitud
-                            </button>
-                            {canContinue && (
-                              <button onClick={() => onOpen(transfer, "continue")}>
-                                <FilePenLine size={15} />
-                                {transfer.status === "Con observaciones"
-                                  ? "Corregir y reenviar"
-                                  : "Continuar"}
-                              </button>
-                            )}
-                            {transfer.status === "Aceptada" &&
-                              role !== "Personal de área" &&
-                              transfer.receptionStatus !== "Recibida" && (
-                                <button onClick={() => onOpen(transfer, "reception")}>
-                                  <PackageCheck size={15} />
-                                  Registrar recepción
-                                </button>
-                              )}
-                            <button onClick={() => onOpen(transfer, "history")}>
-                              <History size={15} />
-                              Ver historial
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowActionsMenu
+                        label={`Acciones para ${transfer.folio}`}
+                        width={210}
+                        actions={[
+                          { label: "Ver solicitud", icon: <Eye size={16}/>,
+                            onSelect: () => onOpen(transfer) },
+                          ...(canContinue ? [{
+                            label: transfer.status === "Con observaciones" ? "Corregir y reenviar" : "Continuar",
+                            icon: <FilePenLine size={15}/>,
+                            onSelect: () => onOpen(transfer, "continue"),
+                          }] : []),
+                          ...(transfer.status === "Aceptada" &&
+                            role !== "Personal de área" &&
+                            transfer.receptionStatus !== "Recibida" ? [{
+                              label: "Registrar recepción",
+                              icon: <PackageCheck size={15}/>,
+                              onSelect: () => onOpen(transfer, "reception"),
+                            }] : []),
+                          { label: "Ver historial", icon: <History size={15}/>,
+                            onSelect: () => onOpen(transfer, "history") },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
