@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -361,6 +361,11 @@ function Preview({
   type: InventoryType;
 }) {
   const [downloaded, setDownloaded] = useState(false);
+  useEffect(() => {
+    if (!downloaded) return;
+    const timer=window.setTimeout(()=>setDownloaded(false),4000);
+    return ()=>window.clearTimeout(timer);
+  },[downloaded]);
   const h = group.header;
   const [error,setError]=useState("");
   const [isDownloading,setIsDownloading]=useState(false);
