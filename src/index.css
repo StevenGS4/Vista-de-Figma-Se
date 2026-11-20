@@ -7988,3 +7988,31 @@
 }
 .concentration-archive-summary th:last-child,
 .concentration-archive-summary td:last-child { border-right: 0; }
+
+/* Concentración > Ver detalle: contraste fuerte exclusivo de los seis paneles.
+   No altera ubicaciones, permisos, contenido ni encabezados de otros módulos. */
+.concentration-detail-grid .record-detail-group {
+  border: 1px solid #b4c4bb;
+  background: #f4f5f0;
+  box-shadow: 0 4px 14px rgb(7 45 36 / 8%);
+}
+.concentration-detail-grid .record-detail-group > h3 {
+  background: linear-gradient(105deg, #123f36 0%, #205b4d 100%);
+  color: #fffdf6;
+  border-bottom: 2px solid #b49a57;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.concentration-detail-grid .record-detail-group > h3 svg {
+  color: #e2c881;
+  flex-shrink: 0;
+}
+.concentration-detail-grid .record-detail-group > div {
+  background: #f4f5f0;
+}
+.concentration-detail-grid .detail-field span {
+  color: #61726b;
+}
+.concentration-detail-grid .detail-field strong {
+  color: #173c34;
+}
