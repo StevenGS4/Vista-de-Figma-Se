@@ -15,6 +15,7 @@ import { Role, UserRecord, areaName, areas } from "./data";
 import { ArchivalRecord, cadidoSections, cadidoSeries } from "./records";
 import { DocumentaryTransfer } from "./transfers";
 import { inventoriesApi } from "./api";
+import PrimaryTransferBuilder from "./PrimaryTransferBuilder";
 
 type InventoryType = "tramite" | "concentracion" | "transferencia";
 type View = "select" | "list" | "preview";
@@ -34,7 +35,7 @@ const types = {
   },
   transferencia: {
     name: "Relación de inventarios para transferencia primaria",
-    description: "Reporte automático con una fila por inventario de trámite, sin ejecutar transferencias.",
+    description: "Consolidado documental con filtros de fecha, CADIDO, área, usuario y selección de inventarios o expedientes.",
     icon: FolderArchive,
     accent: "gold",
   },
@@ -532,6 +533,8 @@ export default function InventoriesPanel({
         }}
       />
     );
+  if (type === "transferencia")
+    return <PrimaryTransferBuilder currentUser={currentUser} role={role} onBack={() => setView("select")} />;
   if (view === "preview" && selected)
     return <Preview group={selected} onBack={() => setView("list")} type={type} />;
   return (
