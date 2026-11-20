@@ -45,6 +45,7 @@ export type DocumentaryTransfer = {
   receptionStatus: ReceptionStatus;
   receptionDate: string;
   receptionResponsible: string;
+  receptionResponsibleName?: string;
   receptionNotes: string;
   history: TransferHistoryEvent[];
 };
