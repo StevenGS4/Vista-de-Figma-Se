@@ -38,7 +38,7 @@ const oneType=(value)=>{
 async function scopedRows(user,type,folio){
  const scope=exportScope(user,type);
  if(!scope)throw fail('No tienes permiso para exportar este inventario',403);
- const filters=['e.etapa=?'];
+ const filters=['e.etapa=?','e.deleted_at IS NULL','i.deleted_at IS NULL'];
  const params=[stageForType(type)];
  if(scope!=='GLOBAL'){filters.push('a.codigo=?');params.push(user.areaId);}
  if(scope==='PROPIO'){filters.push('i.creado_por=?');params.push(user.id);}
