@@ -7632,9 +7632,6 @@
   border-color: rgb(30 91 79 / 12%);
   box-shadow: 0 3px 16px rgb(0 47 42 / 4%);
 }
-.app-main .surface:not(.sidebar) {
-  background-color: rgb(255 255 255 / 93%);
-}
 @media (max-width: 900px) {
   .login__access {
     background:
