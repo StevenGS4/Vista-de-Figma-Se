@@ -1,8 +1,39 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { Archive, Check, FilterX, Search, Trash2, X } from "lucide-react";
 import { disposalApi } from "./api";
 import type { DisposalInventory } from "./api";
 
-const actFields = [["folio_dictamen_agn","Folio del dictamen del AGN"],["fecha_dictamen_agn","Fecha del dictamen","date"],["folio_acta_agn","Folio del acta del AGN"],["fecha_acta_agn","Fecha del acta del AGN","date"],["referencia_inventario_autorizado","Referencia del inventario autorizado"],["hora_inicio","Hora de inicio","time"],["fecha_acta_extendida","Fecha del acta","date"],["sede_y_domicilio","Sede y domicilio"],["total_cajas","Total de cajas"],["metros_lineales","Metros lineales"],["peso_documental","Peso y unidad de medida"],["fecha_ejecucion","Fecha de ejecución","date"],["lugar_ejecucion","Lugar de ejecución"],["metodo_disposicion","Método de disposición"],["responsable_ejecucion","Responsable de ejecución"],["referencia_evidencia","Referencia de evidencia"],["observaciones","Observaciones"],["hora_cierre","Hora de cierre","time"],["fecha_cierre_extendida","Fecha de cierre","date"],["nombre_responsable_concentracion","Responsable de Concentración"],["nombre_firmante","Nombre de la persona firmante"],["cargo_firmante","Cargo de la persona firmante"]] as const;
+const actFields = [
+  ["folio_dictamen_agn","Folio del dictamen del AGN"],
+  ["fecha_dictamen_agn","Fecha del dictamen","date"],
+  ["folio_acta_agn","Folio del acta del AGN"],
+  ["fecha_acta_agn","Fecha del acta del AGN","date"],
+  ["referencia_inventario_autorizado","Referencia del inventario autorizado"],
+  ["hora_inicio","Hora de inicio","time"],
+  ["fecha_acta_extendida","Fecha del acta","date"],
+  ["sede_y_domicilio","Sede y domicilio"],
+  ["total_cajas","Total de cajas"],
+  ["metros_lineales","Metros lineales"],
+  ["peso_documental","Peso y unidad de medida"],
+  ["fecha_ejecucion","Fecha de ejecución","date"],
+  ["lugar_ejecucion","Lugar de ejecución"],
+  ["metodo_disposicion","Método de disposición"],
+  ["responsable_ejecucion","Responsable de ejecución"],
+  ["referencia_evidencia","Referencia de evidencia"],
+  ["observaciones","Observaciones"],
+  ["hora_cierre","Hora de cierre","time"],
+  ["fecha_cierre_extendida","Fecha de cierre","date"],
+  ["nombre_responsable_concentracion","Responsable de Concentración"],
+  ["nombre_firmante","Nombre de la persona firmante"],
+  ["cargo_firmante","Cargo de la persona firmante"],
+] as const;
+
+const fieldGroups = [
+  { title: "Autorización documental", fields: actFields.slice(0, 5) },
+  { title: "Datos del acta", fields: actFields.slice(5, 11) },
+  { title: "Ejecución de la baja", fields: actFields.slice(11, 17) },
+  { title: "Cierre y firmas", fields: actFields.slice(17) },
+];
 
 export default function AdminDisposalsPanel() {
   const [inventories, setInventories] = useState<DisposalInventory[]>([]);
@@ -80,83 +111,133 @@ export default function AdminDisposalsPanel() {
     }
   }
 
+  const hasFilters = Boolean(search || area || user || filter.search || filter.area || filter.user);
+
   return (
     <section aria-labelledby="disposals-title">
-      <h2 id="disposals-title">Bajas de Archivo de Concentración</h2>
-      <form className="form-grid" onSubmit={event => {
-        event.preventDefault();
-        setFilter({ search: search.trim().toLocaleLowerCase("es-MX"), area, user });
-      }}>
-        <label>Área productora
-          <select value={area} onChange={event => setArea(event.target.value)}>
-            <option value="">Todas las áreas</option>
-            {areas.map(value => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <label>Usuario que registró el inventario
-          <select value={user} onChange={event => setUser(event.target.value)}>
-            <option value="">Todos los usuarios</option>
-            {[...users].sort((a,b) => a[1].localeCompare(b[1])).map(([id, name]) =>
-              <option value={id} key={id}>{name}</option>
-            )}
-          </select>
-        </label>
-        <label>Buscar inventario
-          <input value={search} onChange={event => setSearch(event.target.value)} />
-        </label>
+      <div className="records-page-heading">
         <div>
-          <button className="primary-button" type="submit">Buscar</button>
-          <button className="secondary-button" type="button" onClick={() => {
-            setSearch(""); setArea(""); setUser("");
-            setFilter({ search: "", area: "", user: "" });
-          }}>Limpiar</button>
+          <h2 id="disposals-title">Bajas de Archivo de Concentración</h2>
+          <p>Selecciona un inventario para registrar su baja documental.</p>
         </div>
-      </form>
+        <span className="access-chip"><Archive size={15} /> Inventarios de concentración</span>
+      </div>
 
-      {notice && <div className="toast" role="status">{notice}</div>}
-      {error && !selected && <p role="alert">{error}</p>}
-      {loading ? <p role="status">Cargando inventarios…</p> : visible.length ? (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead><tr><th>Inventario</th><th>Área</th><th>Usuario</th><th>Fecha</th><th>Total de expedientes</th><th>Acción</th></tr></thead>
-            <tbody>{visible.map(item => (
-              <tr key={item.folio}>
-                <td>{item.folio}</td><td>{item.area}</td><td>{item.userName}</td><td>{item.date}</td><td>{item.total}</td>
-                <td><button className="secondary-button" type="button" onClick={() => {
-                  setFields({}); setStep(1); setError(""); setNotice(""); setSelected(item);
-                }}>Dar de baja</button></td>
-              </tr>
-            ))}</tbody>
-          </table>
+      {notice && <div className="toast" role="status"><Check size={18} />{notice}</div>}
+      {error && !selected && <div className="inline-notice" role="alert">{error}</div>}
+
+      <div className="surface records-table-card concentration-table-card">
+        <div className="records-filter-head">
+          <h3>Búsqueda de inventarios</h3>
         </div>
-      ) : !error && <p>No se encontraron inventarios para los filtros seleccionados.</p>}
+        <form className="records-filters" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))" }}
+          onSubmit={event => {
+            event.preventDefault();
+            setFilter({ search: search.trim().toLocaleLowerCase("es-MX"), area, user });
+          }}>
+          <label className="search-box">
+            <Search size={17} />
+            <input aria-label="Buscar inventario" placeholder="Buscar inventario…" value={search}
+              onChange={event => setSearch(event.target.value)} />
+          </label>
+          <label className="filter-select">
+            <select aria-label="Área productora" value={area} onChange={event => setArea(event.target.value)}>
+              <option value="">Todas las áreas</option>
+              {areas.map(value => <option key={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="filter-select">
+            <select aria-label="Usuario que registró el inventario" value={user} onChange={event => setUser(event.target.value)}>
+              <option value="">Todos los usuarios</option>
+              {[...users].sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) =>
+                <option value={id} key={id}>{name}</option>
+              )}
+            </select>
+          </label>
+          <div className="modal__actions" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button className="button button--primary" type="submit"><Search size={16} />Buscar</button>
+            <button className="clear-filters" type="button" disabled={!hasFilters} onClick={() => {
+              setSearch(""); setArea(""); setUser("");
+              setFilter({ search: "", area: "", user: "" });
+            }}><FilterX size={16} />Limpiar</button>
+          </div>
+        </form>
+
+        {loading ? (
+          <div className="empty-state" role="status">Cargando inventarios…</div>
+        ) : visible.length ? (
+          <div className="table-scroll">
+            <table className="data-table concentration-table">
+              <thead>
+                <tr><th>Inventario</th><th>Área</th><th>Usuario</th><th>Fecha</th><th>Expedientes</th><th>Acción</th></tr>
+              </thead>
+              <tbody>{visible.map(item => (
+                <tr key={item.folio}>
+                  <td><strong>{item.folio}</strong></td>
+                  <td>{item.area}</td><td>{item.userName}</td><td>{item.date}</td><td>{item.total}</td>
+                  <td>
+                    <button className="button button--danger-outline" type="button" onClick={() => {
+                      setFields({}); setStep(1); setError(""); setNotice(""); setSelected(item);
+                    }}><Trash2 size={16} />Dar de baja</button>
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : !error && (
+          <div className="empty-state concentration-search-empty">
+            <Search size={28} />
+            <strong>No se encontraron inventarios para los filtros seleccionados.</strong>
+          </div>
+        )}
+      </div>
 
       {selected && (
-        <dialog ref={dialog} aria-labelledby="disposal-dialog-title" onCancel={event => {
-          event.preventDefault(); cancel();
-        }} style={{ position: "fixed", inset: 0, margin: "auto", padding: "1.5rem", maxHeight: "85vh", width: step === 1 ? "min(760px, 92vw)" : "min(460px, 92vw)" }}>
-          <form onSubmit={submit}>
-            <h2 id="disposal-dialog-title">{step === 1 ? "Datos del acta de baja" : "¿Estás seguro de que quieres dar de baja?"}</h2>
-            <p>Inventario {selected.folio} · {selected.total} expedientes</p>
-            {step === 1 ? (
-              <div className="form-grid">{actFields.map(([key, label, type]) => (
-                <label key={key}>{label}
-                  <input type={type ?? "text"} value={fields[key] ?? ""} maxLength={500}
-                    required={key !== "observaciones"} onChange={event => setFields(values => ({
-                      ...values, [key]: event.target.value,
-                    }))} />
-                </label>
-              ))}</div>
-            ) : <p>La baja se aplicará a todo el inventario y es definitiva.</p>}
-            {error && <p role="alert">{error}</p>}
-            <div className="modal__actions">
-              <button className="secondary-button" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
-              <button className="primary-button" type="submit" disabled={busy}>
-                {busy ? "Registrando…" : step === 1 ? "Dar de baja" : "Confirmar"}
-              </button>
-            </div>
-          </form>
-        </dialog>
+        <>
+          <div aria-hidden="true" className="modal-backdrop" />
+          <dialog ref={dialog} className="modal" aria-labelledby="disposal-dialog-title" onCancel={event => {
+            event.preventDefault();
+            cancel();
+          }} style={{ position: "fixed", inset: 0, margin: "auto", padding: 0, border: 0, maxHeight: "85vh",
+            width: step === 1 ? "min(760px, 92vw)" : "min(460px, 92vw)" }}>
+            <form onSubmit={submit}>
+              <div className="modal__header">
+                <div>
+                  <span>Baja documental</span>
+                  <h2 id="disposal-dialog-title">{step === 1 ? "Datos del acta" : "¿Estás seguro de que quieres dar de baja?"}</h2>
+                </div>
+                <button aria-label="Cerrar" className="icon-action" type="button" disabled={busy} onClick={cancel}>
+                  <X size={19} />
+                </button>
+              </div>
+              <div className="modal__body">
+                <p className="modal__intro">Inventario <strong>{selected.folio}</strong> · {selected.total} expedientes</p>
+                {step === 1 ? fieldGroups.map(group => (
+                  <fieldset key={group.title} className="form-grid" style={{ border: 0, padding: 0, minWidth: 0 }}>
+                    <legend style={{ fontWeight: 600, marginBottom: 8 }}>{group.title}</legend>
+                    {group.fields.map(([key, label, type]) => (
+                      <label className="form-field" key={key}>
+                        <span>{label}</span>
+                        <input type={type ?? "text"} value={fields[key] ?? ""} maxLength={500}
+                          required={key !== "observaciones"} onChange={event => setFields(values => ({
+                            ...values, [key]: event.target.value,
+                          }))} />
+                      </label>
+                    ))}
+                  </fieldset>
+                )) : <p className="inline-notice">La baja se aplicará a todo el inventario y es definitiva.</p>}
+                {error && <p className="inline-notice" role="alert">{error}</p>}
+              </div>
+              <div className="modal__footer">
+                <button className="button button--secondary" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
+                <button className="button button--danger" type="submit" disabled={busy}>
+                  <Trash2 size={16} />
+                  {busy ? "Registrando…" : step === 1 ? "Dar de baja" : "Confirmar baja"}
+                </button>
+              </div>
+            </form>
+          </dialog>
+        </>
       )}
     </section>
   );
