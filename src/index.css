@@ -7808,3 +7808,83 @@
   color: #1e5b4f;
   background: #dfece2;
 }
+
+/* Archivo de trámite: acciones estandarizadas, selección y papelera documental. */
+.tramite-list-tools,
+.tramite-preview-tools,
+.tramite-preview-selection,
+.tramite-preview-selection > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tramite-preview-tools { justify-content: flex-end; min-width: 0; }
+.tramite-preview-tools .search-box { max-width: 320px; }
+.tramite-preview-selection {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: #e8e8df;
+  border-bottom: 1px solid #c1cbbf;
+  color: #244c43;
+  font-size: 11px;
+}
+.tramite-preview-selection input[type="checkbox"],
+.record-detail-page input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: #1e5b4f;
+  cursor: pointer;
+}
+.tramite-trash .records-page-heading { align-items: center; }
+.tramite-trash__day { padding: 0 20px 10px; }
+.tramite-trash__day-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 9px;
+  padding: 8px 10px;
+  border-left: 3px solid #a57f2c;
+  background: #e5e9df;
+  color: #194f44;
+  font-size: 12px;
+  font-weight: 700;
+}
+.tramite-trash__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px;
+  border-bottom: 1px solid #d2dad1;
+  background: #f9faf6;
+}
+.tramite-trash__item:nth-child(odd) { background: #f0f3ed; }
+.tramite-trash__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: #d9e7dd;
+  color: #1e5b4f;
+}
+.tramite-trash__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tramite-trash__info strong { color: #194f44; font-size: 12px; }
+.tramite-trash__info span { color: #394d46; font-size: 11px; }
+.tramite-trash__info small {
+  color: #6c7872;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .tramite-trash__item { gap: 8px; }
+  .tramite-preview-tools { width: 100%; justify-content: flex-start; }
+  .tramite-preview-selection { align-items: flex-start; }
+}
