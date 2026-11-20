@@ -1,0 +1,37 @@
+name: Verificar papelera archivística
+on:
+  push:
+    branches:
+      - feature/integracion-validacion-etapa-7
+    paths:
+      - 'Backend/src/tramite.js'
+      - 'Backend/src/transfers.js'
+      - 'Backend/src/exports.js'
+      - 'Backend/src/loans.js'
+      - 'Backend/sql/011_papelera_archivistica.sql'
+      - 'src/TramiteTrash.tsx'
+      - 'src/RecordsPanel.tsx'
+      - 'src/records.ts'
+      - 'src/api.ts'
+      - '.github/workflows/tramite-trash.yml'
+  workflow_dispatch:
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate backend JavaScript syntax
+        run: |
+          node --check Backend/src/tramite.js
+          node --check Backend/src/transfers.js
+          node --check Backend/src/exports.js
+          node --check Backend/src/loans.js
+      - name: Install frontend packages
+        run: npm install --no-audit --no-fund
+      - name: Validate frontend TypeScript
+        run: npx tsc --noEmit
+      - name: Compile frontend
+        run: npm run build
