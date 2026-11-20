@@ -170,3 +170,23 @@ export const adminCatalogApi={
 };
 
 export type ReceptionLocation={archiveZone:string;room:string;shelf:string;level:string;physicalSection:string;position:string;locationBox:string;locationNotes:string};
+
+export type AreaStaffSummary = {
+  id:string; name:string; email:string; areaId:string; areaName:string;
+  status:"Activo"|"Inactivo"; activeInventories:number; transferredInventories:number;
+};
+export type AreaStaffDetail = {
+  user:AreaStaffSummary;
+  inventories:{id:string;folio:string;openedAt:string;deletedAt:string|null;status:string;recordCount:number}[];
+  transfers:{id:string;folio:string;inventoryFolio:string;sentAt:string;acceptedAt:string;status:string}[];
+  records:{id:string;recordNumber:string;title:string;inventoryFolio:string;openedAt:string;closedAt:string;status:string}[];
+  activity:{key:string;date:string;action:string;detail:string;source:string}[];
+};
+export const areaControlApi = {
+  list:async(area="")=>(await request<{users:AreaStaffSummary[]}>(
+    "/api/control-area/usuarios"+(area?"?area="+encodeURIComponent(area):"")
+  )).users,
+  detail:async(id:string)=>(await request<AreaStaffDetail>(
+    "/api/control-area/usuarios/"+encodeURIComponent(id)
+  )),
+};
