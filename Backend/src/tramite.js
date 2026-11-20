@@ -431,7 +431,7 @@ async function recycleSelectedRecords(req,res,next,onlyOne=false){
   const requested=onlyOne?[req.params.id]:req.body?.recordIds;
   if(!Array.isArray(requested)||!requested.length||requested.length>5000)
     throw fail('Selecciona al menos un expediente válido',400);
-  if(requested.some(id=>typeof id!=='string'||!/^REG-[1-9]\\d*$/.test(id)))
+  if(requested.some(id=>typeof id!=='string'||!/^REG-[1-9]\d*$/.test(id)))
     throw fail('Identificador de expediente inválido',400);
   const ids=[...new Set(requested.map(id=>Number(id.slice(4))))];
   if(ids.length!==requested.length)throw fail('Hay expedientes repetidos en la selección',400);
@@ -478,7 +478,7 @@ tramiteRouter.post('/papelera/expedientes/:id/restaurar',async(req,res,next)=>{
  let conn;
  try{
   const user=req.auth.user,mode=allowTrash(user);
-  if(!/^REG-[1-9]\\d*$/.test(req.params.id))throw fail('Expediente inválido');
+  if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
   const id=Number(req.params.id.slice(4));
   conn=await pool.getConnection();await conn.beginTransaction();
   const [rows]=await conn.execute(`SELECT e.id,e.deleted_at,i.folio,i.id AS invId,i.deleted_at AS inventory_deleted
@@ -513,7 +513,7 @@ tramiteRouter.delete('/papelera/expedientes/:id',async(req,res,next)=>{
  let conn;
  try{
   const user=req.auth.user,mode=allowTrash(user);
-  if(!/^REG-[1-9]\\d*$/.test(req.params.id))throw fail('Expediente inválido');
+  if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
   const id=Number(req.params.id.slice(4));
   conn=await pool.getConnection();await conn.beginTransaction();
   const [rows]=await conn.execute(`SELECT e.deleted_at,i.folio FROM expedientes e
