@@ -1,0 +1,28 @@
+name: Verificar menús de acciones UI
+on:
+  push:
+    branches:
+      - feature/integracion-validacion-etapa-7
+    paths:
+      - 'src/RowActionsMenu.tsx'
+      - 'src/RecordsPanel.tsx'
+      - 'src/ConcentrationPanel.tsx'
+      - 'src/TransfersPanel.tsx'
+      - 'src/LoansPanel.tsx'
+      - 'src/index.css'
+      - '.github/workflows/action-menus.yml'
+  workflow_dispatch:
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
