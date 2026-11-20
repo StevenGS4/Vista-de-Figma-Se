@@ -1,31 +1,42 @@
-# Plantilla institucional SEMARNAT — inventarios Excel
+# Plantillas institucionales — Inventarios documentales SEMARNAT
 
-## Archivo base
+El módulo **Inventarios Excel** genera una copia en memoria del documento institucional correspondiente, rellena los datos de MySQL y conserva la hoja de instructivo, encabezados, formatos y firmas.
 
-`Backend/plantillas/inventario_tramite.xlsx` — es la copia institucional de partida para **Archivo de trámite** y **Transferencia primaria**.
+| Tipo de descarga | Archivo original obligatorio |
+| --- | --- |
+| Archivo de trámite | `inventario_tramite.xlsx` |
+| Archivo de concentración | `inventario_concentracion.xlsx` |
+| Transferencia primaria | `inventario_transferencia_primaria.xlsx` |
 
-El generador `Backend/src/template-workbooks.js` abre este archivo con ExcelJS y rellena una copia en memoria, sin alterar ni guardar cambios en la plantilla original. Los expedientes se incorporan a la hoja original y el cierre, las firmas y los demás elementos se desplazan al ampliar las filas.
+## Incorporación de los archivos
 
-**No utilizar esta plantilla para Archivo de concentración**; la exportación de concentración mantiene su generador anterior hasta incorporar un formato institucional distinto.
+Los tres documentos deben permanecer en esta carpeta `Backend/plantillas/`, con los nombres **exactos** de la tabla. Para subir archivos XLSX desde GitHub:
 
-## Prueba obligatoria antes de usar en producción
+1. Abrir la rama `feature/integracion-validacion-etapa-7`.
+2. Entrar a `Backend/plantillas/`.
+3. Elegir **Add file → Upload files** y subir los dos archivos pendientes.
+4. Confirmar el commit **en la misma rama**.
 
-En PowerShell, desde la raíz del proyecto:
+El código ya selecciona automáticamente la plantilla correspondiente por tipo de inventario. No es necesario modificar la base de datos ni recrear el archivo Excel por programación.
+
+Hasta que los archivos nuevos estén disponibles, Concentración y Transferencia primaria conservan sus exportaciones anteriores; Trámite sigue utilizando su plantilla actual. No se marca como completa la integración de las nuevas plantillas antes de subirlas.
+
+## Verificación
+
+Desde la raíz del proyecto, ejecutar:
 
 ```powershell
 cd Backend
 npm run test:template
 ```
 
-La prueba crea copias temporales en memoria para 1, 12 y 100 expedientes de trámite y 12 de transferencia primaria, y verifica que se puedan volver a abrir, mantengan el cierre y contengan todos los registros y logotipos del documento original.
+La prueba genera inventarios con 1, 12, 100 y 1000 expedientes (según el tipo), valida encabezado e instructivo, y comprueba que se conserva el resumen y el logotipo. Un tipo de inventario con plantilla faltante se informa como `PENDIENTE` y aún no equivale a una prueba exitosa.
 
-Si la prueba falla, **no uses el archivo descargado para entregas oficiales**: hay que revisar el error y el mapeo de la plantilla. Revisar visualmente, en Excel, cabecera, celdas, renglones añadidos, salto de página, el recuadro de firmas y el instructivo. La prueba no sustituye esa inspección.
+Antes de utilizar las exportaciones como documentos oficiales, también deben compararse visualmente en Microsoft Excel los renglones, estilos, ancho de columnas, saltos de impresión, resumen y cuadros de firmas.
 
-## Restricciones
+## Seguridad de los documentos
 
-- El backend utiliza el `.xlsx` existente, **no** el archivo original `.xls`.
-- La plantilla maestra nunca se modifica en disco.
-- El límite actual del API es 15,000 expedientes por exportación.
-- No se inventan firmas, peso de cajas, metros lineales ni otros datos que MySQL no almacena.
-- Los datos generados se toman de los registros filtrados por permisos de usuario.
-- Si el formato institucional cambia, volver a comprobar ubicaciones, combinaciones de celdas y fórmulas antes de cambiar esta plantilla.
+- El archivo base no se modifica; cada descarga crea una copia.
+- No se insertan nombres ni firmas inventadas.
+- Se conservan los filtros por permisos del backend y el límite de 15,000 expedientes por exportación.
+- Si un archivo XLSX se renombra o se cambia el diseño de sus celdas, deberá ajustarse y volver a probarse su mapeo.
