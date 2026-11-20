@@ -1650,6 +1650,8 @@ export default function RecordsPanel({
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const { confirm, dialog } = useConfirmAction();
   useEffect(() => {
     if (!message) return;
     const timer = window.setTimeout(() => setMessage(""), 4000);
@@ -1665,15 +1667,23 @@ export default function RecordsPanel({
       );
   const selected = authorized.filter((record) => record.inventoryId === selectedId);
   const deleteInventory = async (id: string) => {
-    try {
-      await tramiteApi.remove(id);
-      onRecordsChange(records.filter(record => record.inventoryId !== id));
+    await tramiteApi.remove(id);
+    onRecordsChange(records.filter(record => record.inventoryId !== id));
+    setSelectedId("");
+    setView("list");
+    setMessage("Archivo de trámite movido a la papelera por 60 días.");
+  };
+  const deleteRecords = async (folio: string, ids: string[]) => {
+    const response = await tramiteApi.removeRecords(folio,ids);
+    const removed = new Set(ids);
+    onRecordsChange(records.filter(record =>
+      response.inventoryDeleted ? record.inventoryId !== folio : !removed.has(record.id)));
+    if(response.inventoryDeleted){
       setSelectedId("");
       setView("list");
-      setMessage("Archivo de trámite movido a la papelera.");
-    } catch(error) {
-      window.alert(error instanceof Error ? error.message : "No fue posible mover el inventario a la papelera.");
+      setMessage("Último expediente eliminado. Archivo de trámite enviado a la papelera por 60 días.");
     }
+    return response.inventoryDeleted;
   };
   const refreshTrash = async () => {
     const fresh=await tramiteApi.list();
@@ -1692,7 +1702,7 @@ export default function RecordsPanel({
       setView("list");
       setMessage("Inventario guardado correctamente.");
     } catch(error) {
-      window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
+      setActionError(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
     }
   };
   if (view === "trash") {
@@ -1706,7 +1716,8 @@ export default function RecordsPanel({
           setSelectedId("");
           setView("list");
         }}
-        onDeleteInventory={(folio)=>void deleteInventory(folio)}
+        onDeleteInventory={deleteInventory}
+        onDeleteRecords={deleteRecords}
         onSave={save}
         records={records}
         role={role}
@@ -1736,6 +1747,7 @@ export default function RecordsPanel({
     );
   return (
     <>
+      {actionError && <div className="validation-summary" role="alert">{actionError}</div>}
       {loadError && <div className="validation-summary" role="alert">
         No fue posible cargar los inventarios: {loadError}
       </div>}
@@ -1759,8 +1771,16 @@ export default function RecordsPanel({
           setView("form");
         }}
         onDelete={(id) => {
-          if (!window.confirm(`¿Mover el inventario ${id} y sus expedientes a la papelera de reciclaje? Podrás restaurarlo.`)) return;
-          void deleteInventory(id);
+          void (async()=>{
+            const ok=await confirm({
+              title:"Mover archivo de trámite a papelera",
+              message:`¿Eliminar el inventario ${id} y todos sus expedientes? Podrás restaurarlo durante 60 días.`,
+              danger:true,confirmText:"Mover a papelera",
+            });
+            if(!ok)return;
+            try{await deleteInventory(id);setActionError("");}
+            catch(error){setActionError(error instanceof Error?error.message:"No se pudo eliminar el inventario.");}
+          })();
         }}
         onTrash={() => setView("trash")}
         onOpen={(id) => {
@@ -1770,6 +1790,7 @@ export default function RecordsPanel({
         protectedRecordIds={protectedRecordIds}
         records={authorized}
       />
+      {dialog}
     </>
   );
 }
