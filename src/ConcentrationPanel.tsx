@@ -791,10 +791,10 @@ export default function ConcentrationPanel({
       onRecordsChange(records.map(item=>item.id===saved.id?saved:item));
       setSelected(saved);
       setView("detail");
-      setMessage("La ubicación física se actualizó correctamente en MySQL.");
+      setMessage("Ubicación física actualizada correctamente.");
       window.setTimeout(()=>setMessage(""),3000);
     } catch(error) {
-      const message=error instanceof Error?error.message:"Error al guardar la ubicación en MySQL.";
+      const message=error instanceof Error?error.message:"No fue posible guardar la ubicación.";
       setMessage(message);
       window.alert(message);
     }
