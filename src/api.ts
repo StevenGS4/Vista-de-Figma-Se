@@ -53,7 +53,11 @@ export const tramiteApi = {
 };
 
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
+export type ReceptionSourceBox={recordId:string;boxNumber:string};
 export const transferApi={
+ receptionBoxes:async(id:string)=>(await request<{boxes:ReceptionSourceBox[]}>(
+   '/api/transferencias/'+encodeURIComponent(id)+'/reception-boxes'
+ )).boxes,
  list:async()=>((await request<{transfers:DocumentaryTransfer[]}>('/api/transferencias')).transfers),
  submit:async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
    const path=existing?'/api/transferencias/'+encodeURIComponent(existing.id)+'/resend':'/api/transferencias';
