@@ -92,7 +92,7 @@ export default function AreaControlPanel({ mode }: {mode:"area"|"admin"}) {
             <tbody>{chosen.transfers.map(x=><tr key={x.id+"-"+x.inventoryFolio}><td><strong>{x.folio}</strong></td><td>{x.inventoryFolio}</td><td>{readableDate(x.sentAt)}</td><td>{readableDate(x.acceptedAt)}</td><td>{statusWord(x.status)}</td></tr>)}</tbody>
           </table>:<table className="data-table">
             <thead><tr><th>Fecha y hora</th><th>Movimiento</th><th>Referencia</th><th>Origen</th></tr></thead>
-            <tbody>{chosen.activity.map(x=><tr key={x.key}><td>{displayTime(x.date)}</td><td><strong>{x.action.replaceAll("_"," ")}</strong></td><td>{x.detail}</td><td>{x.source}</td></tr>)}</tbody>
+            <tbody>{chosen.activity.map(x=><tr key={x.key}><td>{displayTime(x.date)}</td><td><strong>{x.action.replace(/_/g," ")}</strong></td><td>{x.detail}</td><td>{x.source}</td></tr>)}</tbody>
           </table>}
           </div>
           {((detailTab==="inventories"&&!chosen.inventories.length)||
