@@ -335,7 +335,7 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
             <div className="demo-access__heading">
               <div>
                 <strong>Acceso institucional</strong>
-                <span>Utiliza una cuenta creada por la administración. Las contraseñas se verifican en el servidor.</span>
+                <span>Utiliza tu cuenta institucional para acceder.</span>
               </div>
             </div>
           </div>
@@ -438,7 +438,7 @@ function MandatoryPasswordChange({
           <div className="inline-notice">
             <ShieldCheck size={18} />
             <span>
-              <strong>Protección de cuenta.</strong> La validación se realiza en Node.js y la contraseña se almacena mediante hash en MySQL.
+              <strong>Protección de cuenta.</strong> Tu contraseña se actualizará de forma segura.
             </span>
           </div>
         </div>
@@ -1100,7 +1100,7 @@ export default function App() {
     }).catch(error => {
       if (!alive) return;
       setArchivalRecords([]);
-      setRecordsLoadError(error instanceof Error ? error.message : "Error consultando archivos en MySQL");
+      setRecordsLoadError(error instanceof Error ? error.message : "No fue posible consultar los archivos.");
       console.error("Error cargando Trámite o Concentración desde MySQL:",error);
     });
     return () => { alive = false; };
