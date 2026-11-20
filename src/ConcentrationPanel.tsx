@@ -146,7 +146,6 @@ function ConcentrationList({
     setRecentOnly(false);
     setSearched(false);
     setExpandedInventory(null);
-    setActiveActions(null);
     setPage(1);
   };
 
@@ -296,8 +295,7 @@ function ConcentrationList({
                               aria-controls={`concentration-inventory-${id}`}
                               onClick={() => {
                                 setExpandedInventory(expanded ? null : id);
-                                setActiveActions(null);
-                              }}
+                                                          }}
                             >
                               <FolderTree size={17} />
                               <strong>{id}</strong>
@@ -314,8 +312,7 @@ function ConcentrationList({
                               aria-expanded={expanded}
                               onClick={() => {
                                 setExpandedInventory(expanded ? null : id);
-                                setActiveActions(null);
-                              }}>
+                                                          }}>
                               {expanded ? "Ocultar expedientes" : "Mostrar expedientes"}
                               <ChevronDown size={16} className={expanded ? "is-expanded" : ""}/>
                             </button>
