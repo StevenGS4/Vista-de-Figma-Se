@@ -54,8 +54,12 @@ async function readTransfer(conn,t){
  const [records]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
  JOIN expedientes e ON e.inventario_id=ti.inventario_id
  WHERE ti.transferencia_id=? ORDER BY ti.inventario_id,e.consecutivo`,[t.id]);
- const [receptions]=await conn.execute(`SELECT estado,DATE_FORMAT(fecha,'%Y-%m-%d') AS date,
- responsable_id,observaciones FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1`,[t.id]);
+ const [receptions]=await conn.execute(`SELECT r.estado,DATE_FORMAT(r.fecha,'%Y-%m-%d') AS date,
+ r.responsable_id,r.observaciones,
+ CONCAT_WS(' ',u.nombres,u.apellido_paterno,NULLIF(u.apellido_materno,'')) AS responsibleName
+ FROM recepciones r
+ LEFT JOIN usuarios u ON u.id=r.responsable_id
+ WHERE r.transferencia_id=? ORDER BY r.id DESC LIMIT 1`,[t.id]);
  const rec=receptions[0];
  return {
  id:'TR-'+t.id,folio:t.folio,areaId:t.areaCode,requestedBy:String(t.solicitante_id),
@@ -72,6 +76,7 @@ async function readTransfer(conn,t){
  receptionStatus:!rec?'Pendiente':rec.estado==='RECIBIDA'?'Recibida':
   rec.estado==='DIFERENCIAS'?'Diferencias pendientes':'Pendiente',
  receptionDate:rec?.date||'',receptionResponsible:rec?String(rec.responsable_id):'',
+ receptionResponsibleName:rec?.responsibleName||'',
  receptionNotes:rec?.observaciones||'',history:await history(conn,t.id),
  };
 }
