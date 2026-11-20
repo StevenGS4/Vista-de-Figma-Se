@@ -8110,3 +8110,52 @@
   .reception-location-layout { grid-template-columns: 1fr; }
   .reception-location-layout .shelf-diagram { max-width: 460px; }
 }
+
+/* Inventarios Excel: generador de relación de transferencia primaria.
+   Superficies sobrias y selección mixta sin alterar otros inventarios. */
+.primary-builder{display:flex;flex-direction:column;gap:14px;min-width:0}
+.primary-builder__note{display:flex;align-items:flex-start;gap:12px;padding:15px 18px;background:#e9eee7;border-color:#bacfc1;color:#31564a;font-size:11px;line-height:1.7}
+.primary-builder__note svg{flex-shrink:0;color:#1e5b4f}
+.primary-builder__tabs{display:flex;flex-wrap:wrap;gap:5px;padding:6px;background:#e8ebe5;border:1px solid #bfccc1;border-radius:10px}
+.primary-builder__tabs button{display:inline-flex;align-items:center;gap:9px;padding:11px 17px;background:transparent;border:0;border-radius:7px;color:#456657;cursor:pointer;font-weight:600;font-size:11px}
+.primary-builder__tabs button.is-active{background:#194f44;color:#fff;box-shadow:0 2px 8px rgb(0 45 38 / 12%)}
+.primary-builder__panel{overflow:hidden;border-color:#aebfb4;background:#f5f6f1}
+.primary-builder__heading{display:flex;align-items:center;gap:12px;padding:17px 19px;background:linear-gradient(100deg,#194f44,#2c6758);color:#fff}
+.primary-builder__heading h3{color:#fff;margin:0 0 4px;font-size:14px}
+.primary-builder__heading p{color:#e4ebe4;margin:0;font-size:10px}
+.primary-builder__heading svg{flex:none;color:#e6c981}
+.primary-builder__filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;padding:20px}
+.primary-builder__filters .form-field{min-width:0}
+.primary-builder__filters .form-field select,.primary-builder__filters .form-field input{width:100%;background:#fbfaf6;border-color:#a7bbae}
+.primary-builder__filters .form-field select:disabled{background:#e5e9e4;cursor:not-allowed}
+.primary-builder__wide{grid-column:span 2}
+.primary-builder__toolbar{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;padding:15px 19px;background:#e8ece6;border-top:1px solid #c7d4c9}
+.primary-builder__toolbar .button{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.primary-builder__modes{display:flex;flex-wrap:wrap;gap:8px;padding:16px 19px;border-bottom:1px solid #cbd7cb}
+.primary-builder__modes button{padding:9px 12px;background:#f8f8f4;border:1px solid #b9cbbd;border-radius:8px;color:#3c5c51;font-size:11px;cursor:pointer}
+.primary-builder__modes button.is-active{background:#1e5b4f;border-color:#1e5b4f;color:#fff}
+.primary-builder__controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:15px 19px;background:#e8eee7}
+.primary-builder__controls .search-box{width:min(100%,470px);background:#fbfaf6}
+.primary-builder__controls strong{font-size:12px;color:#174b3e}
+.primary-builder__inventory-list{padding:6px 19px 18px;display:flex;flex-direction:column;gap:10px}
+.primary-builder__inventory{border:1px solid #c5d2c7;border-radius:9px;background:#fafaf6;overflow:hidden}
+.primary-builder__inventory-head{display:flex;align-items:center;gap:12px;padding:13px 15px;background:#e9eee8}
+.primary-builder__inventory-head>input,.primary-builder__inventory td input{width:17px;height:17px;accent-color:#1e5b4f}
+.primary-builder__inventory-title{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}
+.primary-builder__inventory-title strong{font-size:12px;color:#1c4e40;overflow-wrap:anywhere}
+.primary-builder__inventory-title span{font-size:10px;color:#607168}
+.primary-builder__inventory-head .button{flex:none}
+.primary-builder__inventory .data-table{margin:0}
+.primary-builder__inventory .data-table th{background:#dce5dd}
+.primary-builder__pagination{display:flex;justify-content:center;align-items:center;gap:14px;padding:13px;color:#52685a;font-size:11px}
+.primary-builder__pagination button{display:grid;place-items:center;width:32px;height:32px;border:1px solid #bdcdc1;border-radius:7px;background:#fffefa;color:#225a49;cursor:pointer}
+.primary-builder__pagination button:disabled{opacity:.35;cursor:default}
+.primary-builder__stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:17px}
+.primary-builder__stats>div{display:flex;flex-direction:column;gap:7px;padding:14px 17px;background:#ebf0e9;border:1px solid #c2d2c4;border-radius:9px}
+.primary-builder__stats span{color:#63746a;font-size:11px}
+.primary-builder__stats strong{color:#174b3e;font-size:23px}
+.primary-builder__empty{padding:35px 20px;text-align:center;color:#65766a;font-size:12px}
+.primary-builder__warning{padding:12px 18px;background:#f5ece2;color:#825c22;border-bottom:1px solid #dac9a5;font-size:11px}
+.primary-builder__hint{margin:0;padding:13px 18px;color:#576e5f;font-size:11px;line-height:1.6}
+@media(max-width:1020px){.primary-builder__filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.primary-builder__filters{grid-template-columns:1fr}.primary-builder__wide{grid-column:span 1}.primary-builder__stats{grid-template-columns:1fr}.primary-builder__controls .search-box{width:100%}.primary-builder__inventory-head{flex-wrap:wrap}.primary-builder__inventory-head .button{width:100%}}
