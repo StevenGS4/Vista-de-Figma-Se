@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usersApi } from "./api";
 import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
+import AdminDisposalsPanel from "./AdminDisposalsPanel";
 import {
   ArrowLeft,
   Check,
@@ -32,7 +33,7 @@ import {
   roles,
 } from "./data";
 
-type AdminTab = "users" | "areas" | "permissions" | "activity";
+type AdminTab = "users" | "areas" | "permissions" | "activity" | "disposals";
 type AdminView = "list" | "form" | "detail";
 type FieldErrors = Partial<Record<keyof UserFormState | "roles", string>>;
 
@@ -978,6 +979,8 @@ export default function AdminPanel({
           <Users size={17} />
           Seguimiento por área
         </button>
+        <button aria-selected={tab === "disposals"} className={tab === "disposals" ? "is-active" : ""}
+          onClick={() => setTab("disposals")} role="tab" type="button">Bajas</button>
       </div>
 
       {toast && (
@@ -1010,6 +1013,7 @@ export default function AdminPanel({
         />
       )}
       {tab === "areas" && <AdminAreasPanel />}
+      {tab === "disposals" && <AdminDisposalsPanel />}
       {tab === "activity" && <AreaControlPanel mode="admin" />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />

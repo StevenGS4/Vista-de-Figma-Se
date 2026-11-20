@@ -246,3 +246,20 @@ export const primaryTransferApi={
   window.setTimeout(()=>URL.revokeObjectURL(link.href),30000);
  }
 };
+
+export type DisposalInventory = {folio:string; area:string; userId:string; userName:string; date:string; total:number};
+
+export const disposalApi = {
+ list:()=>request<{inventories:DisposalInventory[]}>('/api/concentracion/bajas'),
+ async confirm(folio:string, fields:Record<string,string>) {
+  const response=await fetch(API_BASE+'/api/concentracion/bajas/'+encodeURIComponent(folio),{
+   method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({confirm:true,fields}),
+  });
+  if(!response.ok){
+   const data=await response.json().catch(()=>({}));
+   throw new Error(data.error || 'No se pudo registrar la baja documental.');
+  }
+  return response.blob();
+ },
+};
