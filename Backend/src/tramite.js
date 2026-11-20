@@ -129,11 +129,7 @@ async function safeInventory(conn,folio,user,mode,includeDeleted=false){
  if(linked.length)throw fail('El inventario tiene historial de transferencia',409);
  return inv;
 }
-const allowTrash=(user)=>{
- const mode=access(user);
- if(mode==='PROPIO')throw fail('Solo el encargado del área o administrador puede gestionar la papelera',403);
- return mode;
-};
+const allowTrash=(user)=>access(user);
 async function latestCadidoYear(conn){
  const [[row]]=await conn.execute(`SELECT MAX(cv.anio) AS year FROM catalogos_cadido_versiones cv
  JOIN series_cadido sr ON sr.catalogo_version_id=cv.id
@@ -407,8 +403,8 @@ tramiteRouter.put('/inventarios/:folio',(req,res,next)=>save(req,res,next,true))
 tramiteRouter.get('/papelera',async(req,res,next)=>{
  try{
   const user=req.auth.user,mode=allowTrash(user);
-  const clause=mode==='GLOBAL'?'': 'AND a.codigo=?';
-  const params=mode==='GLOBAL'?[]:[user.areaId];
+  const clause=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
+  const params=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
   const where='WHERE (i.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL) '+clause;
   const records=await readRecords(pool,where,params,true);
   res.set('Cache-Control','private, no-store');
@@ -515,8 +511,8 @@ tramiteRouter.delete('/papelera',async(req,res,next)=>{
  try{
   const user=req.auth.user,mode=allowTrash(user);
   conn=await pool.getConnection();await conn.beginTransaction();
-  const area=mode==='GLOBAL'?'':'AND a.codigo=?';
-  const args=mode==='GLOBAL'?[]:[user.areaId];
+  const area=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
+  const args=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
   const [inventories]=await conn.execute(`SELECT i.folio FROM inventarios i JOIN areas a ON a.id=i.area_id WHERE i.deleted_at IS NOT NULL ${area} FOR UPDATE`,args);
   const [records]=await conn.execute(`SELECT e.id FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
     JOIN areas a ON a.id=i.area_id WHERE e.deleted_at IS NOT NULL AND i.deleted_at IS NULL ${area} FOR UPDATE`,args);
