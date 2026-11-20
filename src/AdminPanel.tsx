@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usersApi } from "./api";
 import AdminAreasPanel from "./AdminAreasPanel";
 import {
@@ -859,6 +859,11 @@ export default function AdminPanel({
   const [selected, setSelected] = useState<UserRecord | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (!toast || !toast.includes("correctamente")) return;
+    const timer = window.setTimeout(() => setToast(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
