@@ -1010,7 +1010,8 @@ function InventoryForm({
   user: UserRecord;
 }) {
   const isAdmin = role === "Administrador / Coordinador";
-  const canDeleteExisting = isAdmin || role === "Encargado de área";
+  const canDeleteExisting = isAdmin || role === "Encargado de área" ||
+    (existing.length > 0 && existing.every(record => record.createdBy === user.id));
   const editing = existing.length > 0;
   const makeInitial = () => {
     if (editing) return existing.map(item => ({
@@ -1708,7 +1709,7 @@ export default function RecordsPanel({
       <InventoryList
         initialSearch={initialSearch}
         canCreate={!loadError && permissions.includes("register-records")}
-        canDelete={role === "Encargado de área" || isAdmin}
+        canDelete={!loadError && (role === "Personal de área" || role === "Encargado de área" || isAdmin)}
         canEdit={permissions.includes("edit-records")}
         onCreate={() => {
           setSelectedId("");
