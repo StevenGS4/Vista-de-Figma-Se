@@ -331,15 +331,34 @@ function ConcentrationList({
                                   <strong>Expedientes del inventario {id}</strong>
                                   <span>{items.length} expediente{items.length===1?"":"s"} en concentración</span>
                                 </div>
+                                <div className="table-scroll concentration-archive-summary-scroll">
+                                  <table className="data-table concentration-archive-summary" aria-label="Datos generales del inventario">
+                                    <thead><tr>
+                                      <th>Identificador</th>
+                                      <th>Unidad administrativa</th>
+                                      <th>Área generadora</th>
+                                      <th>Fondo</th>
+                                      <th>Sección</th>
+                                      <th>Serie</th>
+                                      <th>Fecha</th>
+                                    </tr></thead>
+                                    <tbody><tr>
+                                      <td><strong>{header.inventoryId}</strong></td>
+                                      <td>{header.administrativeUnit || "Sin registro"}</td>
+                                      <td>{areaName(header.areaId)}</td>
+                                      <td>{header.fund || "Sin registro"}</td>
+                                      <td>{sectionName(header.cadidoSectionId)}</td>
+                                      <td>{seriesName(header.cadidoSeriesId)}</td>
+                                      <td>{formatDate(header.inventoryDate)}</td>
+                                    </tr></tbody>
+                                  </table>
+                                </div>
                                 <div className="table-scroll">
                                   <table className="data-table concentration-table concentration-expedient-table">
                                     <thead><tr>
                                       <th>Número de expediente</th>
                                       <th>Título o asunto</th>
                                       <th>Código de clasificación</th>
-                                      <th>Estante</th>
-                                      <th>Nivel</th>
-                                      <th>Sección física</th>
                                       <th>Disponibilidad</th>
                                       <th className="align-right">Acciones</th>
                                     </tr></thead>
@@ -354,9 +373,6 @@ function ConcentrationList({
                                         </td>
                                         <td><span className="record-subject" title={record.title}>{record.title}</span></td>
                                         <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
-                                        <td>{record.shelf ? `Estante ${record.shelf}` : "Pendiente"}</td>
-                                        <td>{record.level ? `Nivel ${record.level}` : "Pendiente"}</td>
-                                        <td>{record.physicalSection ? `Sección ${record.physicalSection}` : "Pendiente"}</td>
                                         <td><AvailabilityBadge value={record.availability}/></td>
                                         <td>
                                           <RowActionsMenu
