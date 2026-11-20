@@ -70,8 +70,18 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
  JOIN series_cadido sr ON sr.id=e.serie_id
  LEFT JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
- LEFT JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
- LEFT JOIN transferencias t ON t.id=ti.transferencia_id
+ -- Elegir una sola transferencia por inventario. Un JOIN directo con
+ -- transferencia_inventarios multiplica los expedientes si hay historial.
+ LEFT JOIN transferencias t ON t.id=(
+   SELECT ti_hist.transferencia_id
+   FROM transferencia_inventarios ti_hist
+   JOIN transferencias t_hist ON t_hist.id=ti_hist.transferencia_id
+   WHERE ti_hist.inventario_id=i.id
+   ORDER BY
+     CASE WHEN e.etapa='CONCENTRACION' AND t_hist.estado='ACEPTADA' THEN 0 ELSE 1 END,
+     ti_hist.transferencia_id DESC
+   LIMIT 1
+ )
  ${where ? where+' AND ' : 'WHERE '}${includeDeleted ? '1=1' : 'i.deleted_at IS NULL AND e.deleted_at IS NULL'} ORDER BY i.fecha_elaboracion DESC,i.id DESC,e.consecutivo ASC`,params);
  const ids=rows.map(r=>r.dbId);
  let values=[];
