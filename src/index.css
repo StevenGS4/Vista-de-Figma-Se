@@ -7576,3 +7576,69 @@
   .login__environment-logo { padding: 12px 14px; border-radius: 16px; }
   .login-card { background: rgb(255 248 250 / 96%); }
 }
+
+/* Corrección de desbordamiento y refinamiento institucional — 19/11/2026
+   Solo CSS: los botones, filtros, formularios, eventos y permisos no cambian. */
+
+/* Drawer: retirar el orbe de la zona desplazable, responsable de overflow-x. */
+.sidebar__nav {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+.sidebar__nav::after {
+  content: none;
+  display: none;
+}
+/* Mantener círculos decorativos dentro del contenedor fijo y recortado. */
+.sidebar {
+  overflow: hidden;
+  background:
+    radial-gradient(circle 138px at 112% 53%, rgb(30 91 79 / 24%) 0 92%, transparent 94%),
+    radial-gradient(circle 110px at -20% 79%, rgb(165 127 44 / 10%) 0 92%, transparent 94%),
+    radial-gradient(circle 180px at 105% 96%, rgb(155 34 71 / 9%) 0 90%, transparent 92%),
+    linear-gradient(168deg, #002f2a 0%, #073f36 49%, #052b2d 100%);
+}
+
+/* Login: color oficial guinda Gobierno de México, con aros translúcidos. */
+.login__access {
+  background:
+    radial-gradient(circle 220px at 96% 14%, rgb(230 209 148 / 16%) 0 96%, transparent 98%),
+    radial-gradient(circle 200px at 6% 94%, rgb(255 255 255 / 9%) 0 97%, transparent 99%),
+    linear-gradient(142deg, #611232 0%, #77203e 52%, #9b2247 100%);
+}
+.login__access::before {
+  border-color: rgb(255 255 255 / 18%);
+  box-shadow: 0 0 0 38px rgb(255 255 255 / 4%),
+    0 0 0 85px rgb(255 255 255 / 3%);
+}
+.login__access::after {
+  background: radial-gradient(circle at center, rgb(230 209 148 / 15%), transparent 73%);
+}
+.login-card {
+  background: linear-gradient(180deg, rgb(255 252 252 / 98%), rgb(255 248 249 / 96%));
+  border-color: rgb(255 255 255 / 60%);
+  box-shadow: 0 28px 70px rgb(28 5 14 / 27%), 0 6px 20px rgb(28 5 14 / 9%);
+}
+/* Círculos tenues detrás del contenido, no encima de controles. */
+.app-main {
+  background:
+    radial-gradient(circle 190px at 97% 4%, rgb(30 91 79 / 7%) 0 99%, transparent 100%),
+    radial-gradient(circle 135px at 93% 11%, rgb(155 34 71 / 4%) 0 99%, transparent 100%),
+    radial-gradient(circle 200px at 4% 95%, rgb(155 34 71 / 5%) 0 99%, transparent 100%),
+    linear-gradient(180deg, #f8f9f6 0%, #f1f4ef 100%);
+}
+/* Acentos delicados aplicables a distintos módulos, sin alterar sus layouts. */
+.app-main .surface {
+  border-color: rgb(30 91 79 / 12%);
+  box-shadow: 0 3px 16px rgb(0 47 42 / 4%);
+}
+.app-main .surface:not(.sidebar) {
+  background-color: rgb(255 255 255 / 93%);
+}
+@media (max-width: 900px) {
+  .login__access {
+    background:
+      radial-gradient(circle at 95% 10%, rgb(230 209 148 / 15%) 0, transparent 35%),
+      linear-gradient(145deg, #611232, #9b2247);
+  }
+}
