@@ -424,24 +424,42 @@ tramiteRouter.delete('/inventarios/:folio',async(req,res,next)=>{
   await conn.commit();res.json({ok:true});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
-tramiteRouter.delete('/inventarios/:folio/expedientes/:id',async(req,res,next)=>{
+async function recycleSelectedRecords(req,res,next,onlyOne=false){
  let conn;
  try{
   const user=req.auth.user,mode=allowTrash(user);
-  if(!/^REG-[1-9]\\d*$/.test(req.params.id))throw fail('Expediente inválido');
-  const id=Number(req.params.id.slice(4));
+  const requested=onlyOne?[req.params.id]:req.body?.recordIds;
+  if(!Array.isArray(requested)||!requested.length||requested.length>5000)
+    throw fail('Selecciona al menos un expediente válido',400);
+  if(requested.some(id=>typeof id!=='string'||!/^REG-[1-9]\\d*$/.test(id)))
+    throw fail('Identificador de expediente inválido',400);
+  const ids=[...new Set(requested.map(id=>Number(id.slice(4))))];
+  if(ids.length!==requested.length)throw fail('Hay expedientes repetidos en la selección',400);
   conn=await pool.getConnection();await conn.beginTransaction();
   const inv=await safeInventory(conn,req.params.folio,user,mode);
-  const [records]=await conn.execute('SELECT id FROM expedientes WHERE id=? AND inventario_id=? AND deleted_at IS NULL FOR UPDATE',[id,inv.id]);
-  if(!records.length)throw fail('Expediente no encontrado',404);
-  const [[total]]=await conn.execute('SELECT COUNT(*) AS n FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL',[inv.id]);
-  if(Number(total.n)<=1)throw fail('Es el último expediente. Mueve el inventario completo a la papelera',409);
-  await ensureNoHistory(conn,[id]);
-  await conn.execute('UPDATE expedientes SET deleted_at=NOW(),deleted_by=? WHERE id=?',[user.id,id]);
-  await audit(conn,user.id,'expedientes',id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio}));
-  await conn.commit();res.json({ok:true});
+  const [existing]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL FOR UPDATE',[inv.id]);
+  const allIds=new Set(existing.map(r=>Number(r.id)));
+  if(ids.some(id=>!allIds.has(id)))throw fail('Uno o varios expedientes no pertenecen al archivo activo',409);
+  await ensureNoHistory(conn,ids);
+  const movingWhole=ids.length===allIds.size;
+  if(movingWhole) {
+    // El inventario completo queda en papelera sin dejar una cabecera vacía.
+    await conn.execute('UPDATE inventarios SET deleted_at=NOW(),deleted_by=? WHERE id=? AND deleted_at IS NULL',[user.id,inv.id]);
+    await audit(conn,user.id,'inventarios',inv.id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio,razon:'ULTIMOS_EXPEDIENTES',expedientes:ids.length}));
+  }else{
+    for(const id of ids){
+      await conn.execute('UPDATE expedientes SET deleted_at=NOW(),deleted_by=? WHERE id=? AND inventario_id=? AND deleted_at IS NULL',[user.id,id,inv.id]);
+      await audit(conn,user.id,'expedientes',id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio}));
+    }
+  }
+  await conn.commit();
+  res.json({ok:true,inventoryDeleted:movingWhole,removed:ids.length});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
-});
+}
+tramiteRouter.delete('/inventarios/:folio/expedientes', (req,res,next)=>
+ recycleSelectedRecords(req,res,next));
+tramiteRouter.delete('/inventarios/:folio/expedientes/:id',(req,res,next)=>
+ recycleSelectedRecords(req,res,next,true));
 tramiteRouter.post('/papelera/inventarios/:folio/restaurar',async(req,res,next)=>{
  let conn;
  try{
