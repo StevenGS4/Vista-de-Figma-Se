@@ -9,7 +9,7 @@ const err=(message,status=400)=>Object.assign(new Error(message),{status});
 export function scope(user) {
   if(user.mustChangePassword)throw err('Debes cambiar tu contraseña',403);
   if(user.roles.includes('Administrador / Coordinador'))return {admin:true};
-  if(user.roles.includes('Encargado de área'))return {admin:false,area:user.areaId};
+  if(user.roles.includes('Encargado de área'))return {admin:false,area:user.areaId,userId:Number(user.id)};
   throw err('Solo encargados de área y administradores pueden consultar este módulo',403);
 }
 function validateUserId(raw){
@@ -24,7 +24,10 @@ async function userSummary(conn,ctx,area='') {
   const filter=area?String(area).trim():'';
   const c=areaCondition(ctx);
   const args=[...c.args],clauses=['1=1'];
-  if(c.sql)clauses.push('a.codigo=?');
+  if(c.sql){
+    clauses.push('a.codigo=?','u.id<>?');
+    args.push(ctx.userId);
+  }
   if(filter){
     if(!ctx.admin&&filter!==ctx.area)throw err('No puedes consultar otra área',403);
     if(ctx.admin){clauses.push('a.codigo=?');args.push(filter);}
@@ -70,7 +73,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
   const [target]=await pool.execute(`SELECT u.id, a.codigo AS areaCode
     FROM usuarios u JOIN areas a ON a.id=u.area_id WHERE u.id=?`,[id]);
   if(!target.length)throw err('Usuario no encontrado',404);
-  if(!ctx.admin&&target[0].areaCode!==ctx.area)throw err('Usuario fuera de tu área',403);
+  if(!ctx.admin&&(target[0].areaCode!==ctx.area||id===ctx.userId))throw err('Solo puedes consultar empleados de tu área',403);
   const users=await userSummary(pool,ctx,ctx.admin?target[0].areaCode:'');
   const summary=users.find(x=>Number(x.id)===id);
   if(!summary)throw err('Usuario no encontrado',404);
