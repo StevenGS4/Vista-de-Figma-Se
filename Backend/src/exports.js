@@ -72,8 +72,12 @@ exportsRouter.post('/transferencia/opciones',async(req,res,next)=>{
   const records=await selectPrimaryRecords(pool,req.auth.user,{
    ...req.body,selection:'all',inventoryIds:[],recordIds:[],
   });
+  const creatorIds=[...new Set(records.map(r=>Number(r.createdBy)).filter(Number.isSafeInteger))];
+  const [creatorRows]=creatorIds.length?await pool.query(
+   `SELECT id,CONCAT_WS(' ',nombres,apellido_paterno,NULLIF(apellido_materno,'')) AS name
+    FROM usuarios WHERE id IN (${creatorIds.map(()=>'?').join(',')})`,creatorIds):[[]];
   res.set('Cache-Control','private, no-store');
-  res.json({total:records.length,records:records.map(r=>({
+  res.json({total:records.length,creators:creatorRows.map(x=>({id:String(x.id),name:x.name})),records:records.map(r=>({
    id:r.id,inventoryId:r.inventoryId,recordNumber:r.recordNumber,title:r.title,
    inventoryDate:r.inventoryDate,openDate:r.openDate,transferDate:r.transferDate,
    areaId:r.areaId,createdBy:r.createdBy,cadidoCode:r.cadidoCode,
