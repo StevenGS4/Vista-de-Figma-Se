@@ -1312,12 +1312,12 @@ function ReceptionForm({
               <textarea rows={2} value={location.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
             </label>
           </div>
-          <p className="catalog-note">La recepción y la ubicación compartida se guardarán juntas en MySQL. Ningún expediente requiere captura individual.</p>
+          <p className="catalog-note">La ubicación seleccionada se aplicará a todos los expedientes de esta recepción.</p>
         </section>}
         {error && <div role="alert" className="validation-summary">{error}</div>}
         <div className="reception-rule">
           <ShieldCheck size={17} />
-          La ubicación se guarda en MySQL junto con la recepción física. La aceptación administrativa ya se realizó.
+          La recepción física incluirá la ubicación registrada.
         </div>
         <div className="concentration-location-form__footer">
           <Button className="button--secondary" onClick={onBack}>
@@ -1427,7 +1427,7 @@ export default function TransfersPanel({
     setSelected(updated);
   };
   const failure=(error:unknown)=>{
-    setMessage(error instanceof Error ? error.message : "No se pudo completar la operación en MySQL.");
+    setMessage(error instanceof Error ? error.message : "No se pudo completar la operación.");
   };
   const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
     try{
@@ -1435,7 +1435,7 @@ export default function TransfersPanel({
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
-      setMessage(updated.folio+" fue enviada para visto bueno del área en MySQL.");
+      setMessage(updated.folio+" enviada para visto bueno del área.");
     }catch(error){ failure(error);window.alert(error instanceof Error?error.message:"No se pudo enviar la transferencia"); }
   };
   const returnTransfer=async(observation:string)=>{
@@ -1452,7 +1452,7 @@ export default function TransfersPanel({
     try{
       const updated=await transferApi.areaApprove(selected.id);
       saveTransferState(updated);
-      setMessage("El visto bueno quedó registrado en MySQL.");
+      setMessage("Visto bueno registrado correctamente.");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aprobar");}
   };
   const acceptTransfer=async()=>{
@@ -1472,7 +1472,7 @@ export default function TransfersPanel({
         setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
       }catch(refreshError){
         console.error("Transferencia aceptada; error al actualizar la vista:",refreshError);
-        setMessage("Transferencia aceptada en MySQL. Recarga la página para actualizar los expedientes.");
+        setMessage("Transferencia aceptada. Actualiza la página para ver los expedientes.");
       }
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
   };
@@ -1487,7 +1487,7 @@ export default function TransfersPanel({
           onRecordsChange([...tramite.filter(r=>r.stage!=="Archivo de concentración"),...concentracion]);
         }
       }catch(e){console.error("Recepción confirmada, pero falló actualizar pantalla:",e);}
-      setMessage("La recepción y, cuando corresponde, la ubicación física quedaron registradas en MySQL.");
+      setMessage("Recepción registrada correctamente.");
       setView("detail");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo registrar recepción");}
   };
