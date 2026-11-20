@@ -89,7 +89,7 @@ try {
    const m=txt.match(/EXPEDIENTE DE VERIFICACIÓN (\\d+)/);
    if(m)present.push({row:r,number:Number(m[1])});
  }));
- if(present.length!==9)fail('el consolidado no contiene exactamente los nueve expedientes');
+ if(present.length!==9)fail('el consolidado no contiene exactamente los nueve expedientes: '+JSON.stringify(present));
  const expected=[2,5,8,3,6,9,1,4,7];
  if(present.some((item,i)=>item.number!==expected[i]))
    fail('el consolidado no está ordenado por el año de la clave CADIDO');
