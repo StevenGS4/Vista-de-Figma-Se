@@ -764,7 +764,7 @@ function ExpedientsStep({
               (active.archiveClassificationCode || "Clasificación histórica pendiente de revisión") :
               previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
           </strong></div>
-          <small className="field-hint">Clave CADIDO preliminar. MySQL asigna el consecutivo definitivo al guardar. Es independiente del número de expediente.</small>
+          <small className="field-hint">Clave de clasificación preliminar. El consecutivo definitivo se asigna al guardar.</small>
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
@@ -1300,7 +1300,7 @@ function InventoryForm({
                   Agregar otro expediente
                 </Button>
               </div>
-              <p className="catalog-note" role="status">Vista previa sin guardar. El número archivístico definitivo lo asigna MySQL al confirmar.</p>
+              <p className="catalog-note" role="status">Vista previa sin guardar. Revisa los datos antes de confirmar.</p>
             </>
           )}
 
@@ -1333,7 +1333,7 @@ function InventoryForm({
             ) : (
               <Button className="button--primary" onClick={save}>
                 <Check size={17} />
-                Confirmar y guardar en MySQL
+                Confirmar y guardar
               </Button>
             )}
           </div>
@@ -1547,7 +1547,7 @@ export default function RecordsPanel({
       onRecordsChange([...saved,...records.filter((record)=>record.inventoryId!==oldInventory)]);
       setSelectedId("");
       setView("list");
-      setMessage("El inventario y sus expedientes se guardaron en MySQL.");
+      setMessage("Inventario guardado correctamente.");
       window.setTimeout(()=>setMessage(""),3000);
     } catch(error) {
       window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
@@ -1591,7 +1591,7 @@ export default function RecordsPanel({
   return (
     <>
       {loadError && <div className="validation-summary" role="alert">
-        No fue posible cargar inventarios desde MySQL: {loadError}
+        No fue posible cargar los inventarios: {loadError}
       </div>}
       {message && (
         <div className="toast record-toast" role="status">
@@ -1617,7 +1617,7 @@ export default function RecordsPanel({
           try {
             await tramiteApi.remove(id);
             onRecordsChange(records.filter((record) => record.inventoryId !== id));
-            setMessage("Inventario eliminado de MySQL.");
+            setMessage("Inventario eliminado correctamente.");
           } catch(error) {
             window.alert(error instanceof Error ? error.message : "No fue posible eliminar el inventario.");
           }
