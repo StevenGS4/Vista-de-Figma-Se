@@ -194,3 +194,55 @@ export const areaControlApi = {
     "/api/control-area/usuarios/"+encodeURIComponent(id)
   )),
 };
+
+export type PrimaryPeriod='all'|'week'|'twoweeks'|'fortnight'|'month'|'bimester'|'trimester'|'fourmonth'|'semester'|'year'|'custom';
+export type PrimarySelectionMode='all'|'inventories'|'records'|'mixed';
+export type PrimaryFilters={
+  period:PrimaryPeriod;year:number;block:number;from:string;to:string;
+  dateField:'inventory'|'opening'|'transfer';
+  stage:'tramite'|'concentracion'|'ambos';
+  selection:PrimarySelectionMode;area:string;creator:string;
+  section:string;series:string;cadido:string;
+  inventoryIds:string[];recordIds:string[];
+};
+export type PrimaryCandidate={
+ id:string;inventoryId:string;recordNumber:string;title:string;inventoryDate:string;
+ openDate:string;transferDate:string;areaId:string;createdBy:string;cadidoCode:string;
+ archiveClassificationCode:string;section:string;series:string;stage:string;
+};
+export type PrimaryPreviewRow={
+ id:string;inventoryId:string;recordNumber:string;title:string;archiveClassificationCode:string;
+ inventoryDate:string;openDate:string;transferDate:string;areaId:string;stage:string;boxNumber:string;
+};
+async function primaryRequest<T>(path:string,filters:PrimaryFilters):Promise<T>{
+ return request<T>('/api/inventarios/transferencia/'+path,{
+   method:'POST',body:JSON.stringify(filters),
+ });
+}
+export const primaryTransferApi={
+ options:async(filters:PrimaryFilters)=>primaryRequest<{total:number,creators:{id:string,name:string}[],records:PrimaryCandidate[]}>('opciones',filters),
+ preview:async(filters:PrimaryFilters)=>primaryRequest<{total:number,inventories:number,areas:number,records:PrimaryPreviewRow[],truncated:boolean}>('vista-previa',filters),
+ async download(filters:PrimaryFilters){
+  let response:Response;
+  try{
+   response=await fetch(API_BASE+'/api/inventarios/transferencia/seleccion.xlsx',{
+     method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify(filters),
+   });
+  }catch{throw new Error('No se pudo conectar con el servidor para descargar Excel.');}
+  if(!response.ok){
+   const payload=await response.json().catch(()=>({})) as {error?:string};
+   throw new Error(payload.error||'No se pudo descargar el inventario.');
+  }
+  const blob=await response.blob();
+  if(!blob.size)throw new Error('El servidor devolvió un Excel vacío.');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||
+    'relacion_transferencia_primaria_seleccionada.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(link.href),30000);
+ }
+};
