@@ -7,6 +7,7 @@ export const homeTour = [
   [".collapse-button", "Contraer o expandir el menú", "Reduce el menú a iconos para ganar espacio o vuelve a mostrar los nombres."],
   [".app-header__page", "Barra superior", "Aquí aparece el nombre del módulo que tienes abierto."],
   ['[aria-label="Búsqueda global"]', "Búsqueda global", "Busca un expediente o folio entre los registros disponibles para tu cuenta. Selecciona un resultado para abrirlo."],
+  ['[aria-label="Manual de usuario"]', "Manual de usuario", "El libro abre las instrucciones de los módulos y acciones disponibles para tu rol activo. Desde el manual puedes descargar una copia en PDF."],
   ['[aria-label^="Notificaciones"]', "Notificaciones", "Consulta avisos y pendientes relacionados con tu cuenta. Abre un aviso para revisar el registro asociado."],
   [".profile-trigger", "Perfil y rol activo", "Consulta tu cuenta. Desde aquí puedes cambiar entre tus roles asignados, cambiar tu contraseña o cerrar sesión."],
   [".dashboard-grid > *:first-child", "Actividad reciente", "Aquí aparecen tus últimos cinco movimientos registrados. Selecciona un movimiento disponible para abrir el módulo correspondiente."],
@@ -14,6 +15,7 @@ export const homeTour = [
 ] as const;
 
 export const moduleTour: Record<string, [string, string]> = {
+  manual: ["Manual de usuario", "Selecciona un tema del índice para ir a sus pasos. Usa Descargar PDF para guardar la guía del rol activo."],
   tramite: ["Archivo de trámite", "Consulta los inventarios de trámite o registra un inventario con sus expedientes. Usa los filtros y las acciones disponibles en cada fila."],
   concentracion: ["Archivo de concentración", "Consulta inventarios transferidos y abre sus expedientes. El detalle muestra su disponibilidad y ubicación física cuando están registradas."],
   transferencias: ["Transferencias documentales", "Consulta el estado de una transferencia y abre el folio para ver su inventario e historial. Las acciones disponibles dependen de tu rol y de la etapa."],

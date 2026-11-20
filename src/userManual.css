@@ -1,0 +1,70 @@
+.workspace--manual > :not(.user-manual):not(.guided-tour-help) {
+  display: none !important;
+}
+.user-manual {
+  display: grid;
+  gap: 16px;
+}
+.user-manual__hero {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 20px 22px;
+  border-top: 3px solid var(--green-800);
+}
+.user-manual__hero > div { flex: 1 1 190px; }
+.user-manual__hero h2 {
+  color: var(--green-950);
+  font-size: 24px;
+  font-weight: 700;
+}
+.user-manual__hero p {
+  color: var(--gray-600);
+  font-size: 13px;
+}
+.user-manual__layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 250px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+.user-manual__index { padding: 16px; }
+.user-manual__index h3, .user-manual__section h3 {
+  color: var(--green-950);
+  font-size: 15px;
+  font-weight: 700;
+}
+.user-manual__index ul { margin-top: 8px; }
+.user-manual__index button {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--green-800);
+  font-size: 12px;
+  cursor: pointer;
+}
+.user-manual__index button:hover, .user-manual__index button:focus-visible {
+  background: var(--green-50);
+}
+.user-manual__sections {
+  display: grid;
+  gap: 14px;
+}
+.user-manual__section {
+  padding: 18px 22px;
+  scroll-margin-top: 90px;
+}
+.user-manual__section ol {
+  padding-inline-start: 20px;
+  margin-top: 10px;
+  list-style: decimal;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.user-manual__section li + li { margin-top: 7px; }
+.header-icon[aria-label="Manual de usuario"][aria-pressed="true"] { background: var(--green-50); }
+@media (max-width: 760px) {
+  .user-manual__layout { grid-template-columns: 1fr; }
+}
