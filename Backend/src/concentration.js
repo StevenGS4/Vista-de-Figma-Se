@@ -141,7 +141,9 @@ function commonValue(records, selector) {
 concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res, next) => {
  try {
   const [[inventory]] = await pool.execute(
-   "SELECT id FROM inventarios WHERE folio=? AND estado='CONCENTRACION' AND deleted_at IS NULL",
+   "SELECT i.id, i.folio, CONCAT_WS(' ', u.nombres, u.apellido_paterno, u.apellido_materno) AS registrant"
+   + " FROM inventarios i LEFT JOIN usuarios u ON u.id=i.creado_por"
+   + " WHERE i.folio=? AND i.estado='CONCENTRACION' AND i.deleted_at IS NULL",
    [req.params.folio]
   );
   if (!inventory) throw fail('El inventario ya no está disponible para baja', 409);
@@ -149,20 +151,33 @@ concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res,
   if (!records.length) throw fail('El inventario no tiene expedientes activos en Concentración', 409);
   const clock = Object.fromEntries(draftClock.formatToParts(new Date()).map(part => [part.type, part.value]));
   const date = [clock.year, clock.month, clock.day].join('-');
-  const address = commonValue(records, record => record.archiveAddress);
+  const address = commonValue(records, record => record.archiveAddress)
+   || 'Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit';
+  const time = clock.hour + ':' + clock.minute;
+  const administrator = adminName(req.auth.user);
   const allBoxesKnown = records.every(record => String(record.locationBox || record.boxNumber || '').trim());
   const boxes = new Set(records.map(record => JSON.stringify([
    record.archiveAddress, record.room, record.locationBox || record.boxNumber
   ])));
   res.set('Cache-Control', 'private, no-store').json({
-   administrator: adminName(req.auth.user),
+   administrator,
    folioSuffix: String(inventory.id).padStart(6, '0'),
    fields: {
+    referencia_inventario_autorizado: inventory.folio,
     fecha_acta_extendida: date,
-    hora_inicio: clock.hour + ':' + clock.minute,
+    hora_inicio: time,
+    fecha_ejecucion: date,
+    hora_cierre: time,
     fecha_cierre_extendida: date,
     sede_y_domicilio: address,
+    lugar_ejecucion: address,
     total_cajas: allBoxesKnown ? String(boxes.size) : '',
+    metros_lineales: allBoxesKnown ? (boxes.size * 0.4).toFixed(2) + ' m (estimado)' : '',
+    peso_documental: allBoxesKnown ? String(boxes.size * 15) + ' kg (estimado)' : '',
+    responsable_ejecucion: administrator,
+    nombre_responsable_concentracion: inventory.registrant || '',
+    nombre_firmante: administrator,
+    cargo_firmante: 'Administrador de Contacto Ciudadano',
    },
   });
  } catch (error) { next(error); }
