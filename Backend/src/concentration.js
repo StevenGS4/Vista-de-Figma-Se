@@ -138,6 +138,18 @@ function commonValue(records, selector) {
  return values.size === 1 ? [...values][0] : '';
 }
 
+const evidenceReference = (id, year) => 'EV-' + year + '-' + String(id).padStart(6, '0');
+
+function disposalBoxCount(records) {
+ if (!records.length || records.some(record => !String(record.locationBox || record.boxNumber || '').trim())) return 0;
+ return new Set(records.map(record => JSON.stringify([
+  record.archiveAddress, record.room, record.locationBox || record.boxNumber
+ ]))).size;
+}
+
+const linearMeters = boxes => (boxes * 0.4).toFixed(2) + ' m';
+const boxWeight = boxes => String(boxes * 15) + ' kg';
+
 concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res, next) => {
  try {
   const [[inventory]] = await pool.execute(
@@ -155,10 +167,7 @@ concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res,
    || 'Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit';
   const time = clock.hour + ':' + clock.minute;
   const administrator = adminName(req.auth.user);
-  const allBoxesKnown = records.every(record => String(record.locationBox || record.boxNumber || '').trim());
-  const boxes = new Set(records.map(record => JSON.stringify([
-   record.archiveAddress, record.room, record.locationBox || record.boxNumber
-  ])));
+  const boxes = disposalBoxCount(records);
   res.set('Cache-Control', 'private, no-store').json({
    administrator,
    folioSuffix: String(inventory.id).padStart(6, '0'),
@@ -171,9 +180,10 @@ concentrationRouter.get('/bajas/:folio/borrador', requireAdmin, async (req, res,
     fecha_cierre_extendida: date,
     sede_y_domicilio: address,
     lugar_ejecucion: address,
-    total_cajas: allBoxesKnown ? String(boxes.size) : '',
-    metros_lineales: allBoxesKnown ? (boxes.size * 0.4).toFixed(2) + ' m (estimado)' : '',
-    peso_documental: allBoxesKnown ? String(boxes.size * 15) + ' kg (estimado)' : '',
+    total_cajas: boxes ? String(boxes) : '',
+    metros_lineales: boxes ? linearMeters(boxes) : '',
+    peso_documental: boxes ? boxWeight(boxes) : '',
+    metodo_disposicion: 'Trituración',
     responsable_ejecucion: administrator,
     nombre_responsable_concentracion: inventory.registrant || '',
     nombre_firmante: administrator,
@@ -228,6 +238,10 @@ concentrationRouter.post('/bajas/:folio', requireAdmin, async (req, res, next) =
   values.folio_acta = disposalFolio(inventory.id, req.body.fields.fecha_acta_extendida.slice(0, 4));
   values.administrador_nombre = adminName(user);
   values.fecha_hora_generacion = generatedDate.format(new Date());
+  const boxes = disposalBoxCount(records);
+  if (boxes && values.metros_lineales === linearMeters(boxes)) values.metros_lineales += ' (estimado)';
+  if (boxes && values.peso_documental === boxWeight(boxes)) values.peso_documental += ' (estimado)';
+  const internalEvidenceReference = evidenceReference(inventory.id, req.body.fields.fecha_acta_extendida.slice(0, 4));
   const file = await buildDisposalAct(values, records);
 
   await conn.execute('UPDATE expedientes SET deleted_at=NOW(),deleted_by=? WHERE inventario_id=? AND deleted_at IS NULL',
@@ -236,6 +250,7 @@ concentrationRouter.post('/bajas/:folio', requireAdmin, async (req, res, next) =
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
    [user.id, 'inventarios', inventory.id, 'BAJA_DOCUMENTAL', JSON.stringify({
     folio: inventory.folio, acta: values.folio_acta, expedientes: records.length,
+    registroInterno: internalEvidenceReference, referenciaEvidencia: values.referencia_evidencia,
     dictamen: values.folio_dictamen_agn, actaAgn: values.folio_acta_agn, inventarioAutorizado: values.referencia_inventario_autorizado
    })]);
   await conn.commit();

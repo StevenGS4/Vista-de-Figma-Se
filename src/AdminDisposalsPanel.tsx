@@ -35,14 +35,6 @@ const fieldGroups = [
   { title: "Cierre y firmas", fields: actFields.slice(17) },
 ];
 
-const fieldHints: Record<string, string> = {
-  referencia_inventario_autorizado: "Se propone el folio del inventario seleccionado. Coteja con el inventario autorizado.",
-  metros_lineales: "Estimación inicial de 0.40 m por caja. Sustitúyela por la medida real si está disponible.",
-  peso_documental: "Estimación inicial de 15 kg por caja. Sustitúyela por el peso real si está disponible.",
-  metodo_disposicion: "Escribe el método aplicado. Por ejemplo, trituración si esa fue la disposición realizada.",
-  referencia_evidencia: "Escribe el folio de la constancia o la referencia del expediente donde quedó la evidencia.",
-};
-
 export default function AdminDisposalsPanel() {
   const [inventories, setInventories] = useState<DisposalInventory[]>([]);
   const [search, setSearch] = useState("");
@@ -226,7 +218,7 @@ export default function AdminDisposalsPanel() {
           }} style={{ position: "fixed", inset: 0, margin: "auto", padding: 0, border: 0, maxHeight: "85vh",
             width: step === 1 ? "min(760px, 92vw)" : "min(460px, 92vw)" }}>
             <form onSubmit={submit}>
-              <div className="modal__header">
+              <div className="modal__header" style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--white)", borderTop: "3px solid var(--green-800)" }}>
                 <div>
                   <span>Baja documental</span>
                   <h2 id="disposal-dialog-title">{step === 1 ? "Datos del acta" : "¿Estás seguro de que quieres dar de baja?"}</h2>
@@ -246,25 +238,31 @@ export default function AdminDisposalsPanel() {
                       ? "BAJA-" + fields.fecha_acta_extendida.slice(0, 4) + "-" + draft.folioSuffix : ""} />
                   </label>
                 </div>
-                {step === 1 && <p className="modal__intro">Revisa el prellenado. Captura los folios y fechas del AGN desde los documentos originales y confirma los datos de la ejecución física.</p>}
                 {step === 1 ? fieldGroups.map(group => (
-                  <fieldset key={group.title} className="form-grid" style={{ border: 0, padding: 0, minWidth: 0 }}>
-                    <legend style={{ fontWeight: 600, marginBottom: 8 }}>{group.title}</legend>
-                    {group.fields.map(([key, label, type]) => (
-                      <label className="form-field" key={key}>
-                        <span>{label}</span>
-                        <input type={type ?? "text"} value={fields[key] ?? ""} maxLength={500}
-                          required={key !== "observaciones"} onChange={event => setFields(values => ({
-                            ...values, [key]: event.target.value,
-                          }))} />
-                        {fieldHints[key] && <small>{fieldHints[key]}</small>}
-                      </label>
-                    ))}
-                  </fieldset>
+                  <section key={group.title} className="surface form-section">
+                    <div className="form-section__title"><h3>{group.title}</h3></div>
+                    <div className="form-grid">
+                      {group.title === "Ejecución de la baja" && (
+                        <label className="form-field"><span>Folio interno de registro</span>
+                          <input readOnly value={draft && fields.fecha_acta_extendida
+                            ? "EV-" + fields.fecha_acta_extendida.slice(0, 4) + "-" + draft.folioSuffix : ""} />
+                        </label>
+                      )}
+                      {group.fields.map(([key, label, type]) => (
+                        <label className="form-field" key={key}>
+                          <span>{label}</span>
+                          <input type={type ?? "text"} value={fields[key] ?? ""} maxLength={500}
+                            required={key !== "observaciones"} onChange={event => setFields(values => ({
+                              ...values, [key]: event.target.value,
+                            }))} />
+                        </label>
+                      ))}
+                    </div>
+                  </section>
                 )) : <p className="inline-notice">La baja se aplicará a todo el inventario y es definitiva.</p>}
                 {error && <p className="inline-notice" role="alert">{error}</p>}
               </div>
-              <div className="modal__footer">
+              <div className="modal__footer" style={{ position: "sticky", bottom: 0 }}>
                 <button className="button button--secondary" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
                 <button className="button button--danger" type="submit" disabled={busy}>
                   <Trash2 size={16} />
