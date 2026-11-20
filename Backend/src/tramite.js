@@ -467,6 +467,8 @@ tramiteRouter.post('/papelera/inventarios/:folio/restaurar',async(req,res,next)=
   conn=await pool.getConnection();await conn.beginTransaction();
   const inv=await safeInventory(conn,req.params.folio,user,mode,true);
   if(!inv.deleted_at)throw fail('El inventario no está en la papelera',409);
+  const [[expiry]]=await conn.execute('SELECT deleted_at > DATE_SUB(NOW(), INTERVAL 60 DAY) AS restorable FROM inventarios WHERE id=?',[inv.id]);
+  if(!Number(expiry.restorable))throw fail('Este inventario cumplió sus 60 días de recuperación y no puede restaurarse',409);
   await conn.execute('UPDATE inventarios SET deleted_at=NULL,deleted_by=NULL WHERE id=?',[inv.id]);
   await audit(conn,user.id,'inventarios',inv.id,'RESTAURAR',JSON.stringify({folio:inv.folio}));
   await conn.commit();res.json({ok:true});
@@ -482,6 +484,8 @@ tramiteRouter.post('/papelera/expedientes/:id/restaurar',async(req,res,next)=>{
   const [rows]=await conn.execute(`SELECT e.id,e.deleted_at,i.folio,i.id AS invId,i.deleted_at AS inventory_deleted
     FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id WHERE e.id=? FOR UPDATE`,[id]);
   if(!rows.length||!rows[0].deleted_at)throw fail('El expediente no está en la papelera',404);
+  const [[expiry]]=await conn.execute('SELECT deleted_at > DATE_SUB(NOW(), INTERVAL 60 DAY) AS restorable FROM expedientes WHERE id=?',[id]);
+  if(!Number(expiry.restorable))throw fail('Este expediente cumplió sus 60 días de recuperación y no puede restaurarse',409);
   const inv=await safeInventory(conn,rows[0].folio,user,mode,true);
   if(inv.deleted_at)throw fail('Restaura primero el inventario completo',409);
   await conn.execute('UPDATE expedientes SET deleted_at=NULL,deleted_by=NULL WHERE id=?',[id]);
