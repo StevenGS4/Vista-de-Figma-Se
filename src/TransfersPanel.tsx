@@ -104,7 +104,23 @@ function ReceptionBadge({ status }: { status: ReceptionStatus }) {
 
 function userName(users: UserRecord[], id: string) {
   const user = users.find((item) => item.id === id);
-  return user ? fullName(user) : "Sin asignar";
+  return user ? fullName(user) : id ? "Usuario no disponible" : "Pendiente";
+}
+function requesterName(transfer: DocumentaryTransfer, users: UserRecord[]) {
+  return transfer.requesterName || userName(users, transfer.requestedBy);
+}
+function reviewResponsible(transfer: DocumentaryTransfer, users: UserRecord[]) {
+  if (transfer.reviewerId)
+    return transfer.reviewerName || userName(users, transfer.reviewerId);
+  if (transfer.status === "Pendiente de visto bueno del área")
+    return transfer.assignedAreaManagerName
+      ? transfer.assignedAreaManagerName + " · visto bueno pendiente"
+      : "Encargado del área pendiente de asignación";
+  if (transfer.status === "Pendiente de revisión administrativa")
+    return "Pendiente de revisión administrativa";
+  if (transfer.areaApproverId && transfer.areaApproverName)
+    return transfer.areaApproverName + " · visto bueno del área";
+  return "Revisión aún no realizada";
 }
 
 function TransferTray({
@@ -146,7 +162,7 @@ function TransferTray({
       (!query ||
         transfer.folio.toLowerCase().includes(query) ||
         areaName(transfer.areaId).toLowerCase().includes(query) ||
-        userName(users, transfer.requestedBy).toLowerCase().includes(query))
+        requesterName(transfer, users).toLowerCase().includes(query))
     );
   });
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -258,7 +274,7 @@ function TransferTray({
                         <span>
                           <UserRound size={14} />
                         </span>
-                        <strong>{userName(users, transfer.requestedBy)}</strong>
+                        <strong>{requesterName(transfer, users)}</strong>
                       </div>
                     </td>
                     <td>{formatDate(transfer.submittedAt || transfer.createdAt)}</td>
@@ -270,7 +286,7 @@ function TransferTray({
                     <td>
                       <TransferStatusBadge status={transfer.status} />
                     </td>
-                    <td>{userName(users, transfer.reviewerId)}</td>
+                    <td>{reviewResponsible(transfer, users)}</td>
                     <td>
                       <RowActionsMenu
                         label={`Acciones para ${transfer.folio}`}
@@ -937,7 +953,7 @@ function RequestDetail({
         <div className="transfer-summary-grid">
           <div>
             <span>Usuario solicitante</span>
-            <strong>{userName(users, transfer.requestedBy)}</strong>
+            <strong>{requesterName(transfer, users)}</strong>
           </div>
           <div>
             <span>Área solicitante</span>
@@ -949,7 +965,17 @@ function RequestDetail({
           </div>
           <div>
             <span>Responsable de revisión</span>
-            <strong>{userName(users, transfer.reviewerId)}</strong>
+            <strong>{reviewResponsible(transfer, users)}</strong>
+          </div>
+          <div>
+            <span>Encargado del área</span>
+            <strong>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</strong>
+          </div>
+          <div>
+            <span>Visto bueno otorgado por</span>
+            <strong>{transfer.areaApproverId
+              ? (transfer.areaApproverName || userName(users, transfer.areaApproverId))
+              : "Pendiente de visto bueno"}</strong>
           </div>
           <div>
             <span>Fecha de aceptación</span>
