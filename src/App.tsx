@@ -560,7 +560,12 @@ function Sidebar({
           {!collapsed ? (
             <InstitutionalMarks inverse />
           ) : (
-            <span title="Oficina de Representación en Nayarit">NAY</span>
+            <img
+              className="sidebar__collapsed-logo"
+              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570907/wunnlrrfjovxbqopkewo.jpg"
+              alt="Control Archivístico SEMARNAT"
+              title="Oficina de Representación en Nayarit"
+            />
           )}
         </div>
         <nav className="sidebar__nav" aria-label="Navegación principal">
