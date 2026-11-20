@@ -13,6 +13,7 @@ import { catalogsRouter } from './catalogs.js';
 import { adminCatalogRouter } from './admin-catalog.js';
 import { exportsRouter } from './exports.js';
 import { homeRouter } from './home.js';
+import { areaControlRouter } from './area-control.js';
 import { startTrashRetention } from './trash-retention.js';
 
 const app=express();
@@ -39,6 +40,7 @@ app.use('/api/catalogos',catalogsRouter);
 app.use('/api/admin-catalog',adminCatalogRouter);
 app.use('/api/inventarios',exportsRouter);
 app.use('/api/inicio',homeRouter);
+app.use('/api/control-area',areaControlRouter);
 app.use((err,_req,res,_next)=>{
  console.error('Error de API:',err.code||err.message);
  res.status(err.status||500).json({error:err.status?err.message:'Error interno del servidor'});
