@@ -31,8 +31,9 @@ import {
   X,
 } from "lucide-react";
 import RowActionsMenu from "./RowActionsMenu";
+import LocationShelf from "./LocationShelf";
 import { Role, UserRecord, areaName, fullName } from "./data";
-import { transferApi, tramiteApi, concentrationApi, ReceptionLocation } from "./api";
+import { transferApi, tramiteApi, concentrationApi, ReceptionLocation, type ReceptionSourceBox } from "./api";
 import { ArchivalRecord } from "./records";
 import {
   DocumentaryTransfer,
@@ -1197,11 +1198,40 @@ function ReceptionForm({
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
+  const [sourceBoxes,setSourceBoxes]=useState<ReceptionSourceBox[]>([]);
+  const [boxesLoading,setBoxesLoading]=useState(true);
+  const [boxesError,setBoxesError]=useState("");
   const [location,setLocation]=useState<ReceptionLocation>(()=>({
     archiveZone:"Archivo de concentración",
     room:"Sótano",shelf:"",level:"",physicalSection:"",
     position:"",locationBox:"",locationNotes:"",
   }));
+  useEffect(()=>{
+    let active=true;
+    setBoxesLoading(true);
+    transferApi.receptionBoxes(transfer.id)
+      .then(boxes=>{
+        if(!active)return;
+        setSourceBoxes(boxes);
+        setBoxesError("");
+        const values=[...new Set(boxes.map(item=>item.boxNumber.trim()).filter(Boolean))];
+        const allHaveSame=values.length===1&&boxes.every(item=>item.boxNumber.trim()===values[0]);
+        setLocation(current=>({...current,locationBox:allHaveSame?values[0]:""}));
+      })
+      .catch(err=>{
+        if(active){
+          setBoxesError(err instanceof Error?err.message:"No se pudieron consultar las cajas originales.");
+          setSourceBoxes([]);
+        }
+      })
+      .finally(()=>{if(active)setBoxesLoading(false);});
+    return ()=>{active=false;};
+  },[transfer.id]);
+  const existingBoxes=[...new Set(sourceBoxes.map(item=>item.boxNumber.trim()).filter(Boolean))];
+  const missingBoxCount=sourceBoxes.filter(item=>!item.boxNumber.trim()).length;
+  const allBoxesLocked=existingBoxes.length>0&&missingBoxCount===0;
+  const uniformBox=allBoxesLocked&&existingBoxes.length===1;
+  const boxNeedsManual=missingBoxCount>0;
   const updateLocation=(key:keyof ReceptionLocation,value:string)=>{
     setLocation(current=>({...current,[key]:value}));
     setError("");
@@ -1228,6 +1258,10 @@ function ReceptionForm({
           event.preventDefault();
           if (status === "Diferencias pendientes" && !notes.trim()) {
             setError("Describe las diferencias encontradas.");
+            return;
+          }
+          if(status==="Recibida" && (boxesLoading || boxesError)){
+            setError(boxesError||"Consulta las cajas antes de registrar la recepción.");
             return;
           }
           if(status==="Recibida" && (
@@ -1306,7 +1340,8 @@ function ReceptionForm({
             <h3>Ubicación física del inventario recibido</h3>
             <p>Captura la ubicación una sola vez. Se aplicará automáticamente a los {transfer.recordIds.length} expedientes de esta transferencia, sin repetir el formulario.</p>
           </div></div>
-          <div className="record-form-grid" style={{marginTop:16}}>
+          <div className="reception-location-layout">
+            <div className="record-form-grid reception-location-fields">
             <label className="form-field"><span>Archivo o zona *</span>
               <input required maxLength={160} value={location.archiveZone} onChange={e=>updateLocation("archiveZone",e.target.value)}/>
             </label>
@@ -1328,8 +1363,20 @@ function ReceptionForm({
                 <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </label>
-            <label className="form-field"><span>Caja o referencia</span>
-              <input maxLength={60} value={location.locationBox} onChange={e=>updateLocation("locationBox",e.target.value)}/>
+            <label className="form-field"><span>{allBoxesLocked?"Caja(s) original(es)":"Caja o referencia"}</span>
+              <input
+                maxLength={60}
+                value={uniformBox?existingBoxes[0]:allBoxesLocked?"Cajas individuales conservadas":location.locationBox}
+                disabled={boxesLoading||allBoxesLocked}
+                placeholder={boxesLoading?"Consultando cajas...":boxNeedsManual?"Solo para expedientes sin caja":"Sin caja en Trámite"}
+                onChange={e=>updateLocation("locationBox",e.target.value)}
+                className={allBoxesLocked?"reception-box-locked":""}
+              />
+              {uniformBox&&<small className="reception-box-note">Caja heredada de Archivo de trámite. No se puede modificar.</small>}
+              {existingBoxes.length>1&&<small className="reception-box-note">Se conservarán las cajas originales: {existingBoxes.join(", ")}.</small>}
+              {existingBoxes.length===1&&!uniformBox&&<small className="reception-box-note">Caja existente: {existingBoxes[0]}. No se reemplazará.</small>}
+              {boxNeedsManual&&existingBoxes.length>0&&<small className="reception-box-note">Este campo solo completará {missingBoxCount} expediente(s) sin caja.</small>}
+              {boxesError&&<small className="field-error" role="alert">{boxesError}</small>}
             </label>
             <label className="form-field"><span>Posición</span>
               <input maxLength={45} value={location.position} onChange={e=>updateLocation("position",e.target.value.toUpperCase())}/>
@@ -1337,8 +1384,10 @@ function ReceptionForm({
             <label className="form-field record-field--wide"><span>Observaciones de ubicación</span>
               <textarea rows={2} value={location.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
             </label>
+            </div>
+            <LocationShelf level={location.level} section={location.physicalSection}/>
           </div>
-          <p className="catalog-note">La ubicación seleccionada se aplicará a todos los expedientes de esta recepción.</p>
+          <p className="catalog-note">El estante, nivel y sección se aplicarán a toda la recepción. Las cajas registradas en Trámite se conservarán por expediente.</p>
         </section>}
         {error && <div role="alert" className="validation-summary">{error}</div>}
         <div className="reception-rule">
@@ -1349,7 +1398,7 @@ function ReceptionForm({
           <Button className="button--secondary" onClick={onBack}>
             Cancelar
           </Button>
-          <Button className="button--primary" type="submit">
+          <Button className="button--primary" type="submit" disabled={status==="Recibida"&&(boxesLoading||Boolean(boxesError))}>
             <Check size={17} />
             Guardar recepción
           </Button>
