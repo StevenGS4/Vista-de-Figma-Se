@@ -4,7 +4,12 @@ import { resolve, dirname } from 'node:path';
 import { access } from 'node:fs/promises';
 import { safeCell } from './export-policy.js';
 
-const TEMPLATE = resolve(dirname(fileURLToPath(import.meta.url)), '../plantillas/inventario_tramite.xlsx');
+const TEMPLATES = Object.freeze({
+  tramite: 'inventario_tramite.xlsx',
+  concentracion: 'inventario_concentracion.xlsx',
+  transferencia: 'inventario_transferencia_primaria.xlsx',
+});
+const TEMPLATE_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '../plantillas');
 const MAX_ROWS = 15000;
 const normalize = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g,' ').trim().toUpperCase();
 const visible = value => {
@@ -136,7 +141,7 @@ function expandDetail(sheet,{start,summaryRow,fields},recordCount){
     for(const m of lineMerges)sheet.mergeCells(r,m.left,r,m.right);
 }
 const findLabel=(sheet,limit,pattern)=>findCell(sheet,limit,t=>pattern.test(t));
-function fillHeader(sheet,first,location,kind){
+function fillHeader(sheet,first,location){
   if(!first)return;
   const {start}=location;
   // Coordinadas establecidas por el instructivo del modelo institucional.
@@ -150,11 +155,6 @@ function fillHeader(sheet,first,location,kind){
     [/^SERIE/,first.cadidoSeriesName||first.cadidoCode,'E18'],
     [/FECHA DE ELABORACION/,date(first.inventoryDate),'V9'],
   ];
-  if(kind==='transferencia'){
-    const title=findCell(sheet,start-1,t=>t.includes('INVENTARIO DOCUMENTAL ARCHIVO DE TRAMITE'));
-    if(title && title.cell.type!==ExcelJS.ValueType.Formula)
-      title.cell.value='INVENTARIO DOCUMENTAL TRANSFERENCIA PRIMARIA';
-  }
   for(const [pattern,val,fallback] of items){
     const anchor=findLabel(sheet,start-1,pattern);
     if(!anchor)continue;
@@ -235,16 +235,20 @@ function cloneSheet(book,source,name) {
   return copy;
 }
 function sheetName(kind,index,total){
-  return total===1?(kind==='transferencia'?'TRANSFERENCIA PRIMARIA':'INVENTARIO A.T.'):
-    ('INV '+String(index+1).padStart(3,'0'));
+  if(total !== 1)return ('INV '+String(index+1).padStart(3,'0'));
+  return kind==='transferencia'?'INVENTARIO A.TP.':
+    kind==='concentracion'?'INVENTARIO A.C.':'INVENTARIO A.T.';
 }
 export async function makeOfficialTemplateWorkbook(records,kind){
-  if(!['tramite','transferencia'].includes(kind))throw new Error('Tipo de plantilla no soportado');
+  const templateName=TEMPLATES[kind];
+  if(!templateName)throw new Error('Tipo de plantilla no soportado: '+kind);
   if(records.length>MAX_ROWS)throw new Error('El inventario supera el límite de exportación');
-  await access(TEMPLATE);
+  const templatePath=resolve(TEMPLATE_DIRECTORY,templateName);
+  try { await access(templatePath); }
+  catch { throw new Error('Falta la plantilla institucional '+templateName+' en Backend/plantillas'); }
   const book=new ExcelJS.Workbook();
-  await book.xlsx.readFile(TEMPLATE);
-  const source=book.worksheets.find(s=>/INVENTARIO|TRAMITE|A\.T\./i.test(s.name))||book.worksheets[0];
+  await book.xlsx.readFile(templatePath);
+  const source=book.worksheets.find(s=>/^INVENTARIO/i.test(s.name))||book.worksheets[0];
   if(!source)throw new Error('La plantilla no tiene hojas');
   const locations=locate(source);
   const groups=new Map();
@@ -263,7 +267,7 @@ export async function makeOfficialTemplateWorkbook(records,kind){
     const sheet=sheets[i];
     const layout=locate(sheet);
     const rows=entries[i];
-    fillHeader(sheet,rows[0],layout,kind);
+    fillHeader(sheet,rows[0],layout);
     fillRecords(sheet,rows,layout);
     fillSummary(sheet,rows,layout);
     const extra=Math.max(0,rows.length-(layout.summaryRow-layout.start));
