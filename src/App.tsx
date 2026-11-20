@@ -562,7 +562,7 @@ function Sidebar({
           ) : (
             <img
               className="sidebar__collapsed-logo"
-              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570907/wunnlrrfjovxbqopkewo.jpg"
+              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/sldzajfjhdowg7luhsyk.jpg"
               alt="Control Archivístico SEMARNAT"
               title="Oficina de Representación en Nayarit"
             />
