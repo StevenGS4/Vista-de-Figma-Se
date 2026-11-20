@@ -7638,15 +7638,15 @@
 /* Área de trabajo: recuperar contraste y jerarquía en paneles, filtros y formularios.
    Escopado a app-main: el login y el drawer mantienen su diseño actual. */
 .app-main .surface {
-  border-color: #cbd9d1;
-  background: #fafbf7;
+  border-color: #a9c8b6;
+  background: #eef5ed;
 }
 /* Encabezados de listados y bandejas, con verde tenue más visible. */
 .app-main .records-filter-head,
 .app-main .table-titlebar,
 .app-main .surface-heading {
-  background: linear-gradient(102deg, #e4efe8 0%, #edf3ec 65%, #f6f7f1 100%);
-  border-bottom: 1px solid #c7d9ce;
+  background: linear-gradient(102deg, #bdd8c6 0%, #cce2d2 65%, #e0ede1 100%);
+  border-bottom: 1px solid #a1c8b0;
 }
 .app-main .records-filter-head,
 .app-main .table-titlebar {
@@ -7659,14 +7659,14 @@
 .app-main .transfer-searchbar,
 .app-main .loan-filterbar,
 .app-main .table-filters {
-  background: linear-gradient(95deg, #e9f1e9 0%, #f2f3ea 100%);
-  border-bottom-color: #ccdcd0;
+  background: linear-gradient(95deg, #cfe4d4 0%, #dbe9d8 100%);
+  border-bottom-color: #b0d0bc;
 }
 .app-main .search-box,
 .app-main .filter-select,
 .app-main .filter-date {
-  background: #fcfdf9;
-  border-color: #b9cec2;
+  background: #f0f7ef;
+  border-color: #97bda7;
 }
 .app-main .search-box:focus-within,
 .app-main .filter-select:focus-within,
@@ -7676,24 +7676,24 @@
 }
 /* Formulario de registro: tarjeta ligeramente verde en vez de blanco uniforme. */
 .app-main .record-wizard {
-  background: #f4f8f3;
+  background: #e5f0e5;
 }
 .app-main .record-wizard__content,
 .app-main .form-section {
-  background: linear-gradient(145deg, #f3f8f2 0%, #f8faf5 100%);
+  background: linear-gradient(145deg, #dceade 0%, #e9f2e7 100%);
 }
 .app-main .step-heading,
 .app-main .form-section__title {
-  border-bottom-color: #cbded0;
+  border-bottom-color: #afcdb7;
 }
 .app-main .wizard-progress {
-  background: linear-gradient(95deg, #e5efe6 0%, #f0f4ec 100%);
-  border-color: #c5d8ca;
+  background: linear-gradient(95deg, #c9e0cd 0%, #ddebdc 100%);
+  border-color: #a9cbb4;
   box-shadow: 0 5px 18px rgb(0 47 42 / 5%);
 }
 .app-main .step-heading > span,
 .app-main .heading-icon {
-  background: #deede3;
+  background: #c5dfce;
   color: #145747;
 }
 /* Campos con fondo marfil-verde sutil y bordes definidos. */
@@ -7703,8 +7703,8 @@
 .app-main .record-field input:not([type="checkbox"]):not([type="radio"]),
 .app-main .record-field select,
 .app-main .record-field textarea {
-  background-color: #fffefa;
-  border-color: #bdcec3;
+  background-color: #eef6ec;
+  border-color: #9bbfa9;
 }
 .app-main .form-field input:focus,
 .app-main .form-field select:focus,
