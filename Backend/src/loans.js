@@ -140,7 +140,7 @@ loansRouter.post('/',async(req,res,next)=>{
   const [found]=await pool.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
   i.estado AS inventoryState
   FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
-  WHERE e.id IN (${placeholders}) ORDER BY e.id`,ids);
+  WHERE e.id IN (${placeholders}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL ORDER BY e.id`,ids);
   if(found.length!==ids.length)throw fail('Uno o más expedientes no existen',404);
   const inventoryId=found[0].inventario_id;
   if(found.some(e=>e.inventario_id!==inventoryId||e.etapa!=='CONCENTRACION'||

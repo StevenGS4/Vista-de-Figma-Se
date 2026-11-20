@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
+import RowActionsMenu from "./RowActionsMenu";
+import TramiteTrash from "./TramiteTrash";
+import { useConfirmAction } from "./useConfirmAction";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -29,7 +32,7 @@ import {
   locationSummary,
 } from "./records";
 
-type View = "list" | "form" | "detail";
+type View = "list" | "form" | "detail" | "trash";
 type Errors = Partial<Record<keyof ArchivalRecord, string>>;
 const TRAMITE_ADDRESS = "Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit";
 const localDate = () => {
@@ -186,6 +189,7 @@ function InventoryList({
   onEdit,
   onDelete,
   onOpen,
+  onTrash,
   protectedRecordIds,
   records,
 }: {
@@ -197,6 +201,7 @@ function InventoryList({
   onEdit: (inventoryId: string) => void;
   onDelete: (inventoryId: string) => void;
   onOpen: (inventoryId: string) => void;
+  onTrash: () => void;
   protectedRecordIds: Set<string>;
   records: ArchivalRecord[];
 }) {
@@ -256,7 +261,12 @@ function InventoryList({
             <h3>Listado de inventarios</h3>
             <p>{inventories.length} inventarios autorizados en esta sesión</p>
           </div>
-          <span className="demo-label">Archivos activos</span>
+          <div className="tramite-list-tools">
+            {canDelete && <RowActionsMenu label="Acciones de archivo de trámite" actions={[
+              {label:"Papelera de reciclaje",icon:<Trash2 size={16}/>,onSelect:onTrash},
+            ]}/>}
+            <span className="demo-label">Archivos activos</span>
+          </div>
         </div>
         <div className="records-filters inventory-list-filters">
           <label className="search-box records-search">
@@ -348,33 +358,34 @@ function InventoryList({
                       </Badge>
                     </td>
                     <td>
-                      <div className="inventory-row-actions">
-                        <button className="text-button" onClick={() => onOpen(id)}>
-                          <Eye size={15} /> Abrir
-                        </button>
-                        {canEdit &&
-                          rows.every(
+                      <RowActionsMenu
+                        label={`Acciones del inventario ${id}`}
+                        width={190}
+                        actions={[
+                          { label: "Abrir", icon: <Eye size={16}/>, onSelect: () => onOpen(id) },
+                          ...(canEdit && rows.every(
                             (record) =>
                               record.stage === "Archivo de trámite" &&
                               !record.transferReference &&
                               !protectedRecordIds.has(record.id),
-                          ) && (
-                          <button className="text-button" onClick={() => onEdit(id)}>
-                            <Pencil size={15} /> Editar / agregar
-                          </button>
-                        )}
-                        {canDelete &&
-                          rows.every(
+                          ) ? [{
+                            label: "Editar / agregar",
+                            icon: <Pencil size={16}/>,
+                            onSelect: () => onEdit(id),
+                          }] : []),
+                          ...(canDelete && rows.every(
                             (record) =>
                               record.stage === "Archivo de trámite" &&
                               !record.transferReference &&
                               !protectedRecordIds.has(record.id),
-                          ) && (
-                            <button className="text-button" onClick={() => onDelete(id)}>
-                              <Trash2 size={15} /> Eliminar
-                            </button>
-                          )}
-                      </div>
+                          ) ? [{
+                            label: "Eliminar",
+                            icon: <Trash2 size={16}/>,
+                            onSelect: () => onDelete(id),
+                            danger: true,
+                          }] : []),
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
@@ -628,6 +639,7 @@ function RowPicker({
                 record.recordNumber &&
                 record.title &&
                 record.openDate &&
+                record.closeDate &&
                 record.foliosCount &&
                 record.shelf,
               );
@@ -762,7 +774,7 @@ function ExpedientsStep({
               (active.archiveClassificationCode || "Clasificación histórica pendiente de revisión") :
               previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
           </strong></div>
-          <small className="field-hint">Clave CADIDO preliminar. MySQL asigna el consecutivo definitivo al guardar. Es independiente del número de expediente.</small>
+          <small className="field-hint">Clave de clasificación preliminar. El consecutivo definitivo se asigna al guardar.</small>
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
@@ -853,8 +865,8 @@ function ControlStep({
         </Field>
         <Field
           error={errors.closeDate}
-          hint="Puede quedar pendiente si el expediente continúa abierto."
-          label="Cierre"
+          label="Fecha de cierre"
+          required
         >
           <input
             min={active.openDate}
@@ -984,6 +996,8 @@ function ControlStep({
 function InventoryForm({
   existing,
   onCancel,
+  onDeleteInventory,
+  onDeleteRecords,
   onSave,
   records,
   role,
@@ -991,12 +1005,16 @@ function InventoryForm({
 }: {
   existing: ArchivalRecord[];
   onCancel: () => void;
+  onDeleteInventory: (folio: string) => Promise<void>;
+  onDeleteRecords: (folio: string, ids: string[]) => Promise<boolean>;
   onSave: (records: ArchivalRecord[]) => void;
   records: ArchivalRecord[];
   role: Role;
   user: UserRecord;
 }) {
   const isAdmin = role === "Administrador / Coordinador";
+  const canDeleteExisting = isAdmin || role === "Encargado de área" ||
+    (existing.length > 0 && existing.every(record => record.createdBy === user.id));
   const editing = existing.length > 0;
   const makeInitial = () => {
     if (editing) return existing.map(item => ({
@@ -1037,6 +1055,14 @@ function InventoryForm({
   const [currentStep, setCurrentStep] = useState(editing ? 1 : 0);
   const [maxVisited, setMaxVisited] = useState(editing ? 1 : 0);
   const [errors, setErrors] = useState<Errors>({});
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const { confirm, dialog } = useConfirmAction();
+  useEffect(() => {
+    if (!actionMessage) return;
+    const timer=window.setTimeout(()=>setActionMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  }, [actionMessage]);
   const active = drafts.find((item) => item.id === activeId) ?? drafts[0];
   const header = drafts[0];
   const headerLocked = existing.some(
@@ -1113,7 +1139,8 @@ function InventoryForm({
     }
     if (step === 2) {
       if (!record.openDate) next.openDate = "Captura la apertura.";
-      if (record.closeDate && record.closeDate < record.openDate)
+      if (!record.closeDate) next.closeDate = "Captura la fecha de cierre.";
+      else if (record.closeDate < record.openDate)
         next.closeDate = "El cierre es anterior a la apertura.";
       if (!record.filesCount || Number(record.filesCount) < 1)
         next.filesCount = "Captura los legajos.";
@@ -1177,6 +1204,40 @@ function InventoryForm({
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
   };
+  const removePreviewRows = async (ids: string[]) => {
+    const selected = drafts.filter(item => ids.includes(item.id));
+    if (!selected.length) return;
+    const all = selected.length === drafts.length;
+    const confirmed = await confirm({
+      title: all ? "Eliminar archivo de trámite completo" : "Eliminar expediente",
+      message: all
+        ? "Has seleccionado el último expediente del archivo. Se moverá también el inventario completo a la papelera por 60 días. ¿Deseas continuar?"
+        : "¿Eliminar " + selected.length + " expediente(s)? Los registros guardados pasarán a la papelera durante 60 días.",
+      confirmText: all ? "Mover inventario a papelera" : "Eliminar expediente(s)",
+      danger: true,
+    });
+    if (!confirmed) return;
+    setActionError("");
+    try {
+      const persisted=selected.filter(item=>/^REG-\d+$/.test(item.id)).map(item=>item.id);
+      if (!persisted.length && all) {
+        onCancel();
+        return;
+      }
+      if (persisted.length && editing) {
+        const inventoryGone=await onDeleteRecords(header.inventoryId,persisted);
+        if (inventoryGone) return;
+      }
+      const removeIds = new Set(ids);
+      const next = drafts.filter(item => !removeIds.has(item.id));
+      if (!next.length) { onCancel(); return; }
+      setDrafts(next);
+      if (removeIds.has(activeId))setActiveId(next[0].id);
+      setActionMessage("Expediente(s) eliminado(s) correctamente.");
+    } catch(error) {
+      setActionError(error instanceof Error?error.message:"No fue posible eliminar el expediente.");
+    }
+  };
   const addRowFromPreview = () => {
     // El encabezado y los expedientes capturados permanecen en memoria.
     // Una fila adicional se crea en el mismo inventario sin guardar ni salir.
@@ -1186,11 +1247,7 @@ function InventoryForm({
     setMaxVisited((current) => Math.max(current, 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const removeRow = (id: string) => {
-    if (!window.confirm("¿Quitar esta fila no transferida del inventario?")) return;
-    setDrafts((current) => current.filter((item) => item.id !== id));
-    if (activeId === id) setActiveId(drafts.find((item) => item.id !== id)?.id ?? drafts[0].id);
-  };
+  const removeRow = (id: string) => { void removePreviewRows([id]); };
   const save = () => {
     // Solo el botón explícito de confirmación en la vista previa guarda en MySQL.
     if (currentStep !== 3) return;
@@ -1287,6 +1344,24 @@ function InventoryForm({
                 canEdit={false}
                 onBack={()=>setCurrentStep(2)}
                 onEdit={()=>setCurrentStep(2)}
+                allowDelete={!editing || canDeleteExisting}
+                onDeletePreviewRows={removePreviewRows}
+                onDeleteWhole={() => {
+                  void (async()=>{
+                    const approved=await confirm({
+                      title:"Eliminar archivo de trámite completo",
+                      message:editing
+                        ? "Se enviará este archivo completo a la papelera durante 60 días. ¿Confirmas?"
+                        : "Se descartarán todos los expedientes del borrador sin guardar. ¿Confirmas?",
+                      confirmText:"Eliminar archivo de trámite",danger:true,
+                    });
+                    if(!approved)return;
+                    if(editing) {
+                      try{await onDeleteInventory(header.inventoryId);}
+                      catch(error){setActionError(error instanceof Error?error.message:"No se pudo eliminar el archivo.");}
+                    }else onCancel();
+                  })();
+                }}
               />
               <div className="inventory-preview-add-row">
                 <div>
@@ -1298,10 +1373,12 @@ function InventoryForm({
                   Agregar otro expediente
                 </Button>
               </div>
-              <p className="catalog-note" role="status">Vista previa sin guardar. El número archivístico definitivo lo asigna MySQL al confirmar.</p>
+              <p className="catalog-note" role="status">Vista previa sin guardar. Revisa los datos antes de confirmar.</p>
             </>
           )}
 
+          {actionError && <div className="validation-summary" role="alert"><AlertCircle size={17}/>{actionError}</div>}
+          {actionMessage && <div className="toast record-toast" role="status"><Check size={17}/>{actionMessage}</div>}
           {Object.keys(errors).length > 0 && (
             <div className="validation-summary" role="alert">
               <AlertCircle size={17} />
@@ -1331,12 +1408,13 @@ function InventoryForm({
             ) : (
               <Button className="button--primary" onClick={save}>
                 <Check size={17} />
-                Confirmar y guardar en MySQL
+                Confirmar y guardar
               </Button>
             )}
           </div>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }
@@ -1347,6 +1425,9 @@ function InventoryDetail({
   inventory,
   onBack,
   onEdit,
+  onDeleteWhole,
+  onDeletePreviewRows,
+  allowDelete = false,
   preview = false,
 }: {
   canEdit: boolean;
@@ -1354,9 +1435,22 @@ function InventoryDetail({
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
+  onDeleteWhole?: () => void;
+  onDeletePreviewRows?: (ids: string[]) => void;
+  allowDelete?: boolean;
   preview?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  useEffect(() => {
+    if (!selectedRows.length) return;
+    const liveIds=new Set(inventory.map(item=>item.id));
+    if (selectedRows.every(id=>!liveIds.has(id))) {
+      setSelectedRows([]);
+      setSelectionMode(false);
+    }
+  }, [inventory, selectedRows]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const header = inventory[0];
@@ -1433,6 +1527,15 @@ function InventoryDetail({
             <h3>Expedientes del inventario</h3>
             <p>{inventory.length} filas relacionadas sin repetir el encabezado</p>
           </div>
+          <div className="tramite-preview-tools">
+            {preview && allowDelete && <RowActionsMenu label="Acciones de la vista previa" width={250} actions={[
+              {label:"Eliminar expediente",icon:<Trash2 size={16}/>,onSelect:()=>{
+                setSelectionMode(true);
+                setSelectedRows([]);
+              }},
+              {label:"Eliminar archivo de trámite completo",icon:<Trash2 size={16}/>,danger:true,
+                onSelect:()=>onDeleteWhole?.()},
+            ]}/>}
           <label className="search-box">
             <Search size={16} />
             <input
@@ -1441,11 +1544,30 @@ function InventoryDetail({
               value={search}
             />
           </label>
+          </div>
         </div>
+        {preview && selectionMode && <div className="tramite-preview-selection">
+          <span>{selectedRows.length} expediente(s) seleccionados. Las bajas guardadas se harán efectivas al confirmar y guardar.</span>
+          <div>
+            <button type="button" className="button button--secondary"
+              onClick={()=>{setSelectionMode(false);setSelectedRows([]);}}>Cancelar</button>
+            <button type="button" className="button button--secondary danger-text" disabled={!selectedRows.length}
+              onClick={()=>{
+                void onDeletePreviewRows?.(selectedRows);
+              }}><Trash2 size={15}/> Eliminar seleccionados</button>
+          </div>
+        </div>}
         <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
+                {preview && selectionMode && <th>
+                  <input type="checkbox" aria-label="Seleccionar todos los expedientes de esta página"
+                    checked={rows.length > 0 && rows.every(r=>selectedRows.includes(r.id))}
+                    onChange={e=>setSelectedRows(e.target.checked
+                      ? [...new Set([...selectedRows,...rows.map(r=>r.id)])]
+                      : selectedRows.filter(id=>!rows.some(r=>r.id===id)))} />
+                </th>}
                 <th>Consecutivo</th>
                 <th>Caja</th>
                 <th>Número de expediente</th>
@@ -1464,6 +1586,12 @@ function InventoryDetail({
             <tbody>
               {rows.map((record) => (
                 <tr key={record.id}>
+                  {preview && selectionMode && <td>
+                    <input type="checkbox" aria-label={`Seleccionar expediente ${record.recordNumber}`}
+                      checked={selectedRows.includes(record.id)}
+                      onChange={e=>setSelectedRows(current=>e.target.checked
+                        ? [...current,record.id]:current.filter(id=>id!==record.id))} />
+                  </td>}
                   <td>{record.consecutive}</td>
                   <td>{record.boxNumber}</td>
                   <td>{record.recordNumber}</td>
@@ -1528,6 +1656,13 @@ export default function RecordsPanel({
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const { confirm, dialog } = useConfirmAction();
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
   const isAdmin = role === "Administrador / Coordinador";
   const isAreaManager = role === "Encargado de área";
   const authorized = isAdmin
@@ -1537,6 +1672,32 @@ export default function RecordsPanel({
           record.areaId === user.areaId && (isAreaManager || record.createdBy === user.id),
       );
   const selected = authorized.filter((record) => record.inventoryId === selectedId);
+  const deleteInventory = async (id: string) => {
+    await tramiteApi.remove(id);
+    onRecordsChange(records.filter(record => record.inventoryId !== id));
+    setSelectedId("");
+    setView("list");
+    setMessage("Archivo de trámite movido a la papelera por 60 días.");
+  };
+  const deleteRecords = async (folio: string, ids: string[]) => {
+    const response = await tramiteApi.removeRecords(folio,ids);
+    const removed = new Set(ids);
+    onRecordsChange(records.filter(record =>
+      response.inventoryDeleted ? record.inventoryId !== folio : !removed.has(record.id)));
+    if(response.inventoryDeleted){
+      setSelectedId("");
+      setView("list");
+      setMessage("Último expediente eliminado. Archivo de trámite enviado a la papelera por 60 días.");
+    }
+    return response.inventoryDeleted;
+  };
+  const refreshTrash = async () => {
+    const fresh=await tramiteApi.list();
+    onRecordsChange([
+      ...records.filter(record => record.stage === "Archivo de concentración"),
+      ...fresh,
+    ]);
+  };
   const save = async (rows: ArchivalRecord[]) => {
     try {
       const editing = selected.length > 0;
@@ -1545,12 +1706,14 @@ export default function RecordsPanel({
       onRecordsChange([...saved,...records.filter((record)=>record.inventoryId!==oldInventory)]);
       setSelectedId("");
       setView("list");
-      setMessage("El inventario y sus expedientes se guardaron en MySQL.");
-      window.setTimeout(()=>setMessage(""),3000);
+      setMessage("Inventario guardado correctamente.");
     } catch(error) {
-      window.alert(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
+      setActionError(error instanceof Error ? error.message : "No fue posible guardar el inventario.");
     }
   };
+  if (view === "trash") {
+    return <TramiteTrash onBack={() => setView("list")} onChange={refreshTrash}/>;
+  }
   if (view === "form")
     return (
       <InventoryForm
@@ -1559,6 +1722,8 @@ export default function RecordsPanel({
           setSelectedId("");
           setView("list");
         }}
+        onDeleteInventory={deleteInventory}
+        onDeleteRecords={deleteRecords}
         onSave={save}
         records={records}
         role={role}
@@ -1588,8 +1753,9 @@ export default function RecordsPanel({
     );
   return (
     <>
+      {actionError && <div className="validation-summary" role="alert">{actionError}</div>}
       {loadError && <div className="validation-summary" role="alert">
-        No fue posible cargar inventarios desde MySQL: {loadError}
+        No fue posible cargar los inventarios: {loadError}
       </div>}
       {message && (
         <div className="toast record-toast" role="status">
@@ -1600,7 +1766,7 @@ export default function RecordsPanel({
       <InventoryList
         initialSearch={initialSearch}
         canCreate={!loadError && permissions.includes("register-records")}
-        canDelete={role === "Encargado de área" || isAdmin}
+        canDelete={!loadError && (role === "Personal de área" || role === "Encargado de área" || isAdmin)}
         canEdit={permissions.includes("edit-records")}
         onCreate={() => {
           setSelectedId("");
@@ -1610,16 +1776,19 @@ export default function RecordsPanel({
           setSelectedId(id);
           setView("form");
         }}
-        onDelete={async (id) => {
-          if (!window.confirm(`¿Eliminar el inventario ${id} sin movimientos históricos?`)) return;
-          try {
-            await tramiteApi.remove(id);
-            onRecordsChange(records.filter((record) => record.inventoryId !== id));
-            setMessage("Inventario eliminado de MySQL.");
-          } catch(error) {
-            window.alert(error instanceof Error ? error.message : "No fue posible eliminar el inventario.");
-          }
+        onDelete={(id) => {
+          void (async()=>{
+            const ok=await confirm({
+              title:"Mover archivo de trámite a papelera",
+              message:`¿Eliminar el inventario ${id} y todos sus expedientes? Podrás restaurarlo durante 60 días.`,
+              danger:true,confirmText:"Mover a papelera",
+            });
+            if(!ok)return;
+            try{await deleteInventory(id);setActionError("");}
+            catch(error){setActionError(error instanceof Error?error.message:"No se pudo eliminar el inventario.");}
+          })();
         }}
+        onTrash={() => setView("trash")}
         onOpen={(id) => {
           setSelectedId(id);
           setView("detail");
@@ -1627,6 +1796,7 @@ export default function RecordsPanel({
         protectedRecordIds={protectedRecordIds}
         records={authorized}
       />
+      {dialog}
     </>
   );
 }

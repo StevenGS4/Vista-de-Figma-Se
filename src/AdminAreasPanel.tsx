@@ -24,6 +24,11 @@ export default function AdminAreasPanel(){
  const [saving,setSaving]=useState(false);
  const [error,setError]=useState("");
  const [success,setSuccess]=useState("");
+ useEffect(() => {
+  if (!success) return;
+  const timer=window.setTimeout(()=>setSuccess(""),4000);
+  return ()=>window.clearTimeout(timer);
+ },[success]);
  const [showYear,setShowYear]=useState(false);
  const [newYear,setNewYear]=useState("");
  const [newYearName,setNewYearName]=useState("");
@@ -62,7 +67,7 @@ export default function AdminAreasPanel(){
  };
  const submitArea=async(event:FormEvent)=>{
   event.preventDefault();clear();setSaving(true);
-  try{await adminCatalogApi.saveArea(form,editing);await refresh();setView("list");setSuccess(editing?"Área actualizada en MySQL.":"Área creada en MySQL.");}
+  try{await adminCatalogApi.saveArea(form,editing);await refresh();setView("list");setSuccess(editing?"Área actualizada correctamente.":"Área registrada correctamente.");}
   catch(e){setError(e instanceof Error?e.message:"Error guardando área");}
   finally{setSaving(false);}
  };
@@ -74,8 +79,8 @@ export default function AdminAreasPanel(){
    const rows=await adminCatalogApi.series(year,selected.id);setSeries(rows);
    setChosen(rows.filter(x=>x.enabled).map(x=>x.id));
    try{const catalog=await tramiteApi.catalog();setCadidoCatalog(catalog.sections,catalog.series);}
-   catch{setSuccess("Asignación guardada en MySQL. Recarga la página para actualizar los selectores.");return;}
-   setSuccess("Asignación guardada en MySQL. Los expedientes históricos permanecen intactos.");
+   catch{setSuccess("Asignación guardada. Actualiza la página para ver los cambios.");return;}
+   setSuccess("Asignación actualizada correctamente.");
   }catch(e){setError(e instanceof Error?e.message:"Error asignando series");}
   finally{setSaving(false);}
  };
@@ -101,13 +106,13 @@ export default function AdminAreasPanel(){
  const back=()=>{clear();setView("list");setSelected(null);};
  const status=<>{error&&<div role="alert" className="inline-notice" style={{margin:"12px 0",color:"#9d253c"}}>{error}</div>}
   {success&&<div role="status" className="success-banner" style={{margin:"12px 0"}}><Check size={17}/>{success}</div>}</>;
- if(loading&&view==="list")return <div className="surface" style={{padding:24}}>Cargando áreas desde MySQL...</div>;
+ if(loading&&view==="list")return <div className="surface" style={{padding:24}}>Cargando áreas...</div>;
  if(view==="edit")return <div className="admin-form-page">
   <button className="text-button" onClick={back}><ArrowLeft size={17}/>Volver al catálogo</button>
   <div className="surface form-surface">
    <div className="surface-heading"><div className="heading-icon"><Pencil size={22}/></div><div>
     <h2>{editing?"Editar área administrativa":"Registrar área administrativa"}</h2>
-    <p>La asignación del encargado y los códigos queda almacenada en MySQL.</p>
+    <p>Configura el encargado y los códigos autorizados para esta área.</p>
    </div></div>{status}
    <form onSubmit={submitArea}>
     <div className="form-grid">
@@ -194,7 +199,6 @@ export default function AdminAreasPanel(){
     <button className="button button--secondary" onClick={()=>edit(a)}><Pencil size={15}/> Editar / Encargado</button>
     <button className="button button--primary" onClick={()=>void assign(a)}><FolderTree size={15}/> Asignar CADIDO</button>
    </div></td></tr>)}{!items.length&&<tr><td colSpan={5}>Sin áreas activas registradas.</td></tr>}</tbody></table></div>
-  <div className="catalog-note">Las áreas y códigos permanecen en MySQL. Los códigos históricos no se eliminan;
-   una edición nueva no sustituye las referencias guardadas en expedientes anteriores.</div>
+
  </div>;
 }

@@ -38,10 +38,26 @@ export const tramiteApi = {
     })).records;
   },
   remove:(folio:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
+  trash:async()=>((await request<{records:ArchivalRecord[]}>('/api/tramite/papelera')).records),
+  removeRecord:(folio:string,id:string)=>request<{ok:boolean}>('/api/tramite/inventarios/'+encodeURIComponent(folio)+'/expedientes/'+encodeURIComponent(id),{method:'DELETE',body:'{}'}),
+  removeRecords:(folio:string,recordIds:string[])=>
+    request<{ok:boolean,inventoryDeleted:boolean,removed:number}>(
+      '/api/tramite/inventarios/'+encodeURIComponent(folio)+'/expedientes',
+      {method:'DELETE',body:JSON.stringify({recordIds})},
+    ),
+  restoreInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio)+'/restaurar',{method:'POST',body:'{}'}),
+  restoreRecord:(id:string)=>request<{ok:boolean}>('/api/tramite/papelera/expedientes/'+encodeURIComponent(id)+'/restaurar',{method:'POST',body:'{}'}),
+  purgeInventory:(folio:string)=>request<{ok:boolean}>('/api/tramite/papelera/inventarios/'+encodeURIComponent(folio),{method:'DELETE',body:'{}'}),
+  purgeRecord:(id:string)=>request<{ok:boolean}>('/api/tramite/papelera/expedientes/'+encodeURIComponent(id),{method:'DELETE',body:'{}'}),
+  emptyTrash:()=>request<{ok:boolean}>('/api/tramite/papelera',{method:'DELETE',body:'{}'}),
 };
 
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
+export type ReceptionSourceBox={recordId:string;boxNumber:string};
 export const transferApi={
+ receptionBoxes:async(id:string)=>(await request<{boxes:ReceptionSourceBox[]}>(
+   '/api/transferencias/'+encodeURIComponent(id)+'/reception-boxes'
+ )).boxes,
  list:async()=>((await request<{transfers:DocumentaryTransfer[]}>('/api/transferencias')).transfers),
  submit:async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
    const path=existing?'/api/transferencias/'+encodeURIComponent(existing.id)+'/resend':'/api/transferencias';
@@ -158,3 +174,75 @@ export const adminCatalogApi={
 };
 
 export type ReceptionLocation={archiveZone:string;room:string;shelf:string;level:string;physicalSection:string;position:string;locationBox:string;locationNotes:string};
+
+export type AreaStaffSummary = {
+  id:string; name:string; email:string; areaId:string; areaName:string;
+  status:"Activo"|"Inactivo"; activeInventories:number; transferredInventories:number;
+};
+export type AreaStaffDetail = {
+  user:AreaStaffSummary;
+  inventories:{id:string;folio:string;openedAt:string;deletedAt:string|null;status:string;recordCount:number}[];
+  transfers:{id:string;folio:string;inventoryFolio:string;sentAt:string;acceptedAt:string;status:string}[];
+  records:{id:string;recordNumber:string;title:string;inventoryFolio:string;openedAt:string;closedAt:string;status:string}[];
+  activity:{key:string;date:string;action:string;detail:string;source:string}[];
+};
+export const areaControlApi = {
+  list:async(area="")=>(await request<{users:AreaStaffSummary[]}>(
+    "/api/control-area/usuarios"+(area?"?area="+encodeURIComponent(area):"")
+  )).users,
+  detail:async(id:string)=>(await request<AreaStaffDetail>(
+    "/api/control-area/usuarios/"+encodeURIComponent(id)
+  )),
+};
+
+export type PrimaryPeriod='all'|'week'|'twoweeks'|'fortnight'|'month'|'bimester'|'trimester'|'fourmonth'|'semester'|'year'|'custom';
+export type PrimarySelectionMode='all'|'inventories'|'records'|'mixed';
+export type PrimaryFilters={
+  period:PrimaryPeriod;year:number;block:number;from:string;to:string;
+  dateField:'inventory'|'opening'|'transfer';
+  stage:'tramite'|'concentracion'|'ambos';
+  selection:PrimarySelectionMode;area:string;creator:string;
+  section:string;series:string;cadido:string;
+  inventoryIds:string[];recordIds:string[];
+};
+export type PrimaryCandidate={
+ id:string;inventoryId:string;recordNumber:string;title:string;inventoryDate:string;
+ openDate:string;transferDate:string;areaId:string;createdBy:string;cadidoCode:string;
+ archiveClassificationCode:string;section:string;series:string;stage:string;
+};
+export type PrimaryPreviewRow={
+ id:string;inventoryId:string;recordNumber:string;title:string;archiveClassificationCode:string;
+ inventoryDate:string;openDate:string;transferDate:string;areaId:string;stage:string;boxNumber:string;
+};
+async function primaryRequest<T>(path:string,filters:PrimaryFilters):Promise<T>{
+ return request<T>('/api/inventarios/transferencia/'+path,{
+   method:'POST',body:JSON.stringify(filters),
+ });
+}
+export const primaryTransferApi={
+ options:async(filters:PrimaryFilters)=>primaryRequest<{total:number,creators:{id:string,name:string}[],records:PrimaryCandidate[]}>('opciones',filters),
+ preview:async(filters:PrimaryFilters)=>primaryRequest<{total:number,inventories:number,areas:number,records:PrimaryPreviewRow[],truncated:boolean}>('vista-previa',filters),
+ async download(filters:PrimaryFilters){
+  let response:Response;
+  try{
+   response=await fetch(API_BASE+'/api/inventarios/transferencia/seleccion.xlsx',{
+     method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify(filters),
+   });
+  }catch{throw new Error('No se pudo conectar con el servidor para descargar Excel.');}
+  if(!response.ok){
+   const payload=await response.json().catch(()=>({})) as {error?:string};
+   throw new Error(payload.error||'No se pudo descargar el inventario.');
+  }
+  const blob=await response.blob();
+  if(!blob.size)throw new Error('El servidor devolvió un Excel vacío.');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||
+    'relacion_transferencia_primaria_seleccionada.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(link.href),30000);
+ }
+};

@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -15,6 +15,7 @@ import { Role, UserRecord, areaName, areas } from "./data";
 import { ArchivalRecord, cadidoSections, cadidoSeries } from "./records";
 import { DocumentaryTransfer } from "./transfers";
 import { inventoriesApi } from "./api";
+import PrimaryTransferBuilder from "./PrimaryTransferBuilder";
 
 type InventoryType = "tramite" | "concentracion" | "transferencia";
 type View = "select" | "list" | "preview";
@@ -34,7 +35,7 @@ const types = {
   },
   transferencia: {
     name: "Relación de inventarios para transferencia primaria",
-    description: "Reporte automático con una fila por inventario de trámite, sin ejecutar transferencias.",
+    description: "Consolidado documental con filtros de fecha, CADIDO, área, usuario y selección de inventarios o expedientes.",
     icon: FolderArchive,
     accent: "gold",
   },
@@ -98,13 +99,7 @@ function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }
           );
         })}
       </div>
-      <div className="inventory-info">
-        <ShieldCheck size={18} />
-        <span>
-          <strong>Exportación desde MySQL</strong>La descarga XLSX no cambia expedientes,
-          transferencias ni etapas.
-        </span>
-      </div>
+
     </>
   );
 }
@@ -259,7 +254,7 @@ function InventoryList({
             <FileSpreadsheet size={18} />
             <span>
               <strong>{visible.length} inventarios · {visible.reduce((sum, group) => sum + group.records.length, 0)} expedientes</strong>
-              Relación automática basada en la fecha de elaboración; generar o consultar este reporte no cambia etapas.
+              Consulta la relación de inventarios seleccionados.
             </span>
           </div>
         )}
@@ -367,6 +362,11 @@ function Preview({
   type: InventoryType;
 }) {
   const [downloaded, setDownloaded] = useState(false);
+  useEffect(() => {
+    if (!downloaded) return;
+    const timer=window.setTimeout(()=>setDownloaded(false),4000);
+    return ()=>window.clearTimeout(timer);
+  },[downloaded]);
   const h = group.header;
   const [error,setError]=useState("");
   const [isDownloading,setIsDownloading]=useState(false);
@@ -403,7 +403,7 @@ function Preview({
       {downloaded && (
         <div className="success-banner" role="status">
           <Check size={17} />
-          El XLSX fue generado desde MySQL sin modificar los registros.
+          Descarga completada correctamente.
         </div>
       )}
       <section className="surface institutional-inventory-preview">
@@ -533,6 +533,8 @@ export default function InventoriesPanel({
         }}
       />
     );
+  if (type === "transferencia")
+    return <PrimaryTransferBuilder currentUser={currentUser} role={role} onBack={() => setView("select")} />;
   if (view === "preview" && selected)
     return <Preview group={selected} onBack={() => setView("list")} type={type} />;
   return (

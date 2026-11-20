@@ -6,7 +6,7 @@ import type { DocumentaryTransfer } from "./transfers";
 import type { ArchivalLoan } from "./loans";
 import type { ArchivalRecord } from "./records";
 
-export type HomeModule = "inicio" | "tramite" | "concentracion" | "transferencias" | "prestamos" | "inventarios" | "administracion";
+export type HomeModule = "inicio" | "tramite" | "concentracion" | "transferencias" | "prestamos" | "inventarios" | "control-area" | "administracion";
 export type HomeNotice = { id: string; title: string; detail: string; module: HomeModule; date: string; color: "green" | "wine" | "gold" };
 const dateToday = () => {
   const now = new Date();

@@ -36,14 +36,37 @@ async function history(conn,id){
  date:r.date,actor:String(r.usuario_id),detail:r.detalle||''}));
 }
 async function readTransfer(conn,t){
+ // Nombres verificables desde MySQL. El usuario no administrador no necesita
+ // permiso de Administración para conocer al solicitante de una solicitud visible.
+ const [actors]=await conn.execute(`SELECT
+  CONCAT_WS(' ',us.nombres,us.apellido_paterno,NULLIF(us.apellido_materno,'')) AS requesterName,
+  CONCAT_WS(' ',ua.nombres,ua.apellido_paterno,NULLIF(ua.apellido_materno,'')) AS areaApproverName,
+  CONCAT_WS(' ',ur.nombres,ur.apellido_paterno,NULLIF(ur.apellido_materno,'')) AS reviewerName,
+  CONCAT_WS(' ',um.nombres,um.apellido_paterno,NULLIF(um.apellido_materno,'')) AS assignedAreaManagerName
+  FROM transferencias tr
+  LEFT JOIN usuarios us ON us.id=tr.solicitante_id
+  LEFT JOIN usuarios ua ON ua.id=tr.visto_bueno_por
+  LEFT JOIN usuarios ur ON ur.id=tr.aceptada_por
+  LEFT JOIN areas ar ON ar.id=tr.area_id
+  LEFT JOIN usuarios um ON um.id=ar.encargado_usuario_id
+  WHERE tr.id=?`,[t.id]);
+ const actorNames=actors[0]||{};
  const [records]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
  JOIN expedientes e ON e.inventario_id=ti.inventario_id
  WHERE ti.transferencia_id=? ORDER BY ti.inventario_id,e.consecutivo`,[t.id]);
- const [receptions]=await conn.execute(`SELECT estado,DATE_FORMAT(fecha,'%Y-%m-%d') AS date,
- responsable_id,observaciones FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1`,[t.id]);
+ const [receptions]=await conn.execute(`SELECT r.estado,DATE_FORMAT(r.fecha,'%Y-%m-%d') AS date,
+ r.responsable_id,r.observaciones,
+ CONCAT_WS(' ',u.nombres,u.apellido_paterno,NULLIF(u.apellido_materno,'')) AS responsibleName
+ FROM recepciones r
+ LEFT JOIN usuarios u ON u.id=r.responsable_id
+ WHERE r.transferencia_id=? ORDER BY r.id DESC LIMIT 1`,[t.id]);
  const rec=receptions[0];
  return {
  id:'TR-'+t.id,folio:t.folio,areaId:t.areaCode,requestedBy:String(t.solicitante_id),
+ requesterName:actorNames.requesterName||'',
+ areaApproverName:actorNames.areaApproverName||'',
+ reviewerName:actorNames.reviewerName||'',
+ assignedAreaManagerName:actorNames.assignedAreaManagerName||'',
  createdAt:isoDate(t.creada_en),submittedAt:isoDate(t.enviada_en),
  status:transferStates[t.estado],recordIds:records.map(r=>'REG-'+r.id),
  reviewerId:t.aceptada_por?String(t.aceptada_por):'',
@@ -53,6 +76,7 @@ async function readTransfer(conn,t){
  receptionStatus:!rec?'Pendiente':rec.estado==='RECIBIDA'?'Recibida':
   rec.estado==='DIFERENCIAS'?'Diferencias pendientes':'Pendiente',
  receptionDate:rec?.date||'',receptionResponsible:rec?String(rec.responsable_id):'',
+ receptionResponsibleName:rec?.responsibleName||'',
  receptionNotes:rec?.observaciones||'',history:await history(conn,t.id),
  };
 }
@@ -99,20 +123,20 @@ async function chooseInventories(conn,ids,user){
  SUM(CASE WHEN e.disponibilidad='PRESTADO' THEN 1 ELSE 0 END) AS borrowed
  FROM inventarios i JOIN areas a ON a.id=i.area_id
  JOIN expedientes e ON e.inventario_id=i.id
- WHERE e.id IN (${placeholders})
+ WHERE e.id IN (${placeholders}) AND i.deleted_at IS NULL AND e.deleted_at IS NULL
  GROUP BY i.id,i.folio,i.estado,i.area_id,i.creado_por,a.codigo`,ids);
  if(!items.length)throw problem('No se encontraron inventarios seleccionados');
  // Bloquea cada inventario en orden estable para serializar solicitudes concurrentes.
  const selected=items.sort((a,b)=>a.id-b.id);
  for(const i of selected){
-  const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? FOR UPDATE',[i.id]);
+  const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? AND deleted_at IS NULL FOR UPDATE',[i.id]);
   if(locked[0]?.estado!=='TRAMITE')throw problem('Inventario ya transferido o reservado',409);
   if(i.areaCode!==user.areaId)throw problem('No puedes transferir inventarios de otra área',403);
   if(!user.roles.includes('Encargado de área')&&Number(i.creado_por)!==Number(user.id))
    throw problem('Solo puedes solicitar la transferencia de tus inventarios',403);
   const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
   SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed
-  FROM expedientes WHERE inventario_id=?`,[i.id]);
+  FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[i.id]);
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
@@ -121,7 +145,7 @@ async function chooseInventories(conn,ids,user){
  }
  // Todas las filas seleccionadas deben coincidir con la totalidad de cada inventario.
  const [allRows]=await conn.query(`SELECT e.id FROM expedientes e
- WHERE e.inventario_id IN (${selected.map(()=>'?').join(',')})`,selected.map(i=>i.id));
+ WHERE e.inventario_id IN (${selected.map(()=>'?').join(',')}) AND e.deleted_at IS NULL`,selected.map(i=>i.id));
  const desired=new Set(ids);
  if(allRows.length!==desired.size||allRows.some(r=>!desired.has(Number(r.id))))
   throw problem('La solicitud debe incluir todos los expedientes de cada inventario',400);
@@ -240,6 +264,26 @@ transfersRouter.post('/:id/accept',async(req,res,next)=>{
   next(e);
  }
 });
+// Cajas originales: el número capturado en Trámite prevalece en Recepción.
+transfersRouter.get('/:id/reception-boxes',async(req,res,next)=>{
+ try{
+  const user=req.auth.user;ensureAuth(user);
+  const id=Number(String(req.params.id).replace(/^TR-/,''));
+  if(!Number.isSafeInteger(id)||id<1)throw problem('Identificador inválido');
+  const t=await rawTransfer(pool,id);
+  if(!t)throw problem('Transferencia no encontrada',404);
+  if(!canReceiveTransfer(user,t))throw problem('Solo el administrador puede consultar la recepción',403);
+  const [rows]=await pool.execute(`SELECT DISTINCT e.id,
+    CAST(e.numero_caja AS CHAR) AS boxNumber
+    FROM expedientes e
+    JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+    WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION' AND e.deleted_at IS NULL
+    ORDER BY e.id`,[id]);
+  if(!rows.length)throw problem('La transferencia no contiene expedientes disponibles',409);
+  res.set('Cache-Control','private, no-store');
+  res.json({boxes:rows.map(r=>({recordId:'REG-'+r.id,boxNumber:String(r.boxNumber||'').trim()}))});
+ }catch(e){next(e);}
+});
 transfersRouter.post('/:id/reception',async(req,res,next)=>{
  let conn;
  try{
@@ -264,7 +308,8 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   if(state==='Recibida'){
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
-     WHERE ti.transferencia_id=? ORDER BY e.id FOR UPDATE`,[id]);
+     WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION' AND e.deleted_at IS NULL
+     ORDER BY e.id FOR UPDATE`,[id]);
    let location;
    try{location=validateSharedReceptionLocation(req.body?.location,linked.map(row=>row.id));}
    catch(error){throw problem(error.message);}
@@ -273,7 +318,9 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    const [updated]=await conn.execute(`UPDATE expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      SET e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
-       e.seccion_fisica=?,e.posicion=?,e.caja_ubicacion=?,e.notas_ubicacion=?
+       e.seccion_fisica=?,e.posicion=?,
+       e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
+       e.notas_ubicacion=?
      WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'`,
      [location.archiveZone,location.room,location.shelf,location.level,
       location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
@@ -283,7 +330,9 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'
        AND e.archivo_zona=? AND e.lugar_resguardo=? AND e.estante=? AND e.nivel=? AND e.seccion_fisica=?
-       AND (e.posicion <=> ?) AND (e.caja_ubicacion <=> ?) AND (e.notas_ubicacion <=> ?)`,
+       AND (e.posicion <=> ?)
+       AND (e.caja_ubicacion <=> COALESCE(NULLIF(TRIM(e.numero_caja),''),?))
+       AND (e.notas_ubicacion <=> ?)`,
      [id,location.archiveZone,location.room,location.shelf,location.level,location.physicalSection,
       location.position,location.locationBox,location.locationNotes]);
    if(verified.length!==receivedCount)throw problem('No se pudo asignar la ubicación a todos los expedientes',409);

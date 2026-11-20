@@ -28,6 +28,10 @@ export type DocumentaryTransfer = {
   folio: string;
   areaId: string;
   requestedBy: string;
+  requesterName?: string;
+  assignedAreaManagerName?: string;
+  areaApproverName?: string;
+  reviewerName?: string;
   createdAt: string;
   submittedAt: string;
   status: TransferStatus;
@@ -41,6 +45,7 @@ export type DocumentaryTransfer = {
   receptionStatus: ReceptionStatus;
   receptionDate: string;
   receptionResponsible: string;
+  receptionResponsibleName?: string;
   receptionNotes: string;
   history: TransferHistoryEvent[];
 };

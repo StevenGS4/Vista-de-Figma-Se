@@ -38,10 +38,10 @@ function checkOwner(user,mode,inventory,editable=false){
 async function getInventory(conn,folio,locked=false){
  const [rows]=await conn.execute(`SELECT i.id,i.folio,i.area_id,i.creado_por,i.estado,a.codigo AS area_code,
  i.serie_id,i.seccion_id FROM inventarios i JOIN areas a ON a.id=i.area_id
- WHERE i.folio=?${locked?' FOR UPDATE':''}`,[folio]);
+ WHERE i.folio=? AND i.deleted_at IS NULL${locked?' FOR UPDATE':''}`,[folio]);
  return rows[0]||null;
 }
-export async function readRecords(conn,where='',params=[]){
+export async function readRecords(conn,where='',params=[],includeDeleted=false){
  const [rows]=await conn.execute(`SELECT
  i.folio AS inventoryId,DATE_FORMAT(i.fecha_elaboracion,'%Y-%m-%d') AS inventoryDate,
  i.responsable_cargo AS responsiblePosition,i.hoja_inicial AS initialSheetNumber,
@@ -60,16 +60,29 @@ export async function readRecords(conn,where='',params=[]){
  e.posicion AS position,e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes,
  e.etapa AS stage,e.disponibilidad AS availability,CAST(e.creado_por AS CHAR) AS createdBy,
  t.folio AS transferReference,DATE_FORMAT(t.enviada_en,'%Y-%m-%d') AS transferDate,
- DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS transferAcceptedDate
+ DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS transferAcceptedDate,
+ DATE_FORMAT(i.deleted_at,'%Y-%m-%d %H:%i:%s') AS inventoryDeletedAt,
+ DATE_FORMAT(e.deleted_at,'%Y-%m-%d %H:%i:%s') AS recordDeletedAt,
+ i.deleted_by AS inventoryDeletedBy,e.deleted_by AS recordDeletedBy
  FROM inventarios i
  JOIN areas a ON a.id=i.area_id
  JOIN expedientes e ON e.inventario_id=i.id
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
  JOIN series_cadido sr ON sr.id=e.serie_id
  LEFT JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
- LEFT JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
- LEFT JOIN transferencias t ON t.id=ti.transferencia_id
- ${where} ORDER BY i.fecha_elaboracion DESC,i.id DESC,e.consecutivo ASC`,params);
+ -- Elegir una sola transferencia por inventario. Un JOIN directo con
+ -- transferencia_inventarios multiplica los expedientes si hay historial.
+ LEFT JOIN transferencias t ON t.id=(
+   SELECT ti_hist.transferencia_id
+   FROM transferencia_inventarios ti_hist
+   JOIN transferencias t_hist ON t_hist.id=ti_hist.transferencia_id
+   WHERE ti_hist.inventario_id=i.id
+   ORDER BY
+     CASE WHEN e.etapa='CONCENTRACION' AND t_hist.estado='ACEPTADA' THEN 0 ELSE 1 END,
+     ti_hist.transferencia_id DESC
+   LIMIT 1
+ )
+ ${where ? where+' AND ' : 'WHERE '}${includeDeleted ? '1=1' : 'i.deleted_at IS NULL AND e.deleted_at IS NULL'} ORDER BY i.fecha_elaboracion DESC,i.id DESC,e.consecutivo ASC`,params);
  const ids=rows.map(r=>r.dbId);
  let values=[];
  if(ids.length){
@@ -99,8 +112,34 @@ export async function readRecords(conn,where='',params=[]){
  availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,
  transferReference:r.transferReference||'',transferDate:r.transferDate||'',
  transferAcceptedDate:r.transferAcceptedDate||'',receptionDate:'',receptionResponsible:'',receptionNotes:'',
+ inventoryDeletedAt:r.inventoryDeletedAt||'',recordDeletedAt:r.recordDeletedAt||'',
+ inventoryDeletedBy:r.inventoryDeletedBy?String(r.inventoryDeletedBy):'',recordDeletedBy:r.recordDeletedBy?String(r.recordDeletedBy):'',
  }));
 }
+async function audit(conn,userId,entity,id,action,detail){
+ await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+  [userId,entity,id,action,detail]);
+}
+async function ensureNoHistory(conn,ids){
+ if(!ids.length)return;
+ for(let n=0;n<ids.length;n+=400){
+  const slice=ids.slice(n,n+400),marks=slice.map(()=>'?').join(',');
+  const [loans]=await conn.query('SELECT 1 FROM prestamo_expedientes WHERE expediente_id IN ('+marks+') LIMIT 1',slice);
+  if(loans.length)throw fail('No se puede eliminar: existen préstamos históricos vinculados',409);
+ }
+}
+async function safeInventory(conn,folio,user,mode,includeDeleted=false){
+ const [rows]=await conn.execute(`SELECT i.id,i.folio,i.area_id,i.creado_por,i.estado,i.deleted_at,
+  a.codigo AS area_code FROM inventarios i JOIN areas a ON a.id=i.area_id
+  WHERE i.folio=? ${includeDeleted?'':'AND i.deleted_at IS NULL'} FOR UPDATE`,[folio]);
+ const inv=rows[0];if(!inv)throw fail('Inventario no encontrado',404);
+ if(!hasInventoryAccess(user,mode,inv))throw fail('Inventario fuera de tu alcance',403);
+ if(inv.estado!=='TRAMITE')throw fail('No se puede eliminar un inventario transferido a concentración',409);
+ const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
+ if(linked.length)throw fail('El inventario tiene historial de transferencia',409);
+ return inv;
+}
+const allowTrash=(user)=>access(user);
 async function latestCadidoYear(conn){
  const [[row]]=await conn.execute(`SELECT MAX(cv.anio) AS year FROM catalogos_cadido_versiones cv
  JOIN series_cadido sr ON sr.catalogo_version_id=cv.id
@@ -135,8 +174,8 @@ function normalize(rows){
    if(!number||!text(r.title))throw fail('Número de expediente y asunto son obligatorios');
    if(unique.has(consecutivo)||numbers.has(number))throw fail('Número de expediente o consecutivo duplicado');
    unique.add(consecutivo);numbers.add(number);
-   const open=date(r.openDate,true),close=date(r.closeDate);
-   if(close&&close<open)throw fail('Cierre anterior a apertura');
+   const open=date(r.openDate,true),close=date(r.closeDate,true);
+   if(close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
    if(!Array.isArray(r.documentaryValues)||!r.documentaryValues.length)throw fail('Selecciona valores documentales');
    num(r.filesCount,'legajos',0,2147483647);num(r.foliosCount,'folios',0,2147483647);
@@ -172,7 +211,7 @@ function rowFields(r,inventoryId,serieId,userId){
   numero_caja:text(r.boxNumber,60)||null,numero_expediente:text(r.recordNumber,110),
   codigo_clasificacion:text(r.archiveClassificationCode,110)||null,
   serie_id:serieId,titulo_asunto:text(r.title,350),descripcion:text(r.description,50000)||null,
-  apertura:date(r.openDate,true),cierre:date(r.closeDate),legajos:num(r.filesCount,'legajos',0,2147483647),
+  apertura:date(r.openDate,true),cierre:date(r.closeDate,true),legajos:num(r.filesCount,'legajos',0,2147483647),
   folios:num(r.foliosCount,'folios',0,2147483647),
   soporte:{'Físico':'FISICO','Electrónico':'ELECTRONICO','Mixto':'MIXTO'}[r.supportType],
   anios_tramite:num(r.currentValidity,'vigencia trámite'),
@@ -258,7 +297,7 @@ async function save(req,res,next,editing=false){
     fondo=?,fecha_elaboracion=?,hoja_inicial=? WHERE id=?`,
     [text(header.administrativeUnit,220),text(header.responsible,200),text(header.responsiblePosition,200),
      text(header.fund,160),date(header.inventoryDate,true),num(header.initialSheetNumber||1,'hoja',1,65535),inventoryId]);
-   const [oldRows]=await conn.execute('SELECT id,consecutivo FROM expedientes WHERE inventario_id=? FOR UPDATE',[inventoryId]);
+   const [oldRows]=await conn.execute('SELECT id,consecutivo FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL FOR UPDATE',[inventoryId]);
    const oldIds=new Set(oldRows.map(r=>r.id));
    const supplied=new Set();
    for(const r of rows){
@@ -270,8 +309,9 @@ async function save(req,res,next,editing=false){
    }
    for(const id of oldIds){
      if(supplied.has(id))continue;
-     await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[id]);
-     await conn.execute('DELETE FROM expedientes WHERE id=? AND inventario_id=?',[id,inventoryId]);
+     await ensureNoHistory(conn,[id]);
+     await conn.execute('UPDATE expedientes SET deleted_at=NOW(),deleted_by=? WHERE id=? AND inventario_id=? AND deleted_at IS NULL',[user.id,id,inventoryId]);
+     await audit(conn,user.id,'expedientes',id,'MOVER_PAPELERA',JSON.stringify({folio,via:'EDICION'}));
    }
   }else{
    const cat=await resolveCatalog(conn,header,user,mode);
@@ -369,25 +409,157 @@ tramiteRouter.get('/inventarios',async(req,res,next)=>{
 });
 tramiteRouter.post('/inventarios',(req,res,next)=>save(req,res,next));
 tramiteRouter.put('/inventarios/:folio',(req,res,next)=>save(req,res,next,true));
+
+tramiteRouter.get('/papelera',async(req,res,next)=>{
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  const clause=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
+  const params=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
+  const where='WHERE (i.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL) '+clause;
+  const records=await readRecords(pool,where,params,true);
+  res.set('Cache-Control','private, no-store');
+  res.json({records:records.filter(r=>Boolean(r.inventoryDeletedAt||r.recordDeletedAt))});
+ }catch(e){next(e);}
+});
 tramiteRouter.delete('/inventarios/:folio',async(req,res,next)=>{
  let conn;
  try{
-  const user=req.auth.user,mode=access(user);
-  if(mode==='PROPIO')throw fail('Solo el encargado del área o administrador puede eliminar',403);
+  const user=req.auth.user,mode=allowTrash(user);
   conn=await pool.getConnection();await conn.beginTransaction();
-  const inv=await getInventory(conn,req.params.folio,true);
-  if(!inv)throw fail('Inventario no encontrado',404);
-  checkOwner(user,mode,inv,true);
-  const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
-  if(linked.length)throw fail('El inventario tiene historial de transferencia',409);
+  const inv=await safeInventory(conn,req.params.folio,user,mode);
   const [ids]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? FOR UPDATE',[inv.id]);
-  for(const row of ids){
-   await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[row.id]);
-   await conn.execute('DELETE FROM expedientes WHERE id=?',[row.id]);
-  }
-  await conn.execute('DELETE FROM inventarios WHERE id=?',[inv.id]);
-  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'inventarios',inv.id,'ELIMINAR',JSON.stringify({folio:inv.folio,expedientes:ids.length})]);
+  await ensureNoHistory(conn,ids.map(x=>x.id));
+  await conn.execute('UPDATE inventarios SET deleted_at=NOW(),deleted_by=? WHERE id=? AND deleted_at IS NULL',[user.id,inv.id]);
+  await audit(conn,user.id,'inventarios',inv.id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio,expedientes:ids.length}));
   await conn.commit();res.json({ok:true});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
+async function recycleSelectedRecords(req,res,next,onlyOne=false){
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  const requested=onlyOne?[req.params.id]:req.body?.recordIds;
+  if(!Array.isArray(requested)||!requested.length||requested.length>5000)
+    throw fail('Selecciona al menos un expediente válido',400);
+  if(requested.some(id=>typeof id!=='string'||!/^REG-[1-9]\d*$/.test(id)))
+    throw fail('Identificador de expediente inválido',400);
+  const ids=[...new Set(requested.map(id=>Number(id.slice(4))))];
+  if(ids.length!==requested.length)throw fail('Hay expedientes repetidos en la selección',400);
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const inv=await safeInventory(conn,req.params.folio,user,mode);
+  const [existing]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL FOR UPDATE',[inv.id]);
+  const allIds=new Set(existing.map(r=>Number(r.id)));
+  if(ids.some(id=>!allIds.has(id)))throw fail('Uno o varios expedientes no pertenecen al archivo activo',409);
+  await ensureNoHistory(conn,ids);
+  const movingWhole=ids.length===allIds.size;
+  if(movingWhole) {
+    // El inventario completo queda en papelera sin dejar una cabecera vacía.
+    await conn.execute('UPDATE inventarios SET deleted_at=NOW(),deleted_by=? WHERE id=? AND deleted_at IS NULL',[user.id,inv.id]);
+    await audit(conn,user.id,'inventarios',inv.id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio,razon:'ULTIMOS_EXPEDIENTES',expedientes:ids.length}));
+  }else{
+    for(const id of ids){
+      await conn.execute('UPDATE expedientes SET deleted_at=NOW(),deleted_by=? WHERE id=? AND inventario_id=? AND deleted_at IS NULL',[user.id,id,inv.id]);
+      await audit(conn,user.id,'expedientes',id,'MOVER_PAPELERA',JSON.stringify({folio:inv.folio}));
+    }
+  }
+  await conn.commit();
+  res.json({ok:true,inventoryDeleted:movingWhole,removed:ids.length});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+}
+tramiteRouter.delete('/inventarios/:folio/expedientes', (req,res,next)=>
+ recycleSelectedRecords(req,res,next));
+tramiteRouter.delete('/inventarios/:folio/expedientes/:id',(req,res,next)=>
+ recycleSelectedRecords(req,res,next,true));
+tramiteRouter.post('/papelera/inventarios/:folio/restaurar',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const inv=await safeInventory(conn,req.params.folio,user,mode,true);
+  if(!inv.deleted_at)throw fail('El inventario no está en la papelera',409);
+  const [[expiry]]=await conn.execute('SELECT deleted_at > DATE_SUB(NOW(), INTERVAL 60 DAY) AS restorable FROM inventarios WHERE id=?',[inv.id]);
+  if(!Number(expiry.restorable))throw fail('Este inventario cumplió sus 60 días de recuperación y no puede restaurarse',409);
+  await conn.execute('UPDATE inventarios SET deleted_at=NULL,deleted_by=NULL WHERE id=?',[inv.id]);
+  await audit(conn,user.id,'inventarios',inv.id,'RESTAURAR',JSON.stringify({folio:inv.folio}));
+  await conn.commit();res.json({ok:true});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
+tramiteRouter.post('/papelera/expedientes/:id/restaurar',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
+  const id=Number(req.params.id.slice(4));
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const [rows]=await conn.execute(`SELECT e.id,e.deleted_at,i.folio,i.id AS invId,i.deleted_at AS inventory_deleted
+    FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id WHERE e.id=? FOR UPDATE`,[id]);
+  if(!rows.length||!rows[0].deleted_at)throw fail('El expediente no está en la papelera',404);
+  const [[expiry]]=await conn.execute('SELECT deleted_at > DATE_SUB(NOW(), INTERVAL 60 DAY) AS restorable FROM expedientes WHERE id=?',[id]);
+  if(!Number(expiry.restorable))throw fail('Este expediente cumplió sus 60 días de recuperación y no puede restaurarse',409);
+  const inv=await safeInventory(conn,rows[0].folio,user,mode,true);
+  if(inv.deleted_at)throw fail('Restaura primero el inventario completo',409);
+  await conn.execute('UPDATE expedientes SET deleted_at=NULL,deleted_by=NULL WHERE id=?',[id]);
+  await audit(conn,user.id,'expedientes',id,'RESTAURAR',JSON.stringify({folio:inv.folio}));
+  await conn.commit();res.json({ok:true});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
+tramiteRouter.delete('/papelera/inventarios/:folio',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const inv=await safeInventory(conn,req.params.folio,user,mode,true);
+  if(!inv.deleted_at)throw fail('El inventario debe estar en papelera',409);
+  const [rows]=await conn.execute('SELECT id FROM expedientes WHERE inventario_id=? FOR UPDATE',[inv.id]);
+  await ensureNoHistory(conn,rows.map(x=>x.id));
+  for(const row of rows)await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[row.id]);
+  await conn.execute('DELETE FROM expedientes WHERE inventario_id=?',[inv.id]);
+  await conn.execute('DELETE FROM inventarios WHERE id=?',[inv.id]);
+  await audit(conn,user.id,'inventarios',inv.id,'ELIMINACION_DEFINITIVA',JSON.stringify({folio:inv.folio,expedientes:rows.length}));
+  await conn.commit();res.json({ok:true});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
+tramiteRouter.delete('/papelera/expedientes/:id',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
+  const id=Number(req.params.id.slice(4));
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const [rows]=await conn.execute(`SELECT e.deleted_at,i.folio FROM expedientes e
+    JOIN inventarios i ON i.id=e.inventario_id WHERE e.id=? FOR UPDATE`,[id]);
+  if(!rows.length||!rows[0].deleted_at)throw fail('El expediente no está en papelera',404);
+  const inv=await safeInventory(conn,rows[0].folio,user,mode,true);
+  if(inv.deleted_at)throw fail('Elimina el inventario completo desde la papelera',409);
+  await ensureNoHistory(conn,[id]);
+  await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[id]);
+  await conn.execute('DELETE FROM expedientes WHERE id=?',[id]);
+  await audit(conn,user.id,'expedientes',id,'ELIMINACION_DEFINITIVA',JSON.stringify({folio:inv.folio}));
+  await conn.commit();res.json({ok:true});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
+tramiteRouter.delete('/papelera',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user,mode=allowTrash(user);
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const area=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
+  const args=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
+  const [inventories]=await conn.execute(`SELECT i.folio FROM inventarios i JOIN areas a ON a.id=i.area_id WHERE i.deleted_at IS NOT NULL ${area} FOR UPDATE`,args);
+  const [records]=await conn.execute(`SELECT e.id FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
+    JOIN areas a ON a.id=i.area_id WHERE e.deleted_at IS NOT NULL AND i.deleted_at IS NULL ${area} FOR UPDATE`,args);
+  // Se hace todo en una sola transacción: si hay historial, NO hay eliminación parcial.
+  const [allInventoryRows]=inventories.length?await conn.query(`SELECT e.id FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
+    WHERE i.folio IN (${inventories.map(()=>'?').join(',')})`,inventories.map(x=>x.folio)):[[]];
+  const ids=[...allInventoryRows.map(x=>x.id),...records.map(x=>x.id)];
+  await ensureNoHistory(conn,ids);
+  for(const item of inventories){
+    const [[linked]]=await conn.execute('SELECT COUNT(*) AS n FROM transferencia_inventarios ti JOIN inventarios i ON i.id=ti.inventario_id WHERE i.folio=?',[item.folio]);
+    if(Number(linked.n))throw fail('La papelera contiene inventarios con transferencias: no se puede vaciar',409);
+  }
+  for(const id of ids){await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[id]);await conn.execute('DELETE FROM expedientes WHERE id=?',[id]);}
+  for(const item of inventories)await conn.execute('DELETE FROM inventarios WHERE folio=?',[item.folio]);
+  await audit(conn,user.id,'inventarios',0,'VACIAR_PAPELERA',JSON.stringify({inventarios:inventories.length,expedientes:ids.length}));
+  await conn.commit();res.json({ok:true,inventarios:inventories.length,expedientes:ids.length});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });

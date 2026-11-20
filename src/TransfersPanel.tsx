@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Archive,
@@ -20,7 +20,6 @@ import {
   Inbox,
   ListChecks,
   MessageSquareText,
-  MoreHorizontal,
   PackageCheck,
   Plus,
   RotateCcw,
@@ -31,8 +30,10 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import RowActionsMenu from "./RowActionsMenu";
+import LocationShelf from "./LocationShelf";
 import { Role, UserRecord, areaName, fullName } from "./data";
-import { transferApi, tramiteApi, concentrationApi, ReceptionLocation } from "./api";
+import { transferApi, tramiteApi, concentrationApi, ReceptionLocation, type ReceptionSourceBox } from "./api";
 import { ArchivalRecord } from "./records";
 import {
   DocumentaryTransfer,
@@ -104,7 +105,23 @@ function ReceptionBadge({ status }: { status: ReceptionStatus }) {
 
 function userName(users: UserRecord[], id: string) {
   const user = users.find((item) => item.id === id);
-  return user ? fullName(user) : "Sin asignar";
+  return user ? fullName(user) : id ? "Usuario no disponible" : "Pendiente";
+}
+function requesterName(transfer: DocumentaryTransfer, users: UserRecord[]) {
+  return transfer.requesterName || userName(users, transfer.requestedBy);
+}
+function reviewResponsible(transfer: DocumentaryTransfer, users: UserRecord[]) {
+  if (transfer.reviewerId)
+    return transfer.reviewerName || userName(users, transfer.reviewerId);
+  if (transfer.status === "Pendiente de visto bueno del área")
+    return transfer.assignedAreaManagerName
+      ? transfer.assignedAreaManagerName + " · visto bueno pendiente"
+      : "Encargado del área pendiente de asignación";
+  if (transfer.status === "Pendiente de revisión administrativa")
+    return "Pendiente de revisión administrativa";
+  if (transfer.areaApproverId && transfer.areaApproverName)
+    return transfer.areaApproverName + " · visto bueno del área";
+  return "Revisión aún no realizada";
 }
 
 function TransferTray({
@@ -130,7 +147,6 @@ function TransferTray({
   const [search, setSearch] = useState(initialSearch);
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
-  const [activeActions, setActiveActions] = useState<string | null>(null);
   const pageSize = 5;
   const visibleByRole = useMemo(() => {
     if (role === "Administrador / Coordinador") return transfers;
@@ -147,7 +163,7 @@ function TransferTray({
       (!query ||
         transfer.folio.toLowerCase().includes(query) ||
         areaName(transfer.areaId).toLowerCase().includes(query) ||
-        userName(users, transfer.requestedBy).toLowerCase().includes(query))
+        requesterName(transfer, users).toLowerCase().includes(query))
     );
   });
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -259,7 +275,7 @@ function TransferTray({
                         <span>
                           <UserRound size={14} />
                         </span>
-                        <strong>{userName(users, transfer.requestedBy)}</strong>
+                        <strong>{requesterName(transfer, users)}</strong>
                       </div>
                     </td>
                     <td>{formatDate(transfer.submittedAt || transfer.createdAt)}</td>
@@ -271,48 +287,30 @@ function TransferTray({
                     <td>
                       <TransferStatusBadge status={transfer.status} />
                     </td>
-                    <td>{userName(users, transfer.reviewerId)}</td>
+                    <td>{reviewResponsible(transfer, users)}</td>
                     <td>
-                      <div className="record-actions">
-                        <button
-                          aria-label={`Acciones para ${transfer.folio}`}
-                          onClick={() =>
-                            setActiveActions((current) =>
-                              current === transfer.id ? null : transfer.id,
-                            )
-                          }
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-                        {activeActions === transfer.id && (
-                          <div className="record-actions__menu transfer-actions-menu">
-                            <button onClick={() => onOpen(transfer)}>
-                              <Eye size={16} />
-                              Ver solicitud
-                            </button>
-                            {canContinue && (
-                              <button onClick={() => onOpen(transfer, "continue")}>
-                                <FilePenLine size={15} />
-                                {transfer.status === "Con observaciones"
-                                  ? "Corregir y reenviar"
-                                  : "Continuar"}
-                              </button>
-                            )}
-                            {transfer.status === "Aceptada" &&
-                              role !== "Personal de área" &&
-                              transfer.receptionStatus !== "Recibida" && (
-                                <button onClick={() => onOpen(transfer, "reception")}>
-                                  <PackageCheck size={15} />
-                                  Registrar recepción
-                                </button>
-                              )}
-                            <button onClick={() => onOpen(transfer, "history")}>
-                              <History size={15} />
-                              Ver historial
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowActionsMenu
+                        label={`Acciones para ${transfer.folio}`}
+                        width={210}
+                        actions={[
+                          { label: "Ver solicitud", icon: <Eye size={16}/>,
+                            onSelect: () => onOpen(transfer) },
+                          ...(canContinue ? [{
+                            label: transfer.status === "Con observaciones" ? "Corregir y reenviar" : "Continuar",
+                            icon: <FilePenLine size={15}/>,
+                            onSelect: () => onOpen(transfer, "continue"),
+                          }] : []),
+                          ...(transfer.status === "Aceptada" &&
+                            role !== "Personal de área" &&
+                            transfer.receptionStatus !== "Recibida" ? [{
+                              label: "Registrar recepción",
+                              icon: <PackageCheck size={15}/>,
+                              onSelect: () => onOpen(transfer, "reception"),
+                            }] : []),
+                          { label: "Ver historial", icon: <History size={15}/>,
+                            onSelect: () => onOpen(transfer, "history") },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
@@ -956,7 +954,7 @@ function RequestDetail({
         <div className="transfer-summary-grid">
           <div>
             <span>Usuario solicitante</span>
-            <strong>{userName(users, transfer.requestedBy)}</strong>
+            <strong>{requesterName(transfer, users)}</strong>
           </div>
           <div>
             <span>Área solicitante</span>
@@ -968,7 +966,17 @@ function RequestDetail({
           </div>
           <div>
             <span>Responsable de revisión</span>
-            <strong>{userName(users, transfer.reviewerId)}</strong>
+            <strong>{reviewResponsible(transfer, users)}</strong>
+          </div>
+          <div>
+            <span>Encargado del área</span>
+            <strong>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</strong>
+          </div>
+          <div>
+            <span>Visto bueno otorgado por</span>
+            <strong>{transfer.areaApproverId
+              ? (transfer.areaApproverName || userName(users, transfer.areaApproverId))
+              : "Pendiente de visto bueno"}</strong>
           </div>
           <div>
             <span>Fecha de aceptación</span>
@@ -1002,10 +1010,16 @@ function RequestDetail({
           <ReceptionBadge status={transfer.receptionStatus} />
           <div className="reception-summary__data">
             <span>
-              Fecha: <b>{formatDate(transfer.receptionDate)}</b>
+              Fecha de recepción: <b>{formatDate(transfer.receptionDate)}</b>
             </span>
             <span>
-              Responsable: <b>{userName(users, transfer.receptionResponsible)}</b>
+              Responsable de recepción: <b>{transfer.receptionResponsible
+                ? (transfer.receptionResponsibleName || userName(users, transfer.receptionResponsible))
+                : "Pendiente de recepción física"}</b>
+            </span>
+            <span>
+              Aceptada por: <b>{transfer.reviewerName ||
+                (transfer.reviewerId ? userName(users, transfer.reviewerId) : "Pendiente")}</b>
             </span>
           </div>
           {canReceive && transfer.receptionStatus !== "Recibida" && (
@@ -1190,11 +1204,40 @@ function ReceptionForm({
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
+  const [sourceBoxes,setSourceBoxes]=useState<ReceptionSourceBox[]>([]);
+  const [boxesLoading,setBoxesLoading]=useState(true);
+  const [boxesError,setBoxesError]=useState("");
   const [location,setLocation]=useState<ReceptionLocation>(()=>({
     archiveZone:"Archivo de concentración",
     room:"Sótano",shelf:"",level:"",physicalSection:"",
     position:"",locationBox:"",locationNotes:"",
   }));
+  useEffect(()=>{
+    let active=true;
+    setBoxesLoading(true);
+    transferApi.receptionBoxes(transfer.id)
+      .then(boxes=>{
+        if(!active)return;
+        setSourceBoxes(boxes);
+        setBoxesError("");
+        const values=[...new Set(boxes.map(item=>item.boxNumber.trim()).filter(Boolean))];
+        const allHaveSame=values.length===1&&boxes.every(item=>item.boxNumber.trim()===values[0]);
+        setLocation(current=>({...current,locationBox:allHaveSame?values[0]:""}));
+      })
+      .catch(err=>{
+        if(active){
+          setBoxesError(err instanceof Error?err.message:"No se pudieron consultar las cajas originales.");
+          setSourceBoxes([]);
+        }
+      })
+      .finally(()=>{if(active)setBoxesLoading(false);});
+    return ()=>{active=false;};
+  },[transfer.id]);
+  const existingBoxes=[...new Set(sourceBoxes.map(item=>item.boxNumber.trim()).filter(Boolean))];
+  const missingBoxCount=sourceBoxes.filter(item=>!item.boxNumber.trim()).length;
+  const allBoxesLocked=existingBoxes.length>0&&missingBoxCount===0;
+  const uniformBox=allBoxesLocked&&existingBoxes.length===1;
+  const boxNeedsManual=missingBoxCount>0;
   const updateLocation=(key:keyof ReceptionLocation,value:string)=>{
     setLocation(current=>({...current,[key]:value}));
     setError("");
@@ -1221,6 +1264,10 @@ function ReceptionForm({
           event.preventDefault();
           if (status === "Diferencias pendientes" && !notes.trim()) {
             setError("Describe las diferencias encontradas.");
+            return;
+          }
+          if(status==="Recibida" && (boxesLoading || boxesError)){
+            setError(boxesError||"Consulta las cajas antes de registrar la recepción.");
             return;
           }
           if(status==="Recibida" && (
@@ -1299,7 +1346,8 @@ function ReceptionForm({
             <h3>Ubicación física del inventario recibido</h3>
             <p>Captura la ubicación una sola vez. Se aplicará automáticamente a los {transfer.recordIds.length} expedientes de esta transferencia, sin repetir el formulario.</p>
           </div></div>
-          <div className="record-form-grid" style={{marginTop:16}}>
+          <div className="reception-location-layout">
+            <div className="record-form-grid reception-location-fields">
             <label className="form-field"><span>Archivo o zona *</span>
               <input required maxLength={160} value={location.archiveZone} onChange={e=>updateLocation("archiveZone",e.target.value)}/>
             </label>
@@ -1321,8 +1369,20 @@ function ReceptionForm({
                 <option value="">Seleccionar</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </label>
-            <label className="form-field"><span>Caja o referencia</span>
-              <input maxLength={60} value={location.locationBox} onChange={e=>updateLocation("locationBox",e.target.value)}/>
+            <label className="form-field"><span>{allBoxesLocked?"Caja(s) original(es)":"Caja o referencia"}</span>
+              <input
+                maxLength={60}
+                value={uniformBox?existingBoxes[0]:allBoxesLocked?"Cajas individuales conservadas":location.locationBox}
+                disabled={boxesLoading||allBoxesLocked}
+                placeholder={boxesLoading?"Consultando cajas...":boxNeedsManual?"Solo para expedientes sin caja":"Sin caja en Trámite"}
+                onChange={e=>updateLocation("locationBox",e.target.value)}
+                className={allBoxesLocked?"reception-box-locked":""}
+              />
+              {uniformBox&&<small className="reception-box-note">Caja heredada de Archivo de trámite. No se puede modificar.</small>}
+              {existingBoxes.length>1&&<small className="reception-box-note">Se conservarán las cajas originales: {existingBoxes.join(", ")}.</small>}
+              {existingBoxes.length===1&&!uniformBox&&<small className="reception-box-note">Caja existente: {existingBoxes[0]}. No se reemplazará.</small>}
+              {boxNeedsManual&&existingBoxes.length>0&&<small className="reception-box-note">Este campo solo completará {missingBoxCount} expediente(s) sin caja.</small>}
+              {boxesError&&<small className="field-error" role="alert">{boxesError}</small>}
             </label>
             <label className="form-field"><span>Posición</span>
               <input maxLength={45} value={location.position} onChange={e=>updateLocation("position",e.target.value.toUpperCase())}/>
@@ -1330,19 +1390,21 @@ function ReceptionForm({
             <label className="form-field record-field--wide"><span>Observaciones de ubicación</span>
               <textarea rows={2} value={location.locationNotes} onChange={e=>updateLocation("locationNotes",e.target.value)}/>
             </label>
+            </div>
+            <LocationShelf level={location.level} section={location.physicalSection}/>
           </div>
-          <p className="catalog-note">La recepción y la ubicación compartida se guardarán juntas en MySQL. Ningún expediente requiere captura individual.</p>
+          <p className="catalog-note">El estante, nivel y sección se aplicarán a toda la recepción. Las cajas registradas en Trámite se conservarán por expediente.</p>
         </section>}
         {error && <div role="alert" className="validation-summary">{error}</div>}
         <div className="reception-rule">
           <ShieldCheck size={17} />
-          La ubicación se guarda en MySQL junto con la recepción física. La aceptación administrativa ya se realizó.
+          La recepción física incluirá la ubicación registrada.
         </div>
         <div className="concentration-location-form__footer">
           <Button className="button--secondary" onClick={onBack}>
             Cancelar
           </Button>
-          <Button className="button--primary" type="submit">
+          <Button className="button--primary" type="submit" disabled={status==="Recibida"&&(boxesLoading||Boolean(boxesError))}>
             <Check size={17} />
             Guardar recepción
           </Button>
@@ -1432,6 +1494,11 @@ export default function TransfersPanel({
   const [returnOpen, setReturnOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!/enviada para visto bueno|devuelta con observaciones|visto bueno registrado|transferencia aceptada|recepción registrada/i.test(message)) return;
+    const timer=window.setTimeout(()=>setMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  },[message]);
   const canReceive =
     role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
@@ -1446,7 +1513,7 @@ export default function TransfersPanel({
     setSelected(updated);
   };
   const failure=(error:unknown)=>{
-    setMessage(error instanceof Error ? error.message : "No se pudo completar la operación en MySQL.");
+    setMessage(error instanceof Error ? error.message : "No se pudo completar la operación.");
   };
   const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
     try{
@@ -1454,7 +1521,7 @@ export default function TransfersPanel({
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
-      setMessage(updated.folio+" fue enviada para visto bueno del área en MySQL.");
+      setMessage(updated.folio+" enviada para visto bueno del área.");
     }catch(error){ failure(error);window.alert(error instanceof Error?error.message:"No se pudo enviar la transferencia"); }
   };
   const returnTransfer=async(observation:string)=>{
@@ -1471,7 +1538,7 @@ export default function TransfersPanel({
     try{
       const updated=await transferApi.areaApprove(selected.id);
       saveTransferState(updated);
-      setMessage("El visto bueno quedó registrado en MySQL.");
+      setMessage("Visto bueno registrado correctamente.");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aprobar");}
   };
   const acceptTransfer=async()=>{
@@ -1491,7 +1558,7 @@ export default function TransfersPanel({
         setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
       }catch(refreshError){
         console.error("Transferencia aceptada; error al actualizar la vista:",refreshError);
-        setMessage("Transferencia aceptada en MySQL. Recarga la página para actualizar los expedientes.");
+        setMessage("Transferencia aceptada. Actualiza la página para ver los expedientes.");
       }
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
   };
@@ -1506,7 +1573,7 @@ export default function TransfersPanel({
           onRecordsChange([...tramite.filter(r=>r.stage!=="Archivo de concentración"),...concentracion]);
         }
       }catch(e){console.error("Recepción confirmada, pero falló actualizar pantalla:",e);}
-      setMessage("La recepción y, cuando corresponde, la ubicación física quedaron registradas en MySQL.");
+      setMessage("Recepción registrada correctamente.");
       setView("detail");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo registrar recepción");}
   };

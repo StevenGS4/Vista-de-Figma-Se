@@ -1,5 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usersApi } from "./api";
+import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
 import {
   ArrowLeft,
@@ -31,7 +32,7 @@ import {
   roles,
 } from "./data";
 
-type AdminTab = "users" | "areas" | "permissions";
+type AdminTab = "users" | "areas" | "permissions" | "activity";
 type AdminView = "list" | "form" | "detail";
 type FieldErrors = Partial<Record<keyof UserFormState | "roles", string>>;
 
@@ -354,7 +355,7 @@ function UserForm({
             </Button>
             <button className="button button--primary" type="submit" disabled={isSaving} aria-busy={isSaving}>
               <Check size={17} />
-              {isSaving ? "Guardando en MySQL..." : editing ? "Guardar cambios" : "Registrar usuario"}
+              {isSaving ? "Guardando..." : editing ? "Guardar cambios" : "Registrar usuario"}
             </button>
           </div>
         </form>
@@ -448,13 +449,7 @@ function UserDetail({
             </div>
           </div>
         </div>
-        <div className="detail-note">
-          <ShieldCheck size={20} />
-          <div>
-            <strong>Cuenta registrada en MySQL</strong>
-            <p>Los cambios confirmados se conservan en la base de datos y pueden consultarse al iniciar sesión nuevamente.</p>
-          </div>
-        </div>
+
       </div>
     </div>
   );
@@ -842,7 +837,7 @@ function PermissionMatrix({
       <div className="permission-legend">
         <ShieldCheck size={18} />
         <span>
-          <strong>Control de acceso por rol.</strong> La matriz de permisos es ilustrativa en esta etapa. Los permisos reales se verifican en el servidor.
+          <strong>Control de acceso por rol.</strong> Los permisos disponibles dependen del rol asignado.
         </span>
       </div>
     </div>
@@ -865,6 +860,11 @@ export default function AdminPanel({
   const [selected, setSelected] = useState<UserRecord | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (!toast || !toast.includes("correctamente")) return;
+    const timer = window.setTimeout(() => setToast(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -877,7 +877,7 @@ export default function AdminPanel({
     try {
       const saved = await usersApi.save(user);
       onUsersChange(exists ? users.map((item) => (item.id === saved.id ? saved : item)) : [saved,...users]);
-      setToast(exists ? "Los cambios del usuario se guardaron en MySQL." : "El usuario fue registrado en MySQL.");
+      setToast(exists ? "Usuario actualizado correctamente." : "Usuario registrado correctamente.");
       setView("list");
       setSelected(null);
     } catch (error) {
@@ -894,7 +894,7 @@ export default function AdminPanel({
       onUsersChange(users.map((user)=>(user.id===saved.id?saved:user)));
       if (selected?.id === saved.id) setSelected(saved);
       setPermissionsUser(null);
-      setToast("Los roles del usuario se actualizaron en MySQL.");
+      setToast("Roles actualizados correctamente.");
     } catch(error) {
       setToast(error instanceof Error ? error.message : "No se pudieron actualizar los roles.");
     }
@@ -969,6 +969,15 @@ export default function AdminPanel({
           <SlidersHorizontal size={17} />
           Roles y permisos
         </button>
+        <button
+          aria-selected={tab === "activity"}
+          className={tab === "activity" ? "is-active" : ""}
+          onClick={() => setTab("activity")}
+          role="tab"
+        >
+          <Users size={17} />
+          Seguimiento por área
+        </button>
       </div>
 
       {toast && (
@@ -1001,6 +1010,7 @@ export default function AdminPanel({
         />
       )}
       {tab === "areas" && <AdminAreasPanel />}
+      {tab === "activity" && <AreaControlPanel mode="admin" />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />
       )}

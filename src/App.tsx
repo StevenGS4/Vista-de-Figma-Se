@@ -51,6 +51,7 @@ import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
 const AdminPanel = lazy(() => import("./AdminPanel"));
+const AreaControlPanel = lazy(() => import("./AreaControlPanel"));
 const ConcentrationPanel = lazy(() => import("./ConcentrationPanel"));
 const InventoriesPanel = lazy(() => import("./InventoriesPanel"));
 const LoansPanel = lazy(() => import("./LoansPanel"));
@@ -64,6 +65,7 @@ type ModuleId =
   | "transferencias"
   | "prestamos"
   | "inventarios"
+  | "control-area"
   | "administracion";
 
 const roleAccess: Record<ModuleId, Role[]> = {
@@ -92,6 +94,7 @@ const roleAccess: Record<ModuleId, Role[]> = {
     "Encargado de préstamos / Control archivístico",
     "Administrador / Coordinador",
   ],
+  "control-area": ["Encargado de área"],
   administracion: ["Administrador / Coordinador"],
 };
 
@@ -132,6 +135,12 @@ const modules = {
     description: "Generación de inventarios con la información archivística registrada.",
     icon: Download,
   },
+  "control-area": {
+    label: "Control de área",
+    short: "Control de área",
+    description: "Consulta del personal, inventarios, transferencias y actividades de tu área.",
+    icon: Users,
+  },
   administracion: {
     label: "Administración",
     short: "Administración",
@@ -152,6 +161,7 @@ const moduleOrder = Object.keys(modules) as ModuleId[];
 
 function hasModulePermission(id: ModuleId, role: Role, permissions: string[]) {
   if (id === "inicio") return true;
+  if (id === "control-area") return role === "Encargado de área" && permissions.includes("view-records");
   if (id === "tramite" || id === "concentracion") return permissions.includes("view-records");
   if (id === "transferencias") {
     if (role === "Personal de área") return permissions.includes("prepare-transfers");
@@ -335,7 +345,7 @@ function Login({ onLogin }: { onLogin: (user: UserRecord) => void }) {
             <div className="demo-access__heading">
               <div>
                 <strong>Acceso institucional</strong>
-                <span>Utiliza una cuenta creada por la administración. Las contraseñas se verifican en el servidor.</span>
+                <span>Utiliza tu cuenta institucional para acceder.</span>
               </div>
             </div>
           </div>
@@ -438,7 +448,7 @@ function MandatoryPasswordChange({
           <div className="inline-notice">
             <ShieldCheck size={18} />
             <span>
-              <strong>Protección de cuenta.</strong> La validación se realiza en Node.js y la contraseña se almacena mediante hash en MySQL.
+              <strong>Protección de cuenta.</strong> Tu contraseña se actualizará de forma segura.
             </span>
           </div>
         </div>
@@ -560,7 +570,12 @@ function Sidebar({
           {!collapsed ? (
             <InstitutionalMarks inverse />
           ) : (
-            <span title="Oficina de Representación en Nayarit">NAY</span>
+            <img
+              className="sidebar__collapsed-logo"
+              src="https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/sldzajfjhdowg7luhsyk.jpg"
+              alt="Control Archivístico SEMARNAT"
+              title="Oficina de Representación en Nayarit"
+            />
           )}
         </div>
         <nav className="sidebar__nav" aria-label="Navegación principal">
@@ -711,7 +726,7 @@ function Header({
   );
 }
 
-const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion">, string[][]> = {
+const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion" | "control-area">, string[][]> = {
   tramite: [
     ["SEMARNAT-NAY/UJ/2025/0042", "Unidad Jurídica", "4C.3 — Asuntos jurídicos", "En trámite"],
     ["SEMARNAT-NAY/DA/2025/0018", "Recursos Materiales", "6C.6 — Adquisiciones", "En trámite"],
@@ -734,7 +749,7 @@ const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion">, string
   ],
 };
 
-function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion"> }) {
+function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion" | "control-area"> }) {
   const ItemIcon = modules[id].icon;
   const columns =
     id === "tramite"
@@ -1018,6 +1033,8 @@ function Application({
                 transfers={transfers}
               />
             </Suspense>
+          ) : active === "control-area" && role === "Encargado de área" ? (
+            <Suspense fallback={moduleFallback}><AreaControlPanel mode="area"/></Suspense>
           ) : active === "administracion" &&
             role === "Administrador / Coordinador" &&
             currentPermissions.includes("manage-users") ? (
@@ -1030,7 +1047,7 @@ function Application({
               />
             </Suspense>
           ) : (
-            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion">} />
+            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
           )}
         </main>
       </div>
@@ -1095,7 +1112,7 @@ export default function App() {
     }).catch(error => {
       if (!alive) return;
       setArchivalRecords([]);
-      setRecordsLoadError(error instanceof Error ? error.message : "Error consultando archivos en MySQL");
+      setRecordsLoadError(error instanceof Error ? error.message : "No fue posible consultar los archivos.");
       console.error("Error cargando Trámite o Concentración desde MySQL:",error);
     });
     return () => { alive = false; };

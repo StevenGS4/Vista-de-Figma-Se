@@ -4,6 +4,10 @@ export type RecordAvailability = "En archivo" | "Prestado";
 export type ArchivalRecord = {
   id: string;
   inventoryId: string;
+  inventoryDeletedAt?: string;
+  recordDeletedAt?: string;
+  inventoryDeletedBy?: string;
+  recordDeletedBy?: string;
   inventoryDate: string;
   responsiblePosition: string;
   initialSheetNumber: string;

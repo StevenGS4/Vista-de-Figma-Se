@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, ReactNode, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -13,13 +13,13 @@ import {
   FilterX,
   FolderTree,
   MapPin,
-  MoreHorizontal,
   Pencil,
   Search,
   ShieldCheck,
   Truck,
   Warehouse,
 } from "lucide-react";
+import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas } from "./data";
 import { concentrationApi } from "./api";
 import LocationShelf from "./LocationShelf";
@@ -93,7 +93,6 @@ function ConcentrationList({
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [activeActions, setActiveActions] = useState<string | null>(null);
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
   const pageSize = 5;
 
@@ -101,7 +100,12 @@ function ConcentrationList({
   // No mezclamos expedientes de inventarios diferentes aunque compartan CADIDO.
   const inventories = useMemo(() => {
     const grouped = new Map<string, ArchivalRecord[]>();
+    // La llave de un expediente es su ID persistente. Incluso si una respuesta
+    // futura trae filas repetidas por una relación SQL, nunca mostrar copias.
+    const seen = new Set<string>();
     for (const record of records) {
+      if (seen.has(record.id)) continue;
+      seen.add(record.id);
       const key = record.inventoryId;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(record);
@@ -147,7 +151,6 @@ function ConcentrationList({
     setRecentOnly(false);
     setSearched(false);
     setExpandedInventory(null);
-    setActiveActions(null);
     setPage(1);
   };
 
@@ -297,8 +300,7 @@ function ConcentrationList({
                               aria-controls={`concentration-inventory-${id}`}
                               onClick={() => {
                                 setExpandedInventory(expanded ? null : id);
-                                setActiveActions(null);
-                              }}
+                                                          }}
                             >
                               <FolderTree size={17} />
                               <strong>{id}</strong>
@@ -315,8 +317,7 @@ function ConcentrationList({
                               aria-expanded={expanded}
                               onClick={() => {
                                 setExpandedInventory(expanded ? null : id);
-                                setActiveActions(null);
-                              }}>
+                                                          }}>
                               {expanded ? "Ocultar expedientes" : "Mostrar expedientes"}
                               <ChevronDown size={16} className={expanded ? "is-expanded" : ""}/>
                             </button>
@@ -330,15 +331,28 @@ function ConcentrationList({
                                   <strong>Expedientes del inventario {id}</strong>
                                   <span>{items.length} expediente{items.length===1?"":"s"} en concentración</span>
                                 </div>
+                                <div className="table-scroll concentration-archive-summary-scroll">
+                                  <table className="data-table concentration-archive-summary" aria-label="Datos generales del inventario">
+                                    <thead><tr>
+                                      <th>Identificador</th>
+                                      <th>Sección</th>
+                                      <th>Serie</th>
+                                      <th>Fecha de elaboración</th>
+                                    </tr></thead>
+                                    <tbody><tr>
+                                      <td><strong>{header.inventoryId}</strong></td>
+                                      <td>{sectionName(header.cadidoSectionId)}</td>
+                                      <td>{seriesName(header.cadidoSeriesId)}</td>
+                                      <td>{formatDate(header.inventoryDate)}</td>
+                                    </tr></tbody>
+                                  </table>
+                                </div>
                                 <div className="table-scroll">
                                   <table className="data-table concentration-table concentration-expedient-table">
                                     <thead><tr>
                                       <th>Número de expediente</th>
                                       <th>Título o asunto</th>
                                       <th>Código de clasificación</th>
-                                      <th>Estante</th>
-                                      <th>Nivel</th>
-                                      <th>Sección física</th>
                                       <th>Disponibilidad</th>
                                       <th className="align-right">Acciones</th>
                                     </tr></thead>
@@ -353,31 +367,24 @@ function ConcentrationList({
                                         </td>
                                         <td><span className="record-subject" title={record.title}>{record.title}</span></td>
                                         <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
-                                        <td>{record.shelf ? `Estante ${record.shelf}` : "Pendiente"}</td>
-                                        <td>{record.level ? `Nivel ${record.level}` : "Pendiente"}</td>
-                                        <td>{record.physicalSection ? `Sección ${record.physicalSection}` : "Pendiente"}</td>
                                         <td><AvailabilityBadge value={record.availability}/></td>
                                         <td>
-                                          <div className="record-actions">
-                                            <button type="button"
-                                              aria-expanded={activeActions === record.id}
-                                              aria-label={`Acciones para ${record.recordNumber}`}
-                                              onClick={() => setActiveActions(current => current === record.id ? null : record.id)}>
-                                              <MoreHorizontal size={18}/>
-                                            </button>
-                                            {activeActions === record.id && (
-                                              <div className="record-actions__menu concentration-actions-menu">
-                                                {canViewDetail && <button type="button" onClick={() => {
-                                                  setActiveActions(null);
-                                                  onView(record);
-                                                }}><Files size={16}/> Ver detalle</button>}
-                                                {canEditLocation && <button type="button" onClick={() => {
-                                                  setActiveActions(null);
-                                                  onEditLocation(record);
-                                                }}><MapPin size={15}/> Editar ubicación</button>}
-                                              </div>
-                                            )}
-                                          </div>
+                                          <RowActionsMenu
+                                            label={`Acciones para ${record.recordNumber}`}
+                                            width={178}
+                                            actions={[
+                                              ...(canViewDetail ? [{
+                                                label: "Ver detalle",
+                                                icon: <Files size={16}/>,
+                                                onSelect: () => onView(record),
+                                              }] : []),
+                                              ...(canEditLocation ? [{
+                                                label: "Editar ubicación",
+                                                icon: <MapPin size={15}/>,
+                                                onSelect: () => onEditLocation(record),
+                                              }] : []),
+                                            ]}
+                                          />
                                         </td>
                                       </tr>
                                     ))}</tbody>
@@ -778,6 +785,11 @@ export default function ConcentrationPanel({
   const [view, setView] = useState<PanelView>("list");
   const [selected, setSelected] = useState<ArchivalRecord | null>(null);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!message.startsWith("Ubicación física actualizada")) return;
+    const timer=window.setTimeout(()=>setMessage(""),4000);
+    return ()=>window.clearTimeout(timer);
+  },[message]);
   const concentrationRecords = records.filter((record) => {
     if (record.stage !== "Archivo de concentración") return false;
     if (
@@ -791,7 +803,7 @@ export default function ConcentrationPanel({
   const canEditLocation =
     role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
-  const canViewDetail = role !== "Encargado de área";
+  const canViewDetail = permissions.includes("view-records");
 
   const saveLocation = async (record: ArchivalRecord) => {
     try {
@@ -799,10 +811,9 @@ export default function ConcentrationPanel({
       onRecordsChange(records.map(item=>item.id===saved.id?saved:item));
       setSelected(saved);
       setView("detail");
-      setMessage("La ubicación física se actualizó correctamente en MySQL.");
-      window.setTimeout(()=>setMessage(""),3000);
+      setMessage("Ubicación física actualizada correctamente.");
     } catch(error) {
-      const message=error instanceof Error?error.message:"Error al guardar la ubicación en MySQL.";
+      const message=error instanceof Error?error.message:"No fue posible guardar la ubicación.";
       setMessage(message);
       window.alert(message);
     }

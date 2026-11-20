@@ -7,7 +7,7 @@ on:
       - 'Backend/src/template-workbooks.js'
       - 'Backend/src/check-template-export.js'
       - 'Backend/src/exports.js'
-      - 'Backend/plantillas/inventario_tramite.xlsx'
+      - 'Backend/plantillas/*.xlsx'
       - 'Backend/package.json'
       - '.github/workflows/official-template.yml'
   workflow_dispatch:
