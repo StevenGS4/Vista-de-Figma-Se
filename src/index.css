@@ -7766,3 +7766,29 @@
     padding-inline: 8px;
   }
 }
+
+/* Menús de acciones compartidos: renderizados sobre el documento para que
+   las tablas con scroll no recorten sus opciones (Trámite, Concentración,
+   Transferencias y Préstamos). No alterar el scroll de las tablas. */
+.record-actions__menu--floating {
+  position: fixed;
+  z-index: 1200;
+  min-width: 166px;
+  border: 1px solid #b9cec2;
+  border-radius: 10px;
+  background: #fffefa;
+  box-shadow: 0 15px 35px rgb(0 38 33 / 17%);
+}
+.record-actions__menu--floating button {
+  white-space: nowrap;
+}
+.record-actions__menu--floating button.danger-text:hover,
+.record-actions__menu--floating button.danger-text:focus-visible {
+  color: #611232;
+  background: #f7ecef;
+}
+.record-actions > button[aria-expanded="true"] {
+  border-color: #a7c6b2;
+  color: #1e5b4f;
+  background: #dfece2;
+}
