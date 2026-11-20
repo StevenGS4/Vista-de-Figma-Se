@@ -803,7 +803,7 @@ export default function ConcentrationPanel({
   const canEditLocation =
     role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
-  const canViewDetail = role !== "Encargado de área";
+  const canViewDetail = permissions.includes("view-records");
 
   const saveLocation = async (record: ArchivalRecord) => {
     try {
