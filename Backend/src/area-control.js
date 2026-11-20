@@ -6,7 +6,7 @@ export const areaControlRouter = express.Router();
 areaControlRouter.use(requireAuth);
 
 const err=(message,status=400)=>Object.assign(new Error(message),{status});
-function scope(user) {
+export function scope(user) {
   if(user.mustChangePassword)throw err('Debes cambiar tu contraseña',403);
   if(user.roles.includes('Administrador / Coordinador'))return {admin:true};
   if(user.roles.includes('Encargado de área'))return {admin:false,area:user.areaId};
@@ -84,7 +84,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
     LEFT JOIN expedientes e ON e.inventario_id=i.id
     WHERE i.creado_por=? ${c.sql}
     GROUP BY i.id,i.folio,i.fecha_elaboracion,i.deleted_at,i.estado,a.nombre
-    ORDER BY i.fecha_elaboracion DESC,i.id DESC LIMIT 300`,[id,...c.args]);
+    ORDER BY i.fecha_elaboracion DESC,i.id DESC`,[id,...c.args]);
   const [sent]=await pool.execute(`SELECT DISTINCT t.id AS transferId,t.folio AS transferFolio,
     i.id AS inventoryDbId,i.folio AS inventoryFolio,
     DATE_FORMAT(t.enviada_en,'%Y-%m-%d') AS sentAt,
@@ -95,7 +95,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
     JOIN inventarios i ON i.id=ti.inventario_id
     JOIN areas a ON a.id=t.area_id
     WHERE t.solicitante_id=? ${c.sql}
-    ORDER BY sentAt DESC,t.id DESC LIMIT 300`,[id,...c.args]);
+    ORDER BY sentAt DESC,t.id DESC`,[id,...c.args]);
   const [records]=await pool.execute(`SELECT e.id,e.numero_expediente AS recordNumber,
     e.titulo_asunto AS title,i.folio AS inventoryFolio,
     DATE_FORMAT(e.apertura,'%Y-%m-%d') AS openedAt,
@@ -105,7 +105,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
     JOIN inventarios i ON i.id=e.inventario_id
     JOIN areas a ON a.id=i.area_id
     WHERE (e.creado_por=? OR i.creado_por=?) ${c.sql}
-    ORDER BY e.apertura DESC,e.id DESC LIMIT 500`,[id,id,...c.args]);
+    ORDER BY e.apertura DESC,e.id DESC`,[id,id,...c.args]);
   // Solo operaciones relacionadas con el área autorizada y que todavía tengan
   // vínculo documental verificable. Nunca mostrar toda la auditoría global al encargado.
   const [activity]=await pool.execute(`SELECT h.id,h.accion AS action,h.entidad AS entity,
