@@ -1,7 +1,7 @@
 import { pool } from "./config/database.js";
 
 export const RECYCLE_DAYS = 60;
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const CHUNK = 150;
 let running = false;
 
@@ -68,20 +68,35 @@ export async function purgeExpiredTrash() {
  running=true;
  let purgedInventories=0,purgedRecords=0,failed=0;
  try{
-  const [inv]=await pool.execute(`SELECT id FROM inventarios
-    WHERE deleted_at IS NOT NULL AND deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
-    ORDER BY deleted_at ASC LIMIT ${CHUNK}`);
-  for(const row of inv){
-   try{if(await purgeArchivedInventory(row.id))purgedInventories++;}
-   catch(error){failed++;console.error('Caducidad: inventario retenido por integridad:',row.id,error.code||error.message);}
+  // Recorrer mediante cursor para que documentos bloqueados por historial
+  // no impidan procesar otros documentos vencidos.
+  let cursor=0;
+  for(;;){
+   const [inv]=await pool.execute(`SELECT id FROM inventarios
+     WHERE id>? AND deleted_at IS NOT NULL
+       AND deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
+     ORDER BY id ASC LIMIT ${CHUNK}`,[cursor]);
+   if(!inv.length)break;
+   for(const row of inv){
+    cursor=row.id;
+    try{if(await purgeArchivedInventory(row.id))purgedInventories++;}
+    catch(error){failed++;console.error('Caducidad: inventario retenido por integridad:',row.id,error.code||error.message);}
+   }
   }
-  const [records]=await pool.execute(`SELECT e.id FROM expedientes e
-    JOIN inventarios i ON i.id=e.inventario_id
-    WHERE e.deleted_at IS NOT NULL AND e.deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
-      AND i.deleted_at IS NULL ORDER BY e.deleted_at ASC LIMIT ${CHUNK}`);
-  for(const row of records){
-   try{if(await purgeArchivedRecord(row.id))purgedRecords++;}
-   catch(error){failed++;console.error('Caducidad: expediente retenido por integridad:',row.id,error.code||error.message);}
+  cursor=0;
+  for(;;){
+   const [records]=await pool.execute(`SELECT e.id FROM expedientes e
+     JOIN inventarios i ON i.id=e.inventario_id
+     WHERE e.id>? AND e.deleted_at IS NOT NULL
+       AND e.deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
+       AND i.deleted_at IS NULL
+     ORDER BY e.id ASC LIMIT ${CHUNK}`,[cursor]);
+   if(!records.length)break;
+   for(const row of records){
+    cursor=row.id;
+    try{if(await purgeArchivedRecord(row.id))purgedRecords++;}
+    catch(error){failed++;console.error('Caducidad: expediente retenido por integridad:',row.id,error.code||error.message);}
+   }
   }
   if(purgedInventories||purgedRecords||failed)
     console.info('Papelera 60 días:',{purgedInventories,purgedRecords,failed});
