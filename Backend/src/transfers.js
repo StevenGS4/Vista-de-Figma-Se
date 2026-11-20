@@ -259,6 +259,26 @@ transfersRouter.post('/:id/accept',async(req,res,next)=>{
   next(e);
  }
 });
+// Cajas originales: el número capturado en Trámite prevalece en Recepción.
+transfersRouter.get('/:id/reception-boxes',async(req,res,next)=>{
+ try{
+  const user=req.auth.user;ensureAuth(user);
+  const id=Number(String(req.params.id).replace(/^TR-/,''));
+  if(!Number.isSafeInteger(id)||id<1)throw problem('Identificador inválido');
+  const t=await rawTransfer(pool,id);
+  if(!t)throw problem('Transferencia no encontrada',404);
+  if(!canReceiveTransfer(user,t))throw problem('Solo el administrador puede consultar la recepción',403);
+  const [rows]=await pool.execute(`SELECT DISTINCT e.id,
+    CAST(e.numero_caja AS CHAR) AS boxNumber
+    FROM expedientes e
+    JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+    WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION' AND e.deleted_at IS NULL
+    ORDER BY e.id`,[id]);
+  if(!rows.length)throw problem('La transferencia no contiene expedientes disponibles',409);
+  res.set('Cache-Control','private, no-store');
+  res.json({boxes:rows.map(r=>({recordId:'REG-'+r.id,boxNumber:String(r.boxNumber||'').trim()}))});
+ }catch(e){next(e);}
+});
 transfersRouter.post('/:id/reception',async(req,res,next)=>{
  let conn;
  try{
@@ -283,7 +303,8 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   if(state==='Recibida'){
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
-     WHERE ti.transferencia_id=? ORDER BY e.id FOR UPDATE`,[id]);
+     WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION' AND e.deleted_at IS NULL
+     ORDER BY e.id FOR UPDATE`,[id]);
    let location;
    try{location=validateSharedReceptionLocation(req.body?.location,linked.map(row=>row.id));}
    catch(error){throw problem(error.message);}
@@ -292,7 +313,9 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    const [updated]=await conn.execute(`UPDATE expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      SET e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
-       e.seccion_fisica=?,e.posicion=?,e.caja_ubicacion=?,e.notas_ubicacion=?
+       e.seccion_fisica=?,e.posicion=?,
+       e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
+       e.notas_ubicacion=?
      WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'`,
      [location.archiveZone,location.room,location.shelf,location.level,
       location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
@@ -302,7 +325,9 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'
        AND e.archivo_zona=? AND e.lugar_resguardo=? AND e.estante=? AND e.nivel=? AND e.seccion_fisica=?
-       AND (e.posicion <=> ?) AND (e.caja_ubicacion <=> ?) AND (e.notas_ubicacion <=> ?)`,
+       AND (e.posicion <=> ?)
+       AND (e.caja_ubicacion <=> COALESCE(NULLIF(TRIM(e.numero_caja),''),?))
+       AND (e.notas_ubicacion <=> ?)`,
      [id,location.archiveZone,location.room,location.shelf,location.level,location.physicalSection,
       location.position,location.locationBox,location.locationNotes]);
    if(verified.length!==receivedCount)throw problem('No se pudo asignar la ubicación a todos los expedientes',409);
