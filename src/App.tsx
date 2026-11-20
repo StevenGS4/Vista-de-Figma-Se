@@ -726,7 +726,7 @@ function Header({
   );
 }
 
-const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion">, string[][]> = {
+const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion" | "control-area">, string[][]> = {
   tramite: [
     ["SEMARNAT-NAY/UJ/2025/0042", "Unidad Jurídica", "4C.3 — Asuntos jurídicos", "En trámite"],
     ["SEMARNAT-NAY/DA/2025/0018", "Recursos Materiales", "6C.6 — Adquisiciones", "En trámite"],
@@ -749,7 +749,7 @@ const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion">, string
   ],
 };
 
-function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion"> }) {
+function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion" | "control-area"> }) {
   const ItemIcon = modules[id].icon;
   const columns =
     id === "tramite"
