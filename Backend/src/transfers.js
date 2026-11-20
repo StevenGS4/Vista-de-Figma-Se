@@ -99,7 +99,7 @@ async function chooseInventories(conn,ids,user){
  SUM(CASE WHEN e.disponibilidad='PRESTADO' THEN 1 ELSE 0 END) AS borrowed
  FROM inventarios i JOIN areas a ON a.id=i.area_id
  JOIN expedientes e ON e.inventario_id=i.id
- WHERE e.id IN (${placeholders})
+ WHERE e.id IN (${placeholders}) AND i.deleted_at IS NULL AND e.deleted_at IS NULL
  GROUP BY i.id,i.folio,i.estado,i.area_id,i.creado_por,a.codigo`,ids);
  if(!items.length)throw problem('No se encontraron inventarios seleccionados');
  // Bloquea cada inventario en orden estable para serializar solicitudes concurrentes.
