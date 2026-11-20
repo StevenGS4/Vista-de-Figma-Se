@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { tramiteApi } from "./api";
+import RowActionsMenu from "./RowActionsMenu";
 import {
   ArchivalRecord,
   cadidoSections,
@@ -348,33 +349,34 @@ function InventoryList({
                       </Badge>
                     </td>
                     <td>
-                      <div className="inventory-row-actions">
-                        <button className="text-button" onClick={() => onOpen(id)}>
-                          <Eye size={15} /> Abrir
-                        </button>
-                        {canEdit &&
-                          rows.every(
+                      <RowActionsMenu
+                        label={`Acciones del inventario ${id}`}
+                        width={190}
+                        actions={[
+                          { label: "Abrir", icon: <Eye size={16}/>, onSelect: () => onOpen(id) },
+                          ...(canEdit && rows.every(
                             (record) =>
                               record.stage === "Archivo de trámite" &&
                               !record.transferReference &&
                               !protectedRecordIds.has(record.id),
-                          ) && (
-                          <button className="text-button" onClick={() => onEdit(id)}>
-                            <Pencil size={15} /> Editar / agregar
-                          </button>
-                        )}
-                        {canDelete &&
-                          rows.every(
+                          ) ? [{
+                            label: "Editar / agregar",
+                            icon: <Pencil size={16}/>,
+                            onSelect: () => onEdit(id),
+                          }] : []),
+                          ...(canDelete && rows.every(
                             (record) =>
                               record.stage === "Archivo de trámite" &&
                               !record.transferReference &&
                               !protectedRecordIds.has(record.id),
-                          ) && (
-                            <button className="text-button" onClick={() => onDelete(id)}>
-                              <Trash2 size={15} /> Eliminar
-                            </button>
-                          )}
-                      </div>
+                          ) ? [{
+                            label: "Eliminar",
+                            icon: <Trash2 size={16}/>,
+                            onSelect: () => onDelete(id),
+                            danger: true,
+                          }] : []),
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
