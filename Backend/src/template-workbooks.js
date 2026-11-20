@@ -251,6 +251,56 @@ export async function makeOfficialTemplateWorkbook(records,kind){
   const source=book.worksheets.find(s=>/^INVENTARIO/i.test(s.name))||book.worksheets[0];
   if(!source)throw new Error('La plantilla no tiene hojas');
   const locations=locate(source);
+  // Transferencia primaria es UNA relación consolidada, no una hoja por inventario.
+  // Ordenar por el año del código archivístico (CADIDO) y luego por su nomenclatura,
+  // sin perder el vínculo individual de cada expediente con su inventario.
+  if(kind==='transferencia'){
+    const yearOf=r=>{
+      const code=String(r.archiveClassificationCode||r.cadidoCode||'');
+      const matched=code.match(/(?:^|[.\-_])((?:19|20|21)\d{2})$/);
+      const fallback=Number(r.cadidoYear);
+      return matched?Number(matched[1]):Number.isInteger(fallback)&&fallback>=1900&&fallback<=2199?fallback:9999;
+    };
+    const sorted=[...records].sort((a,b)=>
+      yearOf(a)-yearOf(b) ||
+      String(a.archiveClassificationCode||a.cadidoCode||'').localeCompare(
+        String(b.archiveClassificationCode||b.cadidoCode||''),'es',{numeric:true}) ||
+      String(a.inventoryId||'').localeCompare(String(b.inventoryId||''),'es',{numeric:true}) ||
+      String(a.recordNumber||'').localeCompare(String(b.recordNumber||''),'es',{numeric:true})
+    );
+    const uniqueValue=(field,label)=>{
+      const values=[...new Set(sorted.map(r=>String(r[field]||'').trim()).filter(Boolean))];
+      return values.length>1?label:(values[0]||'');
+    };
+    const first=sorted[0]&&{
+      ...sorted[0],
+      areaName:uniqueValue('areaName','VARIAS ÁREAS GENERADORAS'),
+      responsible:uniqueValue('responsible','VARIOS RESPONSABLES'),
+      fund:uniqueValue('fund','VARIOS FONDOS'),
+      cadidoSectionName:uniqueValue('cadidoSectionName','VARIAS SECCIONES'),
+      cadidoSeriesName:uniqueValue('cadidoSeriesName','VARIAS SERIES'),
+      administrativeUnit:uniqueValue('administrativeUnit','VARIAS UNIDADES ADMINISTRATIVAS'),
+    };
+    const singleLayout=locate(source);
+    // Un consecutivo único del consolidado: 1..N (en vez de reiniciar por inventario).
+    const consolidated=sorted.map((r,i)=>({...r,consecutive:String(i+1)}));
+    fillHeader(source,first,singleLayout);
+    fillRecords(source,consolidated,singleLayout);
+    fillSummary(source,consolidated,singleLayout);
+    const extra=Math.max(0,consolidated.length-(singleLayout.summaryRow-singleLayout.start));
+    const oldPrint=String(source.pageSetup?.printArea||'');
+    source.pageSetup={...source.pageSetup,
+      printArea:oldPrint.replace(/(:[A-Z]+)(\d+)$/,(_,a,b)=>a+(Number(b)+extra))||undefined,
+      printTitlesRow:'1:'+String(singleLayout.start-1),
+      fitToPage:true,fitToWidth:1,fitToHeight:0};
+    source.name='INVENTARIO A.TP.';
+    // La descarga específica de transferencia primaria contiene una sola pestaña,
+    // por lo que también se quita el instructivo de la plantilla.
+    for(const sheet of [...book.worksheets]){
+      if(sheet!==source)book.removeWorksheet(sheet.id);
+    }
+    return book;
+  }
   const groups=new Map();
   for(const record of records){
     const k=record.inventoryId||'SIN INVENTARIO';
