@@ -91,7 +91,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}
     </div>
-    <small>Los avisos se generan a partir de transferencias y préstamos registrados. El estado de lectura se guarda en este navegador.</small>
+    <small>Notificaciones de movimientos y asuntos pendientes.</small>
   </div>}
  </>;
 }
