@@ -36,6 +36,21 @@ async function history(conn,id){
  date:r.date,actor:String(r.usuario_id),detail:r.detalle||''}));
 }
 async function readTransfer(conn,t){
+ // Nombres verificables desde MySQL. El usuario no administrador no necesita
+ // permiso de Administración para conocer al solicitante de una solicitud visible.
+ const [actors]=await conn.execute(`SELECT
+  CONCAT_WS(' ',us.nombres,us.apellido_paterno,NULLIF(us.apellido_materno,'')) AS requesterName,
+  CONCAT_WS(' ',ua.nombres,ua.apellido_paterno,NULLIF(ua.apellido_materno,'')) AS areaApproverName,
+  CONCAT_WS(' ',ur.nombres,ur.apellido_paterno,NULLIF(ur.apellido_materno,'')) AS reviewerName,
+  CONCAT_WS(' ',um.nombres,um.apellido_paterno,NULLIF(um.apellido_materno,'')) AS assignedAreaManagerName
+  FROM transferencias tr
+  LEFT JOIN usuarios us ON us.id=tr.solicitante_id
+  LEFT JOIN usuarios ua ON ua.id=tr.visto_bueno_por
+  LEFT JOIN usuarios ur ON ur.id=tr.aceptada_por
+  LEFT JOIN areas ar ON ar.id=tr.area_id
+  LEFT JOIN usuarios um ON um.id=ar.encargado_usuario_id
+  WHERE tr.id=?`,[t.id]);
+ const actorNames=actors[0]||{};
  const [records]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
  JOIN expedientes e ON e.inventario_id=ti.inventario_id
  WHERE ti.transferencia_id=? ORDER BY ti.inventario_id,e.consecutivo`,[t.id]);
@@ -44,6 +59,10 @@ async function readTransfer(conn,t){
  const rec=receptions[0];
  return {
  id:'TR-'+t.id,folio:t.folio,areaId:t.areaCode,requestedBy:String(t.solicitante_id),
+ requesterName:actorNames.requesterName||'',
+ areaApproverName:actorNames.areaApproverName||'',
+ reviewerName:actorNames.reviewerName||'',
+ assignedAreaManagerName:actorNames.assignedAreaManagerName||'',
  createdAt:isoDate(t.creada_en),submittedAt:isoDate(t.enviada_en),
  status:transferStates[t.estado],recordIds:records.map(r=>'REG-'+r.id),
  reviewerId:t.aceptada_por?String(t.aceptada_por):'',
