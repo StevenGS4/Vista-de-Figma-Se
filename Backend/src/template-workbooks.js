@@ -141,18 +141,19 @@ function expandDetail(sheet,{start,summaryRow,fields},recordCount){
     for(const m of lineMerges)sheet.mergeCells(r,m.left,r,m.right);
 }
 const findLabel=(sheet,limit,pattern)=>findCell(sheet,limit,t=>pattern.test(t));
-function fillHeader(sheet,first,location){
+function fillHeader(sheet,first,location,kind){
   if(!first)return;
   const {start}=location;
   // Coordinadas establecidas por el instructivo del modelo institucional.
   // Solo rellenar espacios: conservar rotulación, fórmulas y logos.
+  const catalogLabel=(code,name)=>[...new Set([code,name].filter(Boolean))].join(' — ');
   const items=[
     [/NOMBRE DE LA UNIDAD ADMINISTRATIVA/,first.administrativeUnit,'E6'],
     [/NOMBRE DEL AREA GENERADORA/,first.areaName||first.areaId,'E9'],
     [/NOMBRE Y CARGO DEL RESPONSABLE/, [first.responsible,first.responsiblePosition].filter(Boolean).join(' · '),'E12'],
     [/^FONDO/,first.fund,'E14'],
-    [/^SECCION/,first.cadidoSectionName||first.cadidoSectionId,'E16'],
-    [/^SERIE/,first.cadidoSeriesName||first.cadidoCode,'E18'],
+    [/^SECCION/,kind==='tramite'?catalogLabel(first.cadidoSectionId,first.cadidoSectionName):first.cadidoSectionName||first.cadidoSectionId,'E16'],
+    [/^SERIE/,kind==='tramite'?catalogLabel(first.cadidoCode,first.cadidoSeriesName):first.cadidoSeriesName||first.cadidoCode,'E18'],
     [/FECHA DE ELABORACION/,date(first.inventoryDate),'V9'],
   ];
   for(const [pattern,val,fallback] of items){
@@ -167,7 +168,7 @@ function fillHeader(sheet,first,location){
     fillCell(sheet,fallback,val);
   }
 }
-function fillRecords(sheet,records,location){
+function fillRecords(sheet,records,location,kind){
   const {start,fields}=location;
   expandDetail(sheet,location,records.length);
   for(let i=0;i<records.length;i++){
@@ -176,9 +177,9 @@ function fillRecords(sheet,records,location){
     const values=new Set((rec.documentaryValues||[]).map(normalize));
     const data={
       seq:rec.consecutive,box:rec.boxNumber,number:rec.recordNumber,
-      classification:rec.archiveClassificationCode||rec.cadidoCode,
+      classification:rec.archiveClassificationCode||(kind==='tramite'?'Pendiente':rec.cadidoCode),
       title:[rec.title,rec.description].filter(Boolean).join(' — '),
-      opened:date(rec.openDate),closed:date(rec.closeDate),files:rec.filesCount,folios:rec.foliosCount,
+      opened:date(rec.openDate),closed:date(rec.closeDate)||(kind==='tramite'?'---':''),files:rec.filesCount,folios:rec.foliosCount,
       physical:['FISICO','MIXTO'].includes(support)?'X':'',
       electronic:['ELECTRONICO','MIXTO'].includes(support)?'X':'',
       admin:values.has('ADMINISTRATIVO')?'X':'',legal:values.has('LEGAL')?'X':'',
@@ -190,12 +191,12 @@ function fillRecords(sheet,records,location){
       const cell=sheet.getRow(r).getCell(fields[key]);
       if(cell.type===ExcelJS.ValueType.Formula)
         throw new Error('No se puede sobreescribir fórmula de la plantilla en '+cell.address);
-      cell.value=safeCell(val==null?'':val);
+      cell.value=kind==='tramite' && key==='closed' && val==='---' ? '---' : safeCell(val==null?'':val);
       cell.alignment={...cell.alignment,wrapText:true,vertical:'middle'};
     }
   }
 }
-function fillSummary(sheet,records,location){
+function fillSummary(sheet,records,location,kind){
   const extra=Math.max(0,records.length-(location.summaryRow-location.start));
   const summary=sheet.getRow(location.summaryRow+extra);
   const root=summary.getCell(2);
@@ -208,7 +209,7 @@ function fillSummary(sheet,records,location){
   const boxes=new Set(records.map(r=>String(r.boxNumber||'').trim()).filter(Boolean));
   const electronic=records.filter(r=>['ELECTRONICO','MIXTO'].includes(normalize(r.supportType))).length;
   const replacements=new Map([
-    ['22',String(Math.max(1,Math.ceil(records.length/11)))],['23',String(records.length)],
+    ['22',kind==='tramite'?'(véase numeración al pie)':String(Math.max(1,Math.ceil(records.length/11)))],['23',String(records.length)],
     ['24',years.length?String(Math.min(...years)):'SIN DATO'],
     ['25',years.length?String(Math.max(...years)):'SIN DATO'],
     ['26',String(boxes.size)],['29',String(electronic)],
@@ -317,13 +318,18 @@ export async function makeOfficialTemplateWorkbook(records,kind){
     const sheet=sheets[i];
     const layout=locate(sheet);
     const rows=entries[i];
-    fillHeader(sheet,rows[0],layout);
-    fillRecords(sheet,rows,layout);
-    fillSummary(sheet,rows,layout);
+    fillHeader(sheet,rows[0],layout,kind);
+    fillRecords(sheet,rows,layout,kind);
+    fillSummary(sheet,rows,layout,kind);
+    if(kind==='tramite'){
+      fillCell(sheet,'U5','HOJA: VÉASE NUMERACIÓN AL PIE');
+      sheet.headerFooter={...sheet.headerFooter,differentFirst:false,differentOddEven:false,
+        oddFooter:'&RHoja &P de &N'};
+    }
     const extra=Math.max(0,rows.length-(layout.summaryRow-layout.start));
     const oldPrint=String(sheet.pageSetup?.printArea||'');
     const print=oldPrint.replace(/(:[A-Z]+)(\d+)$/,(_,a,b)=>a+(Number(b)+extra));
-    sheet.pageSetup={...sheet.pageSetup,printArea:print||undefined,
+    sheet.pageSetup={...sheet.pageSetup,printArea:print||(kind==='tramite'?'B2:W'+sheet.rowCount:undefined),
       printTitlesRow:'1:'+String(layout.start-1),
       fitToPage:true,fitToWidth:1,fitToHeight:0};
   }

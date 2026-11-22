@@ -135,11 +135,14 @@ async function chooseInventories(conn,ids,user){
   if(!user.roles.includes('Encargado de área')&&Number(i.creado_por)!==Number(user.id))
    throw problem('Solo puedes solicitar la transferencia de tus inventarios',403);
   const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
-  SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed
+  SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed,
+  SUM(cierre IS NULL) AS openRecords
   FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[i.id]);
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
+  if(Number(all[0].openRecords))
+   throw problem('Cierra los expedientes del inventario antes de solicitar su transferencia',409);
   const [links]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[i.id]);
   if(links.length)throw problem('Inventario vinculado a otra transferencia',409);
  }

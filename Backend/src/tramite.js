@@ -174,8 +174,8 @@ function normalize(rows){
    if(!number||!text(r.title))throw fail('Número de expediente y asunto son obligatorios');
    if(unique.has(consecutivo)||numbers.has(number))throw fail('Número de expediente o consecutivo duplicado');
    unique.add(consecutivo);numbers.add(number);
-   const open=date(r.openDate,true),close=date(r.closeDate,true);
-   if(close<open)throw fail('Cierre anterior a apertura');
+   const open=date(r.openDate,true),close=date(r.closeDate);
+   if(close && close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
    if(!Array.isArray(r.documentaryValues)||!r.documentaryValues.length)throw fail('Selecciona valores documentales');
    num(r.filesCount,'legajos',0,2147483647);num(r.foliosCount,'folios',0,2147483647);
@@ -211,7 +211,7 @@ function rowFields(r,inventoryId,serieId,userId){
   numero_caja:text(r.boxNumber,60)||null,numero_expediente:text(r.recordNumber,110),
   codigo_clasificacion:text(r.archiveClassificationCode,110)||null,
   serie_id:serieId,titulo_asunto:text(r.title,350),descripcion:text(r.description,50000)||null,
-  apertura:date(r.openDate,true),cierre:date(r.closeDate,true),legajos:num(r.filesCount,'legajos',0,2147483647),
+  apertura:date(r.openDate,true),cierre:date(r.closeDate),legajos:num(r.filesCount,'legajos',0,2147483647),
   folios:num(r.foliosCount,'folios',0,2147483647),
   soporte:{'Físico':'FISICO','Electrónico':'ELECTRONICO','Mixto':'MIXTO'}[r.supportType],
   anios_tramite:num(r.currentValidity,'vigencia trámite'),
