@@ -29,11 +29,11 @@ export function manualFor(role: Role, modules: readonly string[], permissions: r
   if (has("register-records")) add("tramite", "tramite-captura", "Archivo de Trámite · Registrar un inventario", [
     "Abre la opción de nuevo inventario. En Datos generales revisa la unidad administrativa, el área generadora, el responsable y su cargo, el fondo, la fecha de elaboración y la hoja inicial. Captura los campos habilitados para tu cuenta.",
     "Elige la edición CADIDO, sección y serie que corresponden al origen y asunto de la documentación. Revisa los campos que el sistema completa o bloquea.",
-    "En Expedientes y clasificación agrega una fila por expediente. Indica número de expediente, año del código, caja si aplica y consecutivo cuando sea editable. Comprueba la clave formada por fondo, sección, serie, número y año.",
+    "En el paso 2, Expedientes y revisión, agrega una fila por expediente y desplázate horizontalmente para completar sus campos. Indica número de expediente, año del código, caja si aplica y consecutivo cuando sea editable. Comprueba la clave formada por fondo, sección, serie, número y año.",
     "Escribe un título concreto y describe el asunto. Evita nombres como Varios o Generalidades. Captura las fechas de apertura y cierre que constan en el expediente.",
     "Indica la cantidad de legajos y folios. Cuenta cada hoja una vez. Selecciona soporte físico, electrónico o mixto y los valores documentales aplicables según CADIDO.",
-    "En Control documental verifica los años de conservación en Trámite y Concentración, la vigencia total, el domicilio completo de resguardo y las observaciones pertinentes. Repite la revisión para cada fila del inventario.",
-    "En la vista previa comprueba los datos generales, los expedientes, sus códigos y fechas. Corrige lo necesario y guarda cuando el inventario coincida con la documentación.",
+    "En la misma fila verifica los años de conservación en Trámite y Concentración, la vigencia total, el domicilio completo de resguardo y las observaciones pertinentes. Repite la revisión para cada fila del inventario.",
+    "Abre la vista previa dentro del paso 2 y comprueba los datos generales, los expedientes, sus códigos y fechas. Corrige lo necesario y guarda cuando el inventario coincida con la documentación.",
   ]);
 
   if (has("edit-records")) add("tramite", "tramite-edicion", "Archivo de Trámite · Corregir un inventario", [

@@ -71,6 +71,7 @@ const contextHelp: [RegExp, string][] = [
   [/recepcion por expediente/, "Marca cada expediente recibido y selecciona su estado. Si faltan expedientes, la devolución es parcial y el préstamo queda activo."],
   [/expedientes prestados/, "El listado conserva todos los expedientes entregados en el préstamo de inventario completo. Revisa cuáles siguen pendientes y cuáles ya se devolvieron."],
   [/ubicacion fisica/, "Revisa o registra la ubicación física. Usa las referencias del inmueble y del mobiliario que correspondan al inventario."],
+  [/expedientes y revision/, "Completa un expediente por fila. Desplázate hacia la derecha para capturar las fechas, el soporte, la vigencia y las observaciones. Puedes agregar filas, revisar la vista previa y guardar desde este paso."],
   [/paso 4.*vista previa/, "Revisa todo el inventario antes de guardarlo. Coteja las hojas, el total de expedientes y los años extremos con el documento de respaldo."],
   [/vista previa/, "Comprueba los datos y los expedientes que aparecen en el documento antes de confirmar o descargar."],
   [/bajas|baja documental/, "Selecciona un inventario completo. Revisa los datos del acta y confirma únicamente cuando corresponda registrar la baja."],

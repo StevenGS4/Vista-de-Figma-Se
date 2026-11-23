@@ -1,13 +1,12 @@
+import "./tramiteSheet.css";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  ClipboardCheck,
   Eye,
   FilePenLine,
   FilePlus2,
@@ -45,9 +44,7 @@ const previewNumber=(code:string,consecutive:string,year:string) =>
 
 const steps = [
   { label: "Datos generales del inventario", icon: Files },
-  { label: "Expedientes y clasificación archivística", icon: FolderTree },
-  { label: "Control documental", icon: ClipboardCheck },
-  { label: "Revisión y guardado", icon: CheckCircle2 },
+  { label: "Expedientes y revisión", icon: FolderTree },
 ];
 
 const sectionName = (id: string) =>
@@ -146,7 +143,7 @@ function Progress({
   return (
     <div className="wizard-progress">
       <div className="wizard-progress__bar">
-        <span style={{ width: `${(current / 3) * 100}%` }} />
+        <span style={{ width: `${(current / (steps.length - 1)) * 100}%` }} />
       </div>
       {steps.map((step, index) => {
         const Icon = step.icon;
@@ -584,155 +581,21 @@ function HeaderStep({
   );
 }
 
-function RowPicker({
-  activeId,
-  drafts,
-  onAdd,
-  onRemove,
-  onSelect,
-}: {
-  activeId: string;
-  drafts: ArchivalRecord[];
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-  onSelect: (id: string) => void;
-}) {
-  const [page, setPage] = useState(1);
-  const pageSize = 8;
-  const pages = Math.max(1, Math.ceil(drafts.length / pageSize));
-  const visible = drafts.slice((page - 1) * pageSize, page * pageSize);
-  return (
-    <div className="inventory-expedients">
-      <div className="inventory-expedients__toolbar">
-        <div>
-          <strong>{drafts.length} expedientes</strong>
-          <small>Selecciona una fila para completar sus datos.</small>
-        </div>
-        <Button
-          className="button--primary"
-          onClick={() => {
-            onAdd();
-            setPage(Math.ceil((drafts.length + 1) / pageSize));
-          }}
-        >
-          <Plus size={16} /> Agregar expediente
-        </Button>
-      </div>
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Consecutivo del renglón</th>
-              <th>Caja</th>
-              <th>Número de expediente</th>
-              <th>Código CADIDO</th>
-              <th>Título o asunto</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((record) => {
-              const protectedRow =
-                record.stage === "Archivo de concentración" || Boolean(record.transferReference);
-              const complete = Boolean(
-                record.recordNumber &&
-                record.title &&
-                record.openDate &&
-                record.foliosCount &&
-                record.shelf,
-              );
-              return (
-                <tr className={record.id === activeId ? "is-active-row" : ""} key={record.id}>
-                  <td>{record.consecutive || "Pendiente"}</td>
-                  <td>{record.boxNumber || "—"}</td>
-                  <td>{record.recordNumber || "Nueva fila"}</td>
-                  <td>
-                    <span className="cadido-code">{record.archiveClassificationCode || "Pendiente"}</span>
-                  </td>
-                  <td>{record.title || "Sin capturar"}</td>
-                  <td>
-                    <Badge wine={!complete || protectedRow}>
-                      {protectedRow ? "Protegido" : complete ? "Completo" : "Incompleto"}
-                    </Badge>
-                  </td>
-                  <td>
-                    <div className="inventory-row-actions">
-                      <button className="text-button" onClick={() => onSelect(record.id)}>
-                        {protectedRow ? <Eye size={15} /> : <Pencil size={15} />}
-                        {protectedRow ? "Ver" : "Editar"}
-                      </button>
-                      {!protectedRow && drafts.length > 1 && (
-                        <button
-                          className="text-button danger-text"
-                          onClick={() => onRemove(record.id)}
-                        >
-                          <Trash2 size={15} /> Quitar
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {pages > 1 && (
-        <div className="pagination">
-          <span>
-            Página {page} de {pages}
-          </span>
-          <div>
-            <button disabled={page === 1} onClick={() => setPage((value) => value - 1)}>
-              <ChevronLeft size={16} />
-            </button>
-            <button disabled={page === pages} onClick={() => setPage((value) => value + 1)}>
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ExpedientsStep({
-  active,
-  drafts,
-  errors,
-  isAdmin,
-  onAdd,
-  onRemove,
-  onSelect,
-  update,
-}: {
+function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
   active: ArchivalRecord;
-  drafts: ArchivalRecord[];
   errors: Errors;
   isAdmin: boolean;
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-  onSelect: (id: string) => void;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
+  remove?: () => void;
 }) {
-  const protectedRow =
-    active.stage === "Archivo de concentración" || Boolean(active.transferReference);
+  const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"], ["Técnico", "T"]];
+  const protectedRow = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
+  const locked = protectedRow;
+  const total = active.currentValidity !== "" && active.concentrationValidity !== ""
+    ? String(Number(active.currentValidity) + Number(active.concentrationValidity)) : "";
   return (
-    <>
-      <StepHeading
-        description="Agrega tantas filas como requiera el inventario sin repetir el encabezado."
-        icon={<FolderTree size={21} />}
-        title="Expedientes y clasificación archivística"
-      />
-      <RowPicker
-        activeId={active.id}
-        drafts={drafts}
-        onAdd={onAdd}
-        onRemove={onRemove}
-        onSelect={onSelect}
-      />
-      <fieldset className="record-form-grid row-detail-editor" disabled={protectedRow}>
+    <div className="tramite-sheet__row" id={active.id} role="group" aria-label={`Expediente ${active.consecutive}`}>
+      <fieldset disabled={protectedRow}>
         {isAdmin && <Field error={errors.consecutive} label="Consecutivo del renglón" required>
           <input
             inputMode="numeric"
@@ -777,73 +640,13 @@ function ExpedientsStep({
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
-          <input onChange={(event) => update("title", event.target.value)} value={active.title} />
+          <input onChange={(event) => { update("title", event.target.value); }} value={active.title} />
         </Field>
-        {!isAdmin && <Field className="record-field--wide" label="Descripción del asunto">
+        <Field className="record-field--wide" label="Descripción del asunto">
           <textarea rows={2} onChange={event=>update("description",event.target.value)} value={active.description}/>
-        </Field>}
+        </Field>
       </fieldset>
-    </>
-  );
-}
-
-function ControlStep({
-  active,
-  drafts,
-  errors,
-  isAdmin,
-  onSelect,
-  update,
-}: {
-  active: ArchivalRecord;
-  drafts: ArchivalRecord[];
-  errors: Errors;
-  isAdmin: boolean;
-  onSelect: (id: string) => void;
-  update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
-}) {
-  const values = [
-    ["Administrativo", "A"],
-    ["Legal", "L"],
-    ["Fiscal", "F"],
-    ["Contable", "C"],
-    ["Técnico", "T"],
-  ];
-  const locked = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
-  const total =
-    active.currentValidity !== "" && active.concentrationValidity !== ""
-      ? String(Number(active.currentValidity) + Number(active.concentrationValidity))
-      : "";
-  return (
-    <>
-      <StepHeading
-        description="Completa el control de cada expediente y avanza entre filas sin volver al encabezado."
-        icon={<ClipboardCheck size={21} />}
-        title="Control documental"
-      />
-      <div className="record-selector-strip">
-        {drafts.map((record) => (
-          <button
-            className={record.id === active.id ? "is-selected" : ""}
-            key={record.id}
-            onClick={() => onSelect(record.id)}
-            type="button"
-          >
-            <span>{record.consecutive || "—"}</span>
-            <strong>{record.recordNumber || "Nueva fila"}</strong>
-            {record.openDate && record.foliosCount ? (
-              <Check size={14} />
-            ) : (
-              <AlertCircle size={14} />
-            )}
-          </button>
-        ))}
-      </div>
-      {!isAdmin && <div className="catalog-note" style={{marginBottom:16}}>
-        <strong>{active.title || "Expediente sin título"}</strong>
-        <div>{active.description || "Sin descripción complementaria"}</div>
-      </div>}
-      <fieldset className="record-form-grid" disabled={locked}>
+      <fieldset disabled={locked}>
         {isAdmin && <Field className="record-field--wide" label="Título o descripción del asunto" required>
           <textarea
             onChange={(event) => {
@@ -988,7 +791,8 @@ function ControlStep({
           />
         </Field>
       </fieldset>
-    </>
+      {remove && !locked && <Button className="button--secondary" onClick={remove}>Eliminar fila</Button>}
+    </div>
   );
 }
 
@@ -1028,7 +832,7 @@ function InventoryForm({
     return [
       {
         ...base,
-        id: `DRAFT-${Date.now()}`,
+        id: `DRAFT-${Date.now().toString(36) + Math.random().toString(36).slice(2)}`,
         inventoryId,
         areaId: isAdmin ? "" : user.areaId,
         responsible: isAdmin ? "" : ((area?.manager && area.manager!=="Sin asignar") ? area.manager : ""),
@@ -1052,6 +856,7 @@ function InventoryForm({
   const [drafts, setDrafts] = useState<ArchivalRecord[]>(makeInitial);
   const [activeId, setActiveId] = useState(drafts[0].id);
   const [currentStep, setCurrentStep] = useState(editing ? 1 : 0);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [maxVisited, setMaxVisited] = useState(editing ? 1 : 0);
   const [errors, setErrors] = useState<Errors>({});
   const [actionError, setActionError] = useState("");
@@ -1068,7 +873,7 @@ function InventoryForm({
     (item) => item.stage === "Archivo de concentración" || Boolean(item.transferReference),
   );
 
-  const updateAll = <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => {
+  const updateAll = <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K], id = active.id) => {
     const commonFields: (keyof ArchivalRecord)[] = [
       "administrativeUnit",
       "areaId",
@@ -1092,12 +897,16 @@ function InventoryForm({
                 ? { archiveZone: `Archivo de trámite — ${areaName(String(value))}` }
                 : {}),
             }
-          : record.id === active.id
+          : record.id === id
             ? { ...record, [field]: value }
             : record,
       ),
     );
-    setErrors((current) => ({ ...current, [field]: undefined }));
+    if (id === active.id || currentStep === 0) setErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   };
 
   const validateHeader = () => {
@@ -1127,10 +936,10 @@ function InventoryForm({
         next.recordYear="Selecciona un año válido (1900–2100).";
       if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
       if (
-        records.some(
+        [...records, ...drafts].some(
           (item) =>
             item.id !== record.id &&
-            item.recordNumber.toLowerCase() === record.recordNumber.toLowerCase(),
+            item.recordNumber.trim().toLowerCase() === record.recordNumber.trim().toLowerCase(),
         )
       )
         next.recordNumber = "El número de expediente ya existe.";
@@ -1159,12 +968,17 @@ function InventoryForm({
       return true;
     }
     setActiveId(invalid.id);
-    setErrors(rowErrors(invalid, step));
+    const issues = rowErrors(invalid, step);
+    setErrors(issues);
+    requestAnimationFrame(() => {
+      const row = document.getElementById(invalid.id);
+      row?.querySelector<HTMLElement>(".has-error input, .has-error select, .has-error textarea, .document-values button")?.focus();
+    });
     return false;
   };
   const next = () => {
     if (!validateStep(currentStep)) return;
-    const value = Math.min(3, currentStep + 1);
+    const value = Math.min(1, currentStep + 1);
     setCurrentStep(value);
     setMaxVisited((current) => Math.max(current, value));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1189,7 +1003,7 @@ function InventoryForm({
           "initialSheetNumber",
         ].map((key) => [key, header[key as keyof ArchivalRecord]]),
       ),
-      id: `DRAFT-${Date.now()}`,
+      id: `DRAFT-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       consecutive: String(nextConsecutive),
       recordYear:String(new Date().getFullYear()),
       recordNumber: "",
@@ -1201,6 +1015,8 @@ function InventoryForm({
     } as ArchivalRecord;
     setDrafts((current) => [...current, row]);
     setActiveId(row.id);
+    setErrors({});
+    requestAnimationFrame(() => document.getElementById(row.id)?.scrollIntoView({ block: "nearest", inline: "start", behavior: "smooth" }));
   };
   const removePreviewRows = async (ids: string[]) => {
     const selected = drafts.filter(item => ids.includes(item.id));
@@ -1236,23 +1052,12 @@ function InventoryForm({
       setActionError(error instanceof Error?error.message:"No fue posible eliminar el expediente.");
     }
   };
-  const addRowFromPreview = () => {
-    // El encabezado y los expedientes capturados permanecen en memoria.
-    // Una fila adicional se crea en el mismo inventario sin guardar ni salir.
-    addRow();
-    setErrors({});
-    setCurrentStep(1);
-    setMaxVisited((current) => Math.max(current, 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
   const removeRow = (id: string) => { void removePreviewRows([id]); };
   const save = () => {
-    // Solo el botón explícito de confirmación en la vista previa guarda en MySQL.
-    if (currentStep !== 3) return;
+    if (currentStep !== 1) return;
     const invalidStep = [0, 1, 2].find((step) => !validateStep(step));
     if (invalidStep !== undefined) {
-      setCurrentStep(invalidStep);
-      setMaxVisited((current) => Math.max(current, invalidStep));
+      setCurrentStep(invalidStep === 0 ? 0 : 1);
       return;
     }
     onSave(
@@ -1301,34 +1106,27 @@ function InventoryForm({
             />
           )}
           {currentStep === 1 && (
-            <ExpedientsStep
-              active={active}
-              drafts={drafts}
-              errors={errors}
-              isAdmin={isAdmin}
-              onAdd={addRow}
-              onRemove={removeRow}
-              onSelect={setActiveId}
-              update={updateAll}
-            />
-          )}
-          {currentStep === 2 && (
-            <ControlStep
-              active={active}
-              drafts={drafts}
-              errors={errors}
-              isAdmin={isAdmin}
-              onSelect={setActiveId}
-              update={updateAll}
-            />
-          )}
-          {currentStep === 3 && (
             <>
-              <StepHeading
-                description="Este es el inventario completo tal como aparecerá al pulsar Ver después de registrarlo. Aún no se ha guardado."
-                icon={<CheckCircle2 size={21}/>}
-                title="Paso 4 · Vista previa del inventario"
-              />
+              <StepHeading title="Expedientes y revisión" icon={<FolderTree size={21} />}
+                description="Captura un expediente por fila y desplázate hacia la derecha para ver todos sus campos." />
+              <div className="tramite-sheet-scroll" role="region" aria-label="Captura de expedientes" tabIndex={0}>
+                <div className="tramite-sheet">
+                  {drafts.map(record => (
+                    <SpreadsheetRow key={record.id} active={record} isAdmin={isAdmin}
+                      errors={record.id === activeId ? errors : {}}
+                      update={(field, value) => updateAll(field, value, record.id)}
+                      remove={!editing || canDeleteExisting ? () => removeRow(record.id) : undefined} />
+                  ))}
+                </div>
+              </div>
+              <div className="tramite-sheet__actions">
+                <Button className="button--secondary" onClick={addRow}><Plus size={17} />Agregar otro expediente</Button>
+                <Button className="button--secondary" onClick={() => setPreviewOpen(open => !open)}>
+                  {previewOpen ? "Ocultar vista previa" : "Ver vista previa"}
+                </Button>
+              </div>
+              {previewOpen && (
+                <section aria-label="Vista previa del inventario">
               <InventoryDetail
                 preview
                 inventory={drafts.map(record=>({
@@ -1340,8 +1138,8 @@ function InventoryForm({
                 }))}
                 isAdmin={isAdmin}
                 canEdit={false}
-                onBack={()=>setCurrentStep(2)}
-                onEdit={()=>setCurrentStep(2)}
+                onBack={()=>setPreviewOpen(false)}
+                onEdit={()=>setPreviewOpen(false)}
                 allowDelete={!editing || canDeleteExisting}
                 onDeletePreviewRows={removePreviewRows}
                 onDeleteWhole={() => {
@@ -1361,17 +1159,8 @@ function InventoryForm({
                   })();
                 }}
               />
-              <div className="inventory-preview-add-row">
-                <div>
-                  <strong>¿Necesitas registrar otro expediente?</strong>
-                  <p>Conservarás todos los datos del inventario y regresarás al paso 2 con una nueva fila lista para capturar.</p>
-                </div>
-                <Button className="button--secondary" onClick={addRowFromPreview}>
-                  <Plus size={17} />
-                  Agregar otro expediente
-                </Button>
-              </div>
-              <p className="catalog-note" role="status">Vista previa sin guardar. Revisa los datos antes de confirmar.</p>
+                </section>
+              )}
             </>
           )}
 
@@ -1395,10 +1184,10 @@ function InventoryForm({
                 onClick={() => setCurrentStep((value) => value - 1)}
               >
                 <ChevronLeft size={17} />
-                {currentStep === 3 ? "Volver a editar" : "Anterior"}
+                Anterior
               </Button>
             )}
-            {currentStep < 3 ? (
+            {currentStep === 0 ? (
               <Button className="button--primary" onClick={next}>
                 Continuar
                 <ArrowRight size={17} />
@@ -1406,7 +1195,7 @@ function InventoryForm({
             ) : (
               <Button className="button--primary" onClick={save}>
                 <Check size={17} />
-                Confirmar y guardar
+                Guardar inventario
               </Button>
             )}
           </div>
