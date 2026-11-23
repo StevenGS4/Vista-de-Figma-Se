@@ -1,29 +1,42 @@
-.tramite-sheet-scroll { min-width: 0; }
-.tramite-sheet { display: grid; gap: 8px; min-width: 0; }
+.tramite-sheet-scroll { min-width: 0; max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
+.tramite-sheet { width: max-content; min-width: 100%; }
 .tramite-sheet__row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: 6px;
   align-items: flex-start;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--gray-200);
-  border-radius: 7px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--gray-200);
 }
 .tramite-sheet__row:nth-child(odd) { background: var(--gray-50); }
 .tramite-sheet__row fieldset { display: contents; }
-.tramite-sheet__row .form-field { flex: 0 1 124px; min-width: 0; max-width: 100%; }
-.tramite-sheet__row .tramite-cell--short { flex-basis: 82px; }
-.tramite-sheet__row .tramite-cell--values { flex-basis: 174px; }
-.tramite-sheet__row .record-field--wide { flex: 1 1 180px; max-width: 310px; }
-.tramite-sheet__row .form-field :is(input, select) { height: 34px; padding-inline: 7px; }
-.tramite-sheet__row .form-field textarea {
-  min-height: 34px;
-  field-sizing: content;
-  overflow-wrap: anywhere;
-  padding: 6px 7px;
+.tramite-sheet__row .form-field { flex: 0 0 105px; min-width: 0; }
+.tramite-sheet__row .tramite-cell--short { flex-basis: 60px; }
+.tramite-sheet__row .tramite-cell--values { flex-basis: 126px; }
+.tramite-sheet__row .record-field--wide { flex-basis: 140px; }
+.tramite-sheet__row .form-field > span:first-child {
+  display: block;
+  min-height: 26px;
+  line-height: 1.2;
 }
-.tramite-sheet__row .read-only-code { overflow-wrap: anywhere; }
-.tramite-sheet__row .document-values { display: flex; flex-wrap: wrap; gap: 4px; }
-.tramite-sheet__row .document-values button { font-size: 10px; }
+.tramite-sheet__row .form-field :is(input, select, textarea, .read-only-code) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding: 5px 6px;
+}
+.tramite-sheet__row textarea { resize: vertical; }
+.tramite-sheet__row .read-only-code { gap: 4px; }
+.tramite-sheet__row .read-only-code strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tramite-sheet__row .document-values { display: flex; flex-wrap: nowrap; gap: 3px; }
+.tramite-sheet__row .document-values button { min-width: 0; padding-inline: 4px; font-size: 10px; }
+.tramite-sheet__row > .button { margin-top: 31px; white-space: nowrap; }
 .tramite-sheet__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+.tramite-sheet__row fieldset:first-child > .form-field:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  align-self: stretch;
+  background: var(--white);
+}
+.tramite-sheet__row:nth-child(odd) fieldset:first-child > .form-field:first-child { background: var(--gray-50); }

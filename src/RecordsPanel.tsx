@@ -581,11 +581,23 @@ function HeaderStep({
   );
 }
 
-function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
+function orderByArchiveYear(records: ArchivalRecord[]) {
+  const yearOf = (record: ArchivalRecord) => {
+    const year = record.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || record.recordYear;
+    return year && /^\d{4}$/.test(year) ? Number(year) : Infinity;
+  };
+  return [...records].sort((a, b) => {
+    const aYear = yearOf(a), bYear = yearOf(b);
+    return aYear === bYear ? Number(a.consecutive) - Number(b.consecutive) : aYear - bYear;
+  });
+}
+
+function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
   errors: Errors;
   isAdmin: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
+  automaticOrder: boolean;
   remove?: () => void;
 }) {
   const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"], ["Técnico", "T"]];
@@ -596,16 +608,16 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
   return (
     <div className="tramite-sheet__row" id={active.id} role="group" aria-label={`Expediente ${active.consecutive}`}>
       <fieldset disabled={protectedRow}>
-        {isAdmin && <Field className="tramite-cell--short" error={errors.consecutive} label="Consecutivo del renglón" required>
+        {isAdmin && !automaticOrder && <Field className="tramite-cell--short" error={errors.consecutive} label="Consecutivo del renglón" required>
           <input
             inputMode="numeric"
             onChange={(event) => update("consecutive", event.target.value)}
             value={active.consecutive}
           />
         </Field>}
-        {!isAdmin && <div className="form-field tramite-cell--short"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
+        {(!isAdmin || automaticOrder) && <div className="form-field tramite-cell--short"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
         <Field className="tramite-cell--short" label="Número de caja">
-          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} placeholder="Hasta 6 dígitos"
+          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} placeholder="Ej. 12"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -622,7 +634,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
               update("recordYear",year);
             }} />
         </Field>
-        <Field error={errors.recordNumber} label="Número de expediente" hint="Referencia registrada por el área. La clave archivística se asigna al guardar." required>
+        <Field error={errors.recordNumber} label="Número de expediente" required>
           <input
             maxLength={110}
             placeholder="Captura el número propio del expediente"
@@ -631,12 +643,11 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
           />
         </Field>
         <Field className="record-field--wide" label="Código de clasificación archivística">
-          <div className="read-only-code"><ShieldCheck size={16}/><strong>
+          <div className="read-only-code"><ShieldCheck size={12}/><strong title={active.archiveClassificationCode || previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}>
             {/^REG-\d+$/.test(active.id) ?
               (active.archiveClassificationCode || "Clasificación histórica pendiente de revisión") :
               previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}
           </strong></div>
-          <small className="field-hint">Clave de clasificación preliminar. El consecutivo definitivo se asigna al guardar.</small>
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
@@ -658,7 +669,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
         <Field
           error={errors.closeDate}
           label="Fecha de cierre"
-          hint="Déjala vacía mientras el expediente siga abierto."
+          
         >
           <input
             min={active.openDate}
@@ -702,6 +713,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
               <button
                 className={active.documentaryValues.includes(value) ? "is-selected" : ""}
                 key={value}
+                title={value} aria-label={value} aria-pressed={active.documentaryValues.includes(value)}
                 onClick={() =>
                   update(
                     "documentaryValues",
@@ -713,7 +725,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
                 type="button"
               >
                 {active.documentaryValues.includes(value) && <Check size={13} />}
-                {value} ({code})
+                {code}
               </button>
             ))}
           </div>
@@ -756,7 +768,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
             value={active.concentrationValidity}
           />
         </Field>
-        {isAdmin ? <Field hint="Suma coherente de ambos periodos." label="Vigencia documental total">
+        {isAdmin ? <Field label="Vigencia documental total">
           <input disabled value={total || active.totalValidity} />
         </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong>{total || active.totalValidity || "Pendiente"} años</strong></div>}
         {isAdmin && <Field
@@ -1031,7 +1043,7 @@ function InventoryForm({
       const removeIds = new Set(ids);
       const next = drafts.filter(item => !removeIds.has(item.id));
       if (!next.length) { onCancel(); return; }
-      setDrafts(next);
+      setDrafts(editing ? next : next.map((item, index) => ({ ...item, consecutive: String(index + 1) })));
       if (removeIds.has(activeId))setActiveId(next[0].id);
       setActionMessage("Expediente(s) eliminado(s) correctamente.");
     } catch(error) {
@@ -1047,8 +1059,9 @@ function InventoryForm({
       return;
     }
     onSave(
-      drafts.map((record) => ({
+      (editing ? drafts : orderByArchiveYear(drafts)).map((record, index) => ({
         ...record,
+        consecutive: editing ? record.consecutive : String(index + 1),
         recordNumber: record.recordNumber.trim(),
         archiveClassificationCode: /^REG-\d+$/.test(record.id) ? (record.archiveClassificationCode||"") : "",
         room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
@@ -1094,11 +1107,11 @@ function InventoryForm({
           {currentStep === 1 && (
             <>
               <StepHeading title="Expedientes y revisión" icon={<FolderTree size={21} />}
-                description="Cada expediente tiene su propio bloque. Completa sus campos de izquierda a derecha y continúa debajo." />
+                description="Completa un expediente por fila. Desplázate hacia la derecha para ver los campos de control documental." />
               <div className="tramite-sheet-scroll" role="region" aria-label="Captura de expedientes" tabIndex={0}>
                 <div className="tramite-sheet">
                   {drafts.map(record => (
-                    <SpreadsheetRow key={record.id} active={record} isAdmin={isAdmin}
+                    <SpreadsheetRow key={record.id} active={record} isAdmin={isAdmin} automaticOrder={!editing}
                       errors={record.id === activeId ? errors : {}}
                       update={(field, value) => updateAll(field, value, record.id)}
                       remove={!editing || canDeleteExisting ? () => removeRow(record.id) : undefined} />
@@ -1115,8 +1128,9 @@ function InventoryForm({
                 <section aria-label="Vista previa del inventario">
               <InventoryDetail
                 preview
-                inventory={drafts.map(record=>({
+                inventory={orderByArchiveYear(drafts).map((record, index)=>({
                   ...record,
+                  consecutive: String(index + 1),
                   archiveClassificationCode: /^REG-\d+$/.test(record.id)
                     ? record.archiveClassificationCode
                     : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
