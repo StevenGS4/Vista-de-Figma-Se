@@ -1256,7 +1256,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </button>
       <p>Solo corresponde si el área generadora no responde.</p>
     </div>}
-    {options.length>0 && <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4" onSubmit={async event=>{
+    {options.length>0 && <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4 sm:p-5" style={{ gridTemplateColumns: "minmax(0, 1fr)" }} onSubmit={async event=>{
       event.preventDefault();
       if(busy)return;
       setBusy(true);
@@ -1277,16 +1277,17 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
       finally{setBusy(false);}
     }}>
-      <label>Documento<select value={selected} onChange={e=>changeDocument(e.target.value)}>
+      <label className="w-full max-w-xl">Documento<select className="min-h-10" value={selected} onChange={e=>changeDocument(e.target.value)}>
         {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
       </select></label>
-      {selected === "ACUSE_SOLICITUD" && <p className="col-span-full">Adjunta el acuse de la última Atenta Nota antes del visto bueno.</p>}
-      {selected === "NOTA_TRASLADO" && <p className="col-span-full">Se usa después del dictamen favorable para solicitar el vehículo al Enlace Administrativo.</p>}
-      {selected === "ACUSE_TRASLADO" && <p className="col-span-full">Es la copia de recibido de la Atenta Nota de traslado.</p>}
-      {selected === "FORMATO_FIRMADO" && <p className="col-span-full">Adjunta la copia con firmas autógrafas que acredita la entrega.</p>}
-      {selected === "ENTREGA" && <p className="col-span-full">Registro interno de la entrega física. El formato con firmas autógrafas acredita la entrega.</p>}
-      {current && !editing ? <div>
-        <p>Ya se guardó este tipo de evidencia.</p>
+      {selected === "ACUSE_SOLICITUD" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Adjunta el acuse de la última Atenta Nota antes del visto bueno.</p>}
+      {selected === "NOTA_TRASLADO" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Se usa después del dictamen favorable para solicitar el vehículo al Enlace Administrativo.</p>}
+      {selected === "ACUSE_TRASLADO" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Es la copia de recibido de la Atenta Nota de traslado.</p>}
+      {selected === "FORMATO_FIRMADO" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Adjunta la copia con firmas autógrafas que acredita la entrega.</p>}
+      {selected === "ENTREGA" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Registro interno de la entrega física. El formato con firmas autógrafas acredita la entrega.</p>}
+      {current && !editing ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c8d4cc] bg-[#edf0e9] px-4 py-3">
+        <p className="text-sm font-medium text-[#002f2a]" role="status">Evidencia guardada</p>
+        <div className="flex flex-wrap items-center gap-2">
         <Button className="button--secondary" disabled={busy} onClick={()=>{setEditingId(current.id);setDetail(current.detail);setError("");}}>Editar</Button>
         <Button className="button--danger-outline" disabled={busy} onClick={async()=>{
           if(!await confirm({title:"Eliminar evidencia",message:"La evidencia se retirará del folio.",confirmText:"Eliminar evidencia",danger:true}))return;
@@ -1295,12 +1296,17 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
           catch(error){saveError(error);}
           finally{setBusy(false);}
         }}>Eliminar</Button>
+        </div>
       </div> : <>
-      <label>Folio y datos de la evidencia<textarea required minLength={5} maxLength={2000} value={detail} onChange={e=>setDetail(e.target.value)} /></label>
-      <label>PDF de evidencia<input key={selected+":"+fileVersion} type="file" accept="application/pdf"
+      <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
+      <label>Folio y datos de la evidencia<textarea rows={3} required minLength={5} maxLength={2000} value={detail} onChange={e=>setDetail(e.target.value)} /></label>
+      <label>PDF de evidencia<input className="min-h-10 file:mr-2 file:rounded file:border-0 file:bg-[#e5eae2] file:px-2 file:py-1 file:text-[#244f41]" key={selected+":"+fileVersion} type="file" accept="application/pdf"
         required={["ACUSE_SOLICITUD","ACUSE_TRASLADO","FORMATO_FIRMADO"].includes(selected) && !(editing && current?.hasFile)}
-        onChange={e=>setFile(e.target.files?.[0] ?? null)} /></label>
+        onChange={e=>setFile(e.target.files?.[0] ?? null)} />{editing && current?.hasFile && <span className="text-xs font-normal text-[#435951]">Si dejas este campo vacío, se conserva el PDF guardado.</span>}</label>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-[#c8d4cc] pt-3">
       <button type="submit" className="button button--primary" disabled={busy}>{busy ? "Guardando…" : editing ? "Guardar cambios" : "Guardar documento"}</button>
+      </div>
       </>}
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
