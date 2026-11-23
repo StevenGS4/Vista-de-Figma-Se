@@ -829,7 +829,7 @@ function TransferWizard({
               </Button>
             ) : (
               <Button className="button--primary" onClick={() => setConfirmOpen(true)}>
-                <Send size={17} /> {activeTransfer ? "Reenviar solicitud" : "Enviar a revisión"}
+                <Send size={17} /> {activeTransfer ? "Reenviar solicitud" : "Confirmar envío"}
               </Button>
             )}
           </div>
