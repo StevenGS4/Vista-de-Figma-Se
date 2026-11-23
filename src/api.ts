@@ -55,17 +55,21 @@ export const tramiteApi = {
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
 export type ReceptionSourceBox={recordId:string;boxNumber:string};
 export const transferApi={
+ documentUrl:(id:string,documentId?:string,copy=false)=>API_BASE+'/api/transferencias/'+encodeURIComponent(id)+'/'+
+   (documentId?'documentos/'+encodeURIComponent(documentId)+(copy?'?copia=1':''):'relacion.xlsx'+(copy?'?copia=1':'')),
+ document:async(id:string,kind:string,detail:string,pdf?:string)=>(await request<{transfer:DocumentaryTransfer}>(
+   '/api/transferencias/'+encodeURIComponent(id)+'/documentos',{method:'POST',body:JSON.stringify({kind,detail,pdf})})).transfer,
  receptionBoxes:async(id:string)=>(await request<{boxes:ReceptionSourceBox[]}>(
    '/api/transferencias/'+encodeURIComponent(id)+'/reception-boxes'
  )).boxes,
  list:async()=>((await request<{transfers:DocumentaryTransfer[]}>('/api/transferencias')).transfers),
- submit:async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
+ submit:async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string)=>{
    const path=existing?'/api/transferencias/'+encodeURIComponent(existing.id)+'/resend':'/api/transferencias';
-   return (await request<{transfer:DocumentaryTransfer}>(path,{method:'POST',body:JSON.stringify({recordIds})})).transfer;
+   return (await request<{transfer:DocumentaryTransfer}>(path,{method:'POST',body:JSON.stringify({recordIds,correction})})).transfer;
  },
  areaApprove:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/approve-area',{method:'POST',body:'{}'})).transfer,
  observe:async(id:string,observation:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/observe',{method:'POST',body:JSON.stringify({observation})})).transfer,
- accept:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/accept',{method:'POST',body:'{}'})).transfer,
+ accept:async(id:string,detail:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/accept',{method:'POST',body:JSON.stringify({detail})})).transfer,
  receive:async(id:string,status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/reception',{method:'POST',body:JSON.stringify({status,date,notes,location})})).transfer,
 };
 

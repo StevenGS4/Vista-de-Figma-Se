@@ -545,9 +545,13 @@ function TransferWizard({
   const blockedInventoryIds = new Set(
     areaRecords.filter((record) => blockedIds.has(record.id)).map((record) => record.inventoryId),
   );
-  const eligible = areaRecords.filter(
-    (record) => !blockedInventoryIds.has(record.inventoryId),
-  );
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mazatlan" });
+  for (const record of areaRecords) {
+    if (!activeTransfer?.recordIds.includes(record.id) &&
+      (!record.tramiteDueDate || record.tramiteDueDate > today || record.availability === "Prestado"))
+      blockedInventoryIds.add(record.inventoryId);
+  }
+  const eligible = areaRecords.filter(record => !blockedInventoryIds.has(record.inventoryId));
   const shown = eligible.filter((record) => {
     const query = search.toLowerCase();
     return (
@@ -632,6 +636,7 @@ function TransferWizard({
               </label>
               <span>{selectedInventoryIds.length} inventarios seleccionados</span>
             </div>
+            <p role="status">{eligibleInventories.length} inventario(s) elegible(s) para transferencia.</p>
             <div className="eligible-list inventory-eligible-list">
               {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
@@ -1036,7 +1041,7 @@ function RequestDetail({
             <ShieldCheck size={19} />
             <span>
               <strong>Revisión administrativa</strong>
-              Aceptar es la única acción que cambia la etapa de los expedientes a concentración.
+              El dictamen favorable autoriza el traslado. La etapa cambia al confirmar la recepción física.
             </span>
           </div>
           {canReview && (
@@ -1048,7 +1053,7 @@ function RequestDetail({
           {canAccept && (
             <Button className="button--primary" onClick={onAccept}>
               <Check size={17} />
-              Aceptar transferencia
+              Emitir dictamen favorable
             </Button>
           )}
         </div>
@@ -1149,6 +1154,74 @@ function ReturnModal({
   );
 }
 
+const documentNames: Record<string,string> = {
+  SOLICITUD:"Atenta Nota de solicitud", ACUSE_SOLICITUD:"Acuse de solicitud",
+  AUTORIZACION:"Autorización del área", SOLICITUD_AMPLIACION:"Gestión de ampliación de plazo",
+  DICTAMEN_FAVORABLE:"Dictamen favorable", DICTAMEN_DESFAVORABLE:"Dictamen desfavorable",
+  OBSERVACION_AREA:"Observación del área", NOTA_TRASLADO:"Atenta Nota al Enlace Administrativo",
+  ACUSE_TRASLADO:"Acuse de traslado", ENTREGA:"Registro de entrega con representante del área",
+  FORMATO_FIRMADO:"Formato firmado con firmas autógrafas",
+};
+
+function TransferDocuments({transfer,user,onChange}: {
+  transfer:DocumentaryTransfer; user:UserRecord; onChange:(updated:DocumentaryTransfer)=>void;
+}) {
+  const [detail,setDetail]=useState("");
+  const [kind,setKind]=useState("");
+  const [file,setFile]=useState<File|null>(null);
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const sender=transfer.requestedBy===user.id ||
+    (transfer.areaId===user.areaId && user.roles.includes("Encargado de área"));
+  const documents=transfer.documents ?? [];
+  const options:string[]=[];
+  if(sender && transfer.status==="Pendiente de visto bueno del área")options.push("ACUSE_SOLICITUD","SOLICITUD_AMPLIACION");
+  if(transfer.status==="Aceptada" && transfer.receptionStatus!=="Recibida"){
+    if(sender)options.push("NOTA_TRASLADO","ACUSE_TRASLADO","ENTREGA");
+    if(user.roles.includes("Administrador / Coordinador"))options.push("FORMATO_FIRMADO");
+  }
+  const selected=options.includes(kind)?kind:(options[0] ?? "");
+  return <section className="surface reception-summary">
+    <h3>Documentos de la transferencia</h3>
+    <a className="text-button" href={transferApi.documentUrl(transfer.id)}>Descargar formato y relación de expedientes en Excel</a>
+    <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia del Excel</a>
+    {documents.length>0 && <ul>{documents.map(doc=><li key={doc.id}>
+      <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id)}>{documentNames[doc.kind] ?? doc.kind} · {doc.date}</a>
+      {!doc.hasFile && <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id,true)}>Descargar copia</a>}
+      <div>{doc.detail}</div>
+    </li>)}</ul>}
+    {options.length>0 && <form className="record-form-grid" onSubmit={async event=>{
+      event.preventDefault();
+      if(busy)return;
+      setBusy(true);
+      setError("");
+      try{
+        if(file && file.size>4194304)throw new Error("El PDF debe pesar hasta 4 MB.");
+        const pdf=file ? await new Promise<string>((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>resolve(String(reader.result).split(",")[1]);
+          reader.onerror=()=>reject(new Error("No se pudo leer el PDF."));
+          reader.readAsDataURL(file);
+        }):undefined;
+        onChange(await transferApi.document(transfer.id,selected,detail,pdf));
+        setDetail("");
+        setFile(null);
+      }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
+      finally{setBusy(false);}
+    }}>
+      <label>Documento<select value={selected} onChange={e=>{setKind(e.target.value);setFile(null);}}>
+        {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
+      </select></label>
+      <label>Folio y datos de la evidencia<textarea required minLength={5} maxLength={2000} value={detail} onChange={e=>setDetail(e.target.value)} /></label>
+      <label>PDF de evidencia<input key={selected+String(documents.length)} type="file" accept="application/pdf"
+        required={["ACUSE_SOLICITUD","ACUSE_TRASLADO","FORMATO_FIRMADO"].includes(selected)}
+        onChange={e=>setFile(e.target.files?.[0] ?? null)} /></label>
+      <button type="submit" className="button button--primary" disabled={busy}>Guardar documento</button>
+      {error && <p role="alert" className="field-error">{error}</p>}
+    </form>}
+  </section>;
+}
+
 function AcceptModal({
   count,
   onCancel,
@@ -1156,8 +1229,9 @@ function AcceptModal({
 }: {
   count: number;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (detail: string) => void;
 }) {
+  const [detail, setDetail] = useState("");
   return (
     <div className="modal-backdrop">
       <div className="modal decision-modal decision-modal--accept">
@@ -1166,20 +1240,20 @@ function AcceptModal({
         </div>
         <h2>Aceptar transferencia</h2>
         <p>
-          Esta decisión cambiará {count} expediente{count === 1 ? "" : "s"} de Archivo de trámite a
-          <strong> Archivo de concentración</strong>. Los identificadores se conservarán.
+          Se autorizará preparar el traslado de {count} expediente{count === 1 ? "" : "s"}.
         </p>
         <div className="accept-warning">
           <AlertCircle size={17} />
           La recepción física se registrará posteriormente.
         </div>
+        <label>Fundamento del dictamen<textarea value={detail} onChange={e => setDetail(e.target.value)} maxLength={2000} /></label>
         <div className="modal__footer">
           <Button className="button--secondary" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button className="button--primary" onClick={onConfirm}>
+          <Button className="button--primary" onClick={() => { if (detail.trim().length >= 5) onConfirm(detail.trim()); else window.alert("Captura el fundamento del dictamen."); }}>
             <Check size={17} />
-            Confirmar aceptación
+            Confirmar dictamen
           </Button>
         </div>
       </div>
@@ -1286,7 +1360,7 @@ function ReceptionForm({
           </span>
           <div>
             <h3>Registrar resultado de recepción</h3>
-            <p>Este seguimiento no vuelve a modificar la etapa archivística.</p>
+            <p>La recepción cotejada y acreditada incorpora los expedientes a Concentración.</p>
           </div>
         </div>
         <div className="reception-options">
@@ -1517,7 +1591,9 @@ export default function TransfersPanel({
   };
   const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
     try{
-      const updated=await transferApi.submit(recordIds,existing);
+      const correction=existing ? window.prompt("Describe la corrección realizada al formato")?.trim() : undefined;
+      if(existing && (!correction || correction.length < 5)) return;
+      const updated=await transferApi.submit(recordIds,existing,correction);
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
@@ -1541,26 +1617,14 @@ export default function TransfersPanel({
       setMessage("Visto bueno registrado correctamente.");
     }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aprobar");}
   };
-  const acceptTransfer=async()=>{
+  const acceptTransfer=async(detail:string)=>{
     if(!selected)return;
     try{
-      const updated=await transferApi.accept(selected.id);
-      // La aceptación ya fue confirmada por MySQL. Fallos posteriores al
-      // refrescar la pantalla no deben confundirse con un fallo de aceptación.
+      const updated=await transferApi.accept(selected.id,detail);
       saveTransferState(updated);
       setAcceptOpen(false);
-      try{
-        const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
-        onRecordsChange([
-          ...tramite.filter(record=>record.stage!=="Archivo de concentración"),
-          ...concentracion,
-        ]);
-        setMessage("La transferencia fue aceptada; todos sus expedientes pasaron a concentración.");
-      }catch(refreshError){
-        console.error("Transferencia aceptada; error al actualizar la vista:",refreshError);
-        setMessage("Transferencia aceptada. Actualiza la página para ver los expedientes.");
-      }
-    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aceptar");}
+      setMessage("Dictamen favorable registrado. Pendiente de traslado y recepción física.");
+    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo emitir el dictamen");}
   };
   const saveReception=async(status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>{
     if(!selected)return;
@@ -1633,6 +1697,7 @@ export default function TransfersPanel({
           transfer={selected}
           users={users}
         />
+        <TransferDocuments transfer={selected} user={currentUser} onChange={saveTransferState} />
         {returnOpen && (
           <ReturnModal onCancel={() => setReturnOpen(false)} onConfirm={returnTransfer} />
         )}
