@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, FilePlus2, FolderTree, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, Download, Upload, FilePlus2, FolderTree, Pencil, Plus, ShieldCheck } from "lucide-react";
 import { adminCatalogApi, AdminArea, AdminManager, AdminSeries, AdminVersion, areasApi, tramiteApi } from "./api";
 import { setAreasCatalog } from "./data";
 import { setCadidoCatalog } from "./records";
@@ -136,6 +136,25 @@ export default function AdminAreasPanel(){
      <button className="button button--primary" disabled={saving} type="submit">{saving?"Guardando...":"Guardar área"}</button></div>
    </form>
   </div></div>;
+ const importExcel=async(file:File)=>{
+  if(!selected)return;
+  clear();setSaving(true);
+  try{
+   if(!file.name.toLowerCase().endsWith(".xlsx")||file.size>2_000_000)throw new Error("Selecciona un archivo .xlsx de hasta 2 MB.");
+   const base64=await new Promise<string>((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result).split(",")[1]);
+    reader.onerror=()=>reject(new Error("No se pudo leer el archivo."));
+    reader.readAsDataURL(file);
+   });
+   const result=await adminCatalogApi.importSeries(year,base64);
+   setSeries(await adminCatalogApi.series(year,selected.id));
+   const catalog=await tramiteApi.catalog();
+   setCadidoCatalog(catalog.sections,catalog.series);
+   setSuccess(`Importación terminada. Nuevas: ${result.created}. Plazos completados: ${result.completed}. Sin cambios: ${result.unchanged}.`);
+  }catch(e){setError(e instanceof Error?e.message:"No se pudo importar el catálogo.");}
+  finally{setSaving(false);}
+ };
  if(view==="assign"&&selected)return <div className="admin-form-page">
   <button className="text-button" onClick={back}><ArrowLeft size={17}/>Volver al catálogo</button>
   <div className="surface form-surface">
@@ -152,6 +171,16 @@ export default function AdminAreasPanel(){
     <button className="button button--secondary" type="button" onClick={()=>setOnlyEnabled(!onlyEnabled)}>
      {onlyEnabled?"Mostrar todos":"Solo seleccionados"} ({chosen.length})
     </button>
+    <button className="button button--secondary" type="button" disabled={saving||loading} onClick={()=>document.getElementById("cadido-import-file")?.click()}>
+      <Upload size={16}/> Importar Excel
+    </button>
+    <input id="cadido-import-file" hidden type="file" accept=".xlsx" onChange={event=>{
+      const file=event.currentTarget.files?.[0];event.currentTarget.value="";
+      if(file)void importExcel(file);
+    }}/>
+    <button className="button button--secondary" type="button" onClick={()=>{
+      void adminCatalogApi.downloadTemplate().catch(e=>setError(e.message));
+    }}><Download size={16}/> Plantilla y guía</button>
     <button className="button button--secondary" type="button" onClick={()=>setShowSeries(!showSeries)}><FilePlus2 size={16}/> Agregar código</button>
     <button className="button button--secondary" type="button" onClick={()=>setShowYear(!showYear)}><Plus size={16}/> Nueva edición</button>
    </div>
@@ -175,11 +204,11 @@ export default function AdminAreasPanel(){
    <p className="catalog-note">Marcar autoriza nuevos expedientes en esta área. Desmarcar impide nuevas altas,
     pero jamás elimina el código ni los expedientes históricos asociados.</p>
    {loading?<p>Cargando series...</p>:<div className="table-scroll" style={{maxHeight:420,overflowY:"auto"}}>
-    <table className="data-table"><thead><tr><th>Habilitar</th><th>Código</th><th>Sección</th><th>Serie</th><th>Expedientes históricos</th></tr></thead>
+    <table className="data-table"><thead><tr><th>Habilitar</th><th>Código</th><th>Sección</th><th>Serie</th><th>Plazos AT / AC</th><th>Expedientes históricos</th></tr></thead>
     <tbody>{visible.map(s=><tr key={s.id}><td><input aria-label={"Autorizar "+s.code} type="checkbox"
      checked={chosen.includes(s.id)} disabled={!s.active} onChange={e=>setChosen(prev=>e.target.checked?[...prev,s.id]:prev.filter(x=>x!==s.id))}/></td>
-     <td><span className="record-id">{s.code}</span></td><td>{s.sectionName}</td><td>{s.name}</td><td>{s.records}</td></tr>)}
-    {!visible.length&&<tr><td colSpan={5}>No hay códigos con estos filtros.</td></tr>}</tbody></table></div>}
+     <td><span className="record-id">{s.code}</span></td><td>{s.sectionName}</td><td>{s.name}</td><td>{s.tramiteYears ?? '—'} / {s.concentrationYears ?? '—'}</td><td>{s.records}</td></tr>)}
+    {!visible.length&&<tr><td colSpan={6}>No hay códigos con estos filtros.</td></tr>}</tbody></table></div>}
    <div className="form-actions"><button className="button button--secondary" type="button" onClick={back}>Volver</button>
     <button className="button button--primary" type="button" disabled={saving||loading} onClick={()=>void saveAssignments()}>
       <ShieldCheck size={17}/>{saving?"Guardando...":"Guardar asignación ("+chosen.length+")"}

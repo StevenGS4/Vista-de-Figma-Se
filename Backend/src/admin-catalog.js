@@ -1,3 +1,4 @@
+import { cadidoTemplate, readCadidoFile } from './cadido-workbook.js';
 import express from 'express';
 import { pool } from './config/database.js';
 import { requireAuth, requireAdmin } from './auth.js';
@@ -98,12 +99,56 @@ adminCatalogRouter.get('/series',wrap(async(req,res)=>{
  if(areaCode)areaId=(await validArea(pool,areaCode)).id;
  const [rows]=await pool.execute(`SELECT sr.id,sr.codigo AS code,sr.nombre AS name,
  sc.codigo AS section,sc.nombre AS sectionName,sr.activo AS active,
+ sr.anios_tramite AS tramiteYears,sr.anios_concentracion AS concentrationYears,
  COALESCE(sa.habilitado,0) AS enabled,
  (SELECT COUNT(*) FROM expedientes e WHERE e.serie_id=sr.id) AS records
  FROM series_cadido sr JOIN secciones_cadido sc ON sc.id=sr.seccion_id
  LEFT JOIN series_areas sa ON sa.serie_id=sr.id AND sa.area_id=?
  WHERE sr.catalogo_version_id=? ORDER BY sc.codigo,sr.codigo`,[areaId||0,versions[0].id]);
  res.json({series:rows});
+}));
+adminCatalogRouter.get('/series/plantilla.xlsx',wrap(async(_req,res)=>{
+ res.attachment('Plantilla_importacion_CADIDO.xlsx').send(Buffer.from(await cadidoTemplate()));
+}));
+adminCatalogRouter.post('/series/importar',wrap(async(req,res)=>{
+ const y=year(req.body?.year);
+ const data=await readCadidoFile(req.body?.file);
+ const conn=await pool.getConnection();
+ try{
+  await conn.beginTransaction();
+  const [[version]]=await conn.execute('SELECT id FROM catalogos_cadido_versiones WHERE anio=? AND activo=1 FOR UPDATE',[y]);
+  if(!version)throw fail('Selecciona una edición activa antes de importar',404);
+  const [existing]=await conn.execute('SELECT id,codigo,anios_tramite,anios_concentracion FROM series_cadido WHERE catalogo_version_id=?',[version.id]);
+  const byCode=new Map(existing.map(row=>[row.codigo,row]));
+  const [sections]=await conn.execute('SELECT id,codigo FROM secciones_cadido');
+  const bySection=new Map(sections.map(row=>[row.codigo,row.id]));
+  let created=0, completed=0, unchanged=0;
+  for(const item of data){
+   const row=byCode.get(item.code);
+   if(row){
+    if(item.at===null){unchanged++;continue;}
+    if((row.anios_tramite!==null && Number(row.anios_tramite)!==item.at)
+      || (row.anios_concentracion!==null && Number(row.anios_concentracion)!==item.ac))
+      throw fail('Los plazos de '+item.code+' ya están definidos con otros valores',409);
+    if(row.anios_tramite===null||row.anios_concentracion===null){
+     await conn.execute('UPDATE series_cadido SET anios_tramite=?,anios_concentracion=? WHERE id=?',[item.at,item.ac,row.id]);
+     completed++;
+    }else unchanged++;
+    continue;
+   }
+   if(y===2023)throw fail('La edición validada 2023 no admite códigos nuevos: '+item.code,409);
+   const sectionCode=item.code.split('.')[0];
+   if(!bySection.has(sectionCode)){
+    const [section]=await conn.execute('INSERT INTO secciones_cadido(codigo,nombre,es_demostracion) VALUES(?,?,0) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[sectionCode,item.section]);
+    bySection.set(sectionCode,section.insertId);
+   }
+   await conn.execute(`INSERT INTO series_cadido
+    (seccion_id,codigo,nombre,activo,es_demostracion,catalogo_version_id,anios_tramite,anios_concentracion)
+    VALUES(?,?,?,1,0,?,?,?)`,[bySection.get(sectionCode),item.code,item.name,version.id,item.at,item.ac]);
+   created++;
+  }
+  await conn.commit();res.json({created,completed,unchanged});
+ }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 }));
 adminCatalogRouter.post('/series',wrap(async(req,res)=>{
  const y=year(req.body?.year),seriesCode=code(req.body?.code),name=str(req.body?.name,300);
@@ -129,7 +174,7 @@ adminCatalogRouter.post('/series',wrap(async(req,res)=>{
 }));
 adminCatalogRouter.put('/areas/:code/series',wrap(async(req,res)=>{
  const areaCode=code(req.params.code),y=year(req.body?.year),ids=req.body?.seriesIds;
- if(!Array.isArray(ids)||ids.length>500||ids.some(v=>!Number.isSafeInteger(Number(v))||Number(v)<1))throw fail('Lista de series inválida');
+ if(!Array.isArray(ids)||ids.length>10000||ids.some(v=>!Number.isSafeInteger(Number(v))||Number(v)<1))throw fail('Lista de series inválida');
  const selected=[...new Set(ids.map(Number))];
  let conn;try{
   conn=await pool.getConnection();await conn.beginTransaction();

@@ -608,6 +608,15 @@ function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+function withCatalogValidity(record: ArchivalRecord): ArchivalRecord {
+  if (/^REG-\d+$/.test(record.id)) return record;
+  const series = cadidoSeries.find(item => item.id === record.cadidoSeriesId);
+  if (series?.tramiteYears == null || series.concentrationYears == null) return record;
+  return { ...record, currentValidity: String(series.tramiteYears),
+    concentrationValidity: String(series.concentrationYears),
+    totalValidity: String(series.tramiteYears + series.concentrationYears) };
+}
+
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
   errors: Errors;
@@ -619,8 +628,11 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
   const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"]];
   const protectedRow = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
   const locked = protectedRow;
-  const total = active.currentValidity !== "" && active.concentrationValidity !== ""
-    ? String(Number(active.currentValidity) + Number(active.concentrationValidity)) : "";
+  const catalogValidity = withCatalogValidity(active);
+  const selectedSeries = cadidoSeries.find(item => item.id === active.cadidoSeriesId);
+  const automaticValidity = !/^REG-\d+$/.test(active.id) && selectedSeries?.tramiteYears != null && selectedSeries.concentrationYears != null;
+  const total = catalogValidity.currentValidity !== "" && catalogValidity.concentrationValidity !== ""
+    ? String(Number(catalogValidity.currentValidity) + Number(catalogValidity.concentrationValidity)) : "";
   return (
     <div className="tramite-sheet__row" id={active.id} role="group" aria-label={`Expediente ${active.consecutive}`}>
       <fieldset disabled={protectedRow}>
@@ -761,7 +773,8 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
               );
             }}
             type="number"
-            value={active.currentValidity}
+            value={catalogValidity.currentValidity}
+            readOnly={automaticValidity}
           />
         </Field>
         <Field
@@ -781,7 +794,8 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
               );
             }}
             type="number"
-            value={active.concentrationValidity}
+            value={catalogValidity.concentrationValidity}
+            readOnly={automaticValidity}
           />
         </Field>
         {isAdmin ? <Field label="Vigencia documental total">
@@ -937,7 +951,8 @@ function InventoryForm({
     setErrors(next);
     return !Object.keys(next).length;
   };
-  const rowErrors = (record: ArchivalRecord, step: number) => {
+  const rowErrors = (draft: ArchivalRecord, step: number) => {
+    const record = withCatalogValidity(draft);
     const next: Errors = {};
     if (record.stage === "Archivo de concentración" || record.transferReference) return next;
     if (step === 1) {
@@ -1075,7 +1090,7 @@ function InventoryForm({
       return;
     }
     onSave(
-      (editing ? drafts : orderByArchiveYear(drafts)).map((record, index) => ({
+      (editing ? drafts : orderByArchiveYear(drafts)).map((draft, index) => { const record = withCatalogValidity(draft); return ({
         ...record,
         consecutive: editing ? record.consecutive : String(index + 1),
         recordNumber: record.recordNumber.trim(),
@@ -1084,7 +1099,7 @@ function InventoryForm({
         archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
         initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
         totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
-      })),
+      }); }),
     );
   };
 
@@ -1145,7 +1160,7 @@ function InventoryForm({
                 <section aria-label="Vista previa del inventario">
               <InventoryDetail
                 preview
-                inventory={orderByArchiveYear(drafts).map((record, index)=>({
+                inventory={orderByArchiveYear(drafts).map(withCatalogValidity).map((record, index)=>({
                   ...record,
                   consecutive: String(index + 1),
                   archiveClassificationCode: /^REG-\d+$/.test(record.id)

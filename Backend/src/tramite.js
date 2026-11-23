@@ -149,16 +149,16 @@ async function latestCadidoYear(conn){
 async function catalog(conn,user,mode){
  const latest=await latestCadidoYear(conn);
  const [sections]=await conn.execute('SELECT codigo AS id,nombre AS name FROM secciones_cadido ORDER BY codigo');
- const [series]=await conn.execute(`SELECT sr.id,sr.nombre,sr.codigo,cv.anio AS editionYear,sc.codigo AS sectionCode,
+ const [series]=await conn.execute(`SELECT sr.id,sr.nombre,sr.codigo,cv.anio AS editionYear,sc.codigo AS sectionCode,sr.anios_tramite,sr.anios_concentracion,
  GROUP_CONCAT(DISTINCT a.codigo ORDER BY a.codigo SEPARATOR ',') AS enabled
  FROM series_cadido sr JOIN secciones_cadido sc ON sc.id=sr.seccion_id
  JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  JOIN series_areas sa ON sa.serie_id=sr.id JOIN areas a ON a.id=sa.area_id
- WHERE sr.activo=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sa.habilitado=1 GROUP BY sr.id,sr.nombre,sr.codigo,cv.anio,sc.codigo ORDER BY cv.anio DESC,sr.codigo`);
+ WHERE sr.activo=1 AND sr.es_demostracion=0 AND sr.catalogo_version_id IS NOT NULL AND sa.habilitado=1 GROUP BY sr.id,sr.nombre,sr.codigo,cv.anio,sc.codigo,sr.anios_tramite,sr.anios_concentracion ORDER BY cv.anio DESC,sr.codigo`);
  return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),currentYear:latest,
   series:series.filter(s=>mode==='GLOBAL'||(Number(s.editionYear)===latest && s.enabled.split(',').includes(user.areaId)))
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
-      detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(',')}))};
+      detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(','),tramiteYears:s.anios_tramite,concentrationYears:s.anios_concentracion}))};
 }
 function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
@@ -179,7 +179,6 @@ function normalize(rows){
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
    if(!Array.isArray(r.documentaryValues)||!r.documentaryValues.length)throw fail('Selecciona valores documentales');
    num(r.filesCount,'legajos',0,2147483647);num(r.foliosCount,'folios',0,2147483647);
-   num(r.currentValidity,'vigencia trámite');num(r.concentrationValidity,'vigencia concentración');
    nullableNum(r.shelf,'estante',1,25);nullableNum(r.level,'nivel',1,4);
    nullableNum(r.physicalSection,'sección física',1,4);
  }
@@ -195,7 +194,7 @@ async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
  if(mode!=='GLOBAL'&&header.areaId!==user.areaId)throw fail('No puedes registrar inventarios de otra área',403);
  const id=Number(String(header.cadidoSeriesId).replace(/^SER-/,'')); 
  if(!Number.isSafeInteger(id))throw fail('Serie CADIDO inexistente');
- const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code,cv.anio AS edition_year FROM series_cadido sr
+ const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code,cv.anio AS edition_year,sr.anios_tramite,sr.anios_concentracion FROM series_cadido sr
  JOIN secciones_cadido sc ON sc.id=sr.seccion_id
  JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  JOIN series_areas sa ON sa.serie_id=sr.id
@@ -203,7 +202,7 @@ async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
  AND sr.es_demostracion=0 AND sr.activo=1`,
  [id,header.cadidoSectionId,areas[0].id,allowDisabled?1:0]);
  if(!series.length)throw fail('Serie CADIDO no autorizada para esta área');
- return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id,editionYear:series[0].edition_year};
+ return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id,editionYear:series[0].edition_year,tramiteYears:series[0].anios_tramite,concentrationYears:series[0].anios_concentracion};
 }
 function rowFields(r,inventoryId,serieId,userId){
  return {
@@ -331,6 +330,12 @@ async function save(req,res,next,editing=false){
   if(!isAdmin && rows.some(r=>!/^REG-\d+$/.test(r.id)) &&
      cat.editionYear!==await latestCadidoYear(conn))
     throw fail('No puedes agregar expedientes nuevos con una edición CADIDO histórica. Crea un inventario con la edición vigente.',409);
+  for(const row of rows){
+   if(!/^REG-\d+$/.test(row.id) && cat.tramiteYears!=null && cat.concentrationYears!=null){
+    row.currentValidity=String(cat.tramiteYears);
+    row.concentrationValidity=String(cat.concentrationYears);
+   }
+  }
   if(!isAdmin){
    const [assigned]=await conn.execute('SELECT consecutivo FROM expedientes WHERE inventario_id=?',[inventoryId]);
    const reserved=new Set(assigned.map(x=>Number(x.consecutivo)));

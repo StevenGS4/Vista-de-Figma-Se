@@ -149,7 +149,7 @@ export const areasApi={
 };
 
 export type AdminVersion={id:number;year:number;name:string;reference:string|null;active:number};
-export type AdminSeries={id:number;code:string;name:string;section:string;sectionName:string;active:number;enabled:number;records:number};
+export type AdminSeries={tramiteYears:number|null;concentrationYears:number|null;id:number;code:string;name:string;section:string;sectionName:string;active:number;enabled:number;records:number};
 export type AdminManager={id:number;name:string;areaId:string;email:string};
 export type AdminArea=Area & {parentId?:string;managerId?:number|null};
 export const adminCatalogApi={
@@ -168,6 +168,16 @@ export const adminCatalogApi={
  '/api/admin-catalog/areas/'+encodeURIComponent(areaId)+'/series',{
  method:'PUT',body:JSON.stringify({year,seriesIds}),
  }),
+ importSeries:(year:number,file:string)=>request<{created:number;completed:number;unchanged:number}>(
+  '/api/admin-catalog/series/importar',{method:'POST',body:JSON.stringify({year,file})}),
+ downloadTemplate:async()=>{
+  const response=await fetch(API_BASE+'/api/admin-catalog/series/plantilla.xlsx',{credentials:'include'});
+  if(!response.ok) throw new Error('No se pudo descargar la plantilla CADIDO.');
+  const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');
+  link.href=url;link.download='Plantilla_importacion_CADIDO.xlsx';
+  document.body.appendChild(link);link.click();link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+ },
  createSeries:(year:number,code:string,name:string,sectionName:string)=>request<{ok:boolean}>('/api/admin-catalog/series',{
  method:'POST',body:JSON.stringify({year,code,name,sectionName}),
  }),

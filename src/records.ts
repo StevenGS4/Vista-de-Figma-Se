@@ -70,6 +70,8 @@ export type CadidoSeries = {
   year?: string;
   detail: string;
   enabledAreaIds: string[];
+  tramiteYears?: number | null;
+  concentrationYears?: number | null;
 };
 
 export const cadidoSections: CadidoSection[] = [
