@@ -774,20 +774,23 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
           )}
         </div>
         <Field className="tramite-cell--short" error={errors.currentValidity} label="Años en archivo de trámite" required>
-          <input
-            min="0"
-            onChange={(event) => {
-              update("currentValidity", event.target.value);
-              const concentration = Number(active.concentrationValidity || 0);
-              update(
-                "totalValidity",
-                event.target.value === "" ? "" : String(Number(event.target.value) + concentration),
-              );
-            }}
-            type="number"
-            value={catalogValidity.currentValidity}
-            readOnly={selectedSeries?.tramiteYears != null}
-          />
+          {selectedSeries?.tramiteYears != null ? (
+            <strong className="tramite-sheet__validity">{catalogValidity.currentValidity} {catalogValidity.currentValidity === "1" ? "año" : "años"}</strong>
+          ) : (
+            <input
+              min="0"
+              onChange={(event) => {
+                update("currentValidity", event.target.value);
+                const concentration = Number(active.concentrationValidity || 0);
+                update(
+                  "totalValidity",
+                  event.target.value === "" ? "" : String(Number(event.target.value) + concentration),
+                );
+              }}
+              type="number"
+              value={catalogValidity.currentValidity}
+            />
+          )}
         </Field>
         <Field
           className="tramite-cell--short"
@@ -795,20 +798,23 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
           label="Años en archivo de concentración"
           required
         >
-          <input
-            min="0"
-            onChange={(event) => {
-              update("concentrationValidity", event.target.value);
-              const current = Number(active.currentValidity || 0);
-              update(
-                "totalValidity",
-                event.target.value === "" ? "" : String(current + Number(event.target.value)),
-              );
-            }}
-            type="number"
-            value={catalogValidity.concentrationValidity}
-            readOnly={selectedSeries?.concentrationYears != null}
-          />
+          {selectedSeries?.concentrationYears != null ? (
+            <strong className="tramite-sheet__validity">{catalogValidity.concentrationValidity} {catalogValidity.concentrationValidity === "1" ? "año" : "años"}</strong>
+          ) : (
+            <input
+              min="0"
+              onChange={(event) => {
+                update("concentrationValidity", event.target.value);
+                const current = Number(active.currentValidity || 0);
+                update(
+                  "totalValidity",
+                  event.target.value === "" ? "" : String(current + Number(event.target.value)),
+                );
+              }}
+              type="number"
+              value={catalogValidity.concentrationValidity}
+            />
+          )}
         </Field>
         {isAdmin ? <Field label="Vigencia documental total">
           <input disabled value={total || active.totalValidity} />
