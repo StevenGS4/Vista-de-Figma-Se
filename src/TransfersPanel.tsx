@@ -30,6 +30,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { useConfirmAction } from "./useConfirmAction";
 import RowActionsMenu from "./RowActionsMenu";
 import LocationShelf from "./LocationShelf";
 import { Role, UserRecord, areaName, fullName } from "./data";
@@ -477,9 +478,12 @@ function ConfirmationModal({
 }: {
   count: number;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (correction?: string) => Promise<void>;
   resend: boolean;
 }) {
+  const [correction, setCorrection] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div className="modal-backdrop">
       <div className="modal transfer-confirm-modal" role="dialog" aria-modal="true">
@@ -489,18 +493,28 @@ function ConfirmationModal({
         <h2>{resend ? "¿Reenviar solicitud?" : "¿Enviar transferencia a revisión?"}</h2>
         <p>
           Se incluirán todos los expedientes de {count} inventario{count === 1 ? "" : "s"}. El envío
-          cambiará la solicitud a <strong> Pendiente de visto bueno del área</strong>, pero los
-          expedientes permanecerán en Archivo de trámite.
+          remitirá la solicitud al responsable de revisión. Los expedientes permanecerán en Archivo de trámite.
         </p>
         <div className="transfer-rule">
           <ShieldCheck size={17} />
           Enviar no cambia la etapa archivística.
         </div>
+        {resend && <label className="form-field transfer-dictamen-field">
+          <span>Corrección realizada <b>*</b></span>
+          <textarea autoFocus rows={4} maxLength={1900} value={correction} onChange={e=>{setCorrection(e.target.value);setError("");}} />
+        </label>}
+        {error && <p className="field-error" role="alert">{error}</p>}
         <div className="modal__footer">
-          <Button className="button--secondary" onClick={onCancel}>
+          <Button className="button--secondary" onClick={onCancel} disabled={saving}>
             Cancelar
           </Button>
-          <Button className="button--primary" onClick={onConfirm}>
+          <Button className="button--primary" disabled={saving} onClick={async()=>{
+            if(resend && correction.trim().length<5){setError("Describe la corrección con al menos 5 caracteres.");return;}
+            setSaving(true);setError("");
+            try{await onConfirm(resend?correction.trim():undefined);}
+            catch(error){setError(error instanceof Error?error.message:"No se pudo enviar la solicitud.");}
+            finally{setSaving(false);}
+          }}>
             <Send size={16} />
             {resend ? "Confirmar reenvío" : "Confirmar envío"}
           </Button>
@@ -522,7 +536,7 @@ function TransferWizard({
   allRecords: ArchivalRecord[];
   currentUser: UserRecord;
   onCancel: () => void;
-  onSubmit: (recordIds: string[], existing: DocumentaryTransfer | null) => void;
+  onSubmit: (recordIds: string[], existing: DocumentaryTransfer | null, correction?: string) => Promise<void>;
   transfers: DocumentaryTransfer[];
 }) {
   const [testMode, setTestMode] = useState<boolean | null>(null);
@@ -893,7 +907,7 @@ function TransferWizard({
         <ConfirmationModal
           count={selectedInventoryIds.length}
           onCancel={() => setConfirmOpen(false)}
-          onConfirm={() => onSubmit(selectedRecords.map((record) => record.id), activeTransfer)}
+          onConfirm={correction => onSubmit(selectedRecords.map((record) => record.id), activeTransfer, correction)}
           resend={Boolean(activeTransfer)}
         />
       )}
@@ -1210,6 +1224,7 @@ function TransferDocuments({transfer,user,onChange}: {
   const [file,setFile]=useState<File|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
+  const {confirm,dialog}=useConfirmAction();
   const sender=transfer.requestedBy===user.id ||
     (transfer.areaId===user.areaId && user.roles.includes("Encargado de área"));
   const documents=transfer.documents ?? [];
@@ -1273,7 +1288,7 @@ function TransferDocuments({transfer,user,onChange}: {
         <p>Ya se guardó este tipo de evidencia.</p>
         <Button className="button--secondary" disabled={busy} onClick={()=>{setEditingId(current.id);setDetail(current.detail);setError("");}}>Editar</Button>
         <Button className="button--danger-outline" disabled={busy} onClick={async()=>{
-          if(!window.confirm("¿Eliminar esta evidencia del folio?"))return;
+          if(!await confirm({title:"Eliminar evidencia",message:"La evidencia se retirará del folio.",confirmText:"Eliminar evidencia",danger:true}))return;
           setBusy(true);setError("");
           try{onChange(await transferApi.document(transfer.id,selected,"",undefined,current.id,true));}
           catch(error){saveError(error);}
@@ -1288,7 +1303,40 @@ function TransferDocuments({transfer,user,onChange}: {
       </>}
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
+    {dialog}
   </section>;
+}
+
+function CancelTransferModal({onClose,onSave}: {onClose:()=>void;onSave:(reason:string)=>Promise<void>}) {
+  const [reason,setReason]=useState("");
+  const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
+  return <div className="modal-backdrop">
+    <form className="modal decision-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-transfer-title"
+      onSubmit={async event=>{
+        event.preventDefault();
+        if(saving)return;
+        if(reason.trim().length<5){setError("Indica el motivo de cancelación.");return;}
+        setSaving(true);setError("");
+        try{await onSave(reason.trim());}
+        catch(error){setError(error instanceof Error?error.message:"No se pudo cancelar la solicitud.");}
+        finally{setSaving(false);}
+      }}>
+      <div className="modal__header"><h2 id="cancel-transfer-title">Cancelar solicitud</h2></div>
+      <div className="modal__body">
+        <p>Se liberarán los inventarios y el folio quedará registrado como cancelado.</p>
+        <label className="form-field">
+          <span>Motivo de cancelación <b>*</b></span>
+          <textarea autoFocus rows={4} maxLength={2000} value={reason} onChange={e=>{setReason(e.target.value);setError("");}} />
+        </label>
+        {error && <p className="field-error" role="alert">{error}</p>}
+      </div>
+      <div className="modal__footer">
+        <Button className="button--secondary" disabled={saving} onClick={onClose}>Volver</Button>
+        <Button className="button--danger" type="submit" disabled={saving}>{saving?"Cancelando…":"Confirmar cancelación"}</Button>
+      </div>
+    </form>
+  </div>;
 }
 
 function AcceptModal({
@@ -1667,6 +1715,7 @@ export default function TransfersPanel({
   const [selected, setSelected] = useState<DocumentaryTransfer | null>(null);
   const [wizardTransfer, setWizardTransfer] = useState<DocumentaryTransfer | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -1690,17 +1739,13 @@ export default function TransfersPanel({
   const failure=(error:unknown)=>{
     setMessage(error instanceof Error ? error.message : "No se pudo completar la operación.");
   };
-  const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null)=>{
-    try{
-      const correction=existing ? window.prompt("Describe la corrección realizada al formato")?.trim() : undefined;
-      if(existing && (!correction || correction.length < 5)) return;
+  const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string)=>{
       const updated=await transferApi.submit(recordIds,existing,correction);
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
       setMessage(updated.folio+(updated.status==="Pendiente de revisión administrativa"
         ? " reenviada a Concentración para dictamen." : " enviada para visto bueno del área."));
-    }catch(error){ failure(error);window.alert(error instanceof Error?error.message:"No se pudo enviar la transferencia"); }
   };
   const returnTransfer=async(observation:string)=>{
     if(!selected)return;
@@ -1709,7 +1754,7 @@ export default function TransfersPanel({
       saveTransferState(updated);
       setReturnOpen(false);
       setMessage("La solicitud fue devuelta con observaciones.");
-    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo devolver");}
+    }catch(error){failure(error);}
   };
   const approveAreaTransfer=async()=>{
     if(!selected)return;
@@ -1717,7 +1762,7 @@ export default function TransfersPanel({
       const updated=await transferApi.areaApprove(selected.id);
       saveTransferState(updated);
       setMessage("Visto bueno registrado correctamente.");
-    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo aprobar");}
+    }catch(error){failure(error);}
   };
   const acceptTransfer=async(detail:string)=>{
     if(!selected)return;
@@ -1726,7 +1771,7 @@ export default function TransfersPanel({
       saveTransferState(updated);
       setAcceptOpen(false);
       setMessage("Dictamen favorable registrado. Pendiente de traslado y recepción física.");
-    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo emitir el dictamen");}
+    }catch(error){failure(error);}
   };
   const saveReception=async(status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>{
     if(!selected)return;
@@ -1800,15 +1845,14 @@ export default function TransfersPanel({
         />
         {role === "Administrador / Coordinador" && selected.status !== "Cancelada" && selected.receptionStatus !== "Recibida" && (
           <section className="surface transfer-documents">
-            <Button className="button--danger-outline" onClick={async()=>{
-              const reason=window.prompt("Indica el motivo para cancelar y liberar los inventarios.")?.trim();
-              if(!reason || reason.length<5)return;
-              if(!window.confirm("¿Cancelar la solicitud completa y liberar los inventarios?"))return;
-              try{saveTransferState(await transferApi.cancel(selected.id,reason));setMessage("Solicitud cancelada.");}
-              catch(error){failure(error);}
-            }}>Cancelar solicitud</Button>
+            <Button className="button--danger-outline" onClick={()=>setCancelOpen(true)}>Cancelar solicitud</Button>
           </section>
         )}
+        {cancelOpen && <CancelTransferModal onClose={()=>setCancelOpen(false)} onSave={async reason=>{
+          saveTransferState(await transferApi.cancel(selected.id,reason));
+          setCancelOpen(false);
+          setMessage("Solicitud cancelada.");
+        }} />}
         {returnOpen && (
           <ReturnModal onCancel={() => setReturnOpen(false)} onConfirm={returnTransfer} />
         )}
