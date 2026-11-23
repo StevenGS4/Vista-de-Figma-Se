@@ -314,7 +314,7 @@ function InventoryList({
           <table className="data-table records-table">
             <thead>
               <tr>
-                <th>Identificador</th>
+                <th>Inventario de trámite</th>
                 <th>Unidad administrativa</th>
                 <th>Área generadora</th>
                 <th>Fondo</th>
@@ -335,8 +335,9 @@ function InventoryList({
                   <tr key={id}>
                     <td>
                       <button className="record-number-link" onClick={() => onOpen(id)}>
-                        {id}
+                        {seriesName(header.cadidoSeriesId) === "Sin asignar" ? "Inventario de trámite" : seriesName(header.cadidoSeriesId)}
                       </button>
+                      <span className="block break-words text-xs font-normal text-[#52605a]">{id}</span>
                     </td>
                     <td>{header.administrativeUnit}</td>
                     <td>{areaName(header.areaId)}</td>
@@ -1327,7 +1328,8 @@ function InventoryDetail({
         <div className="section-heading">
           <div>
             <span className="section-kicker">Encabezado del inventario</span>
-            <h2>{preview ? "Vista previa · " : ""}Folio del inventario: {header.inventoryId || "Pendiente"}</h2>
+            <h2>{preview ? "Vista previa · " : ""}Inventario de trámite{seriesName(header.cadidoSeriesId) !== "Sin asignar" && ` · ${seriesName(header.cadidoSeriesId)}`}</h2>
+            {header.inventoryId && <span className="block break-words text-xs font-normal text-[#52605a]">Folio {header.inventoryId}</span>}
             <p>
               {areaName(header.areaId)} · {formatDate(header.inventoryDate)}
             </p>
@@ -1423,9 +1425,7 @@ function InventoryDetail({
                 </th>}
                 <th>Consecutivo del renglón</th>
                 <th>Caja</th>
-                <th>Referencia interna</th>
-                <th>Clave archivística</th>
-                <th>Asunto</th>
+                <th>Asunto e identificación</th>
                 <th>Apertura / cierre</th>
                 <th>Legajos / folios</th>
                 <th>Soporte</th>
@@ -1447,11 +1447,11 @@ function InventoryDetail({
                   </td>}
                   <td>{record.consecutive}</td>
                   <td>{record.boxNumber}</td>
-                  <td>{record.recordNumber}</td>
-                  <td>
-                    <span className="cadido-code">{record.archiveClassificationCode || "Pendiente"}</span>
+                  <td><strong>{record.title}</strong>
+                    {record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">{record.archiveClassificationCode}</span>}
+                    {record.recordNumber && record.recordNumber !== record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">Ref. interna {record.recordNumber}</span>}
+                    {record.description && <div>{record.description}</div>}
                   </td>
-                  <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
                   <td>{record.filesCount} / {record.foliosCount}</td>
                   <td>{record.supportType}</td>

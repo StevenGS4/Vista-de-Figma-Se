@@ -303,7 +303,7 @@ function ConcentrationList({
                                                           }}
                             >
                               <FolderTree size={17} />
-                              <strong>{id}</strong>
+                              <span><strong>{seriesName(header.cadidoSeriesId) === "Sin asignar" ? header.cadidoCode || "Inventario en concentración" : seriesName(header.cadidoSeriesId)}</strong><span className="block break-words text-xs font-normal text-[#52605a]">{id}</span></span>
                               <ChevronDown size={16} className={expanded ? "is-expanded" : ""} />
                             </button>
                           </td>
@@ -350,9 +350,7 @@ function ConcentrationList({
                                 <div className="table-scroll">
                                   <table className="data-table concentration-table concentration-expedient-table">
                                     <thead><tr>
-                                      <th>Número de expediente</th>
-                                      <th>Título o asunto</th>
-                                      <th>Código de clasificación</th>
+                                      <th>Asunto e identificación</th>
                                       <th>Disponibilidad</th>
                                       <th className="align-right">Acciones</th>
                                     </tr></thead>
@@ -361,12 +359,11 @@ function ConcentrationList({
                                         <td>
                                           {canViewDetail ? (
                                             <button type="button" className="record-number-link" onClick={() => onView(record)}>
-                                              {record.recordNumber}
+                                              {record.title}
                                             </button>
-                                          ) : <strong>{record.recordNumber}</strong>}
+                                          ) : <strong>{record.title}</strong>}
+                                          <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
                                         </td>
-                                        <td><span className="record-subject" title={record.title}>{record.title}</span></td>
-                                        <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
                                         <td><AvailabilityBadge value={record.availability}/></td>
                                         <td>
                                           <RowActionsMenu
@@ -491,8 +488,8 @@ function ConcentrationDetail({
           <Archive size={24} />
         </div>
         <div>
-          <span>{record.recordNumber}</span>
           <h2>{record.title}</h2>
+          <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
           <p>
             {areaName(record.areaId)} · Transferencia {record.transferReference}
           </p>

@@ -292,8 +292,7 @@ function TransferTray({
           <table className="data-table transfer-table">
             <thead>
               <tr>
-                <th>Folio</th>
-                <th>Área solicitante</th>
+                <th>Transferencia</th>
                 <th>Usuario solicitante</th>
                 <th>Fecha</th>
                 <th>Inventarios / expedientes</th>
@@ -314,10 +313,10 @@ function TransferTray({
                   <tr key={transfer.id}>
                     <td>
                       <button className="record-number-link" onClick={() => onOpen(transfer)}>
-                        {transfer.folio}
+                        Transferencia primaria · {areaName(transfer.areaId)}
                       </button>
+                      <span className="block break-words text-xs font-normal text-[#52605a]">{transfer.folio}</span>
                     </td>
-                    <td>{areaName(transfer.areaId)}</td>
                     <td>
                       <div className="requester-cell">
                         <span>
@@ -431,10 +430,8 @@ function InventoryTable({ records }: { records: ArchivalRecord[] }) {
       <table className="data-table transfer-inventory">
         <thead>
           <tr>
-            <th>Número de expediente</th>
+            <th>Asunto e identificación</th>
             <th>Área</th>
-            <th>Código CADIDO</th>
-            <th>Título o asunto</th>
             <th>Fechas</th>
             <th>Vigencias</th>
             <th>Datos documentales</th>
@@ -444,15 +441,10 @@ function InventoryTable({ records }: { records: ArchivalRecord[] }) {
           {visible.map((record) => (
             <tr key={record.id}>
               <td>
-                <span className="record-id">{record.recordNumber}</span>
+                <span className="inventory-title">{record.title}</span>
+                <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
               </td>
               <td>{areaName(record.areaId)}</td>
-              <td>
-                <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
-              </td>
-              <td>
-                <span className="inventory-title">{record.title}</span>
-              </td>
               <td>
                 <span className="inventory-stack">
                   <b>Apertura: {formatDate(record.openDate)}</b>
@@ -1066,9 +1058,10 @@ function RequestDetail({
         Volver a la bandeja
       </button>
       <header className="surface mt-3 mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-xl px-5 py-4">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="break-words text-xl font-semibold text-[#002f2a]">{transfer.folio}</h2>
-          <p className="text-sm text-[#435951]">{areaName(transfer.areaId)} · {included.length} expedientes</p>
+        <div className="grid min-w-0 gap-1">
+          <h2 className="break-words text-xl font-semibold text-[#002f2a]">Transferencia primaria · {areaName(transfer.areaId)}</h2>
+          <span className="block break-words text-xs font-normal text-[#52605a]">Folio {transfer.folio}</span>
+          <p className="text-sm text-[#435951]">{included.length} expedientes</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <TransferStatusBadge status={transfer.status} />
