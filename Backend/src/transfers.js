@@ -502,16 +502,30 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    catch(error){throw problem(error.message);}
    // Una ubicación capturada por el ADMIN; se aplica a todos los expedientes.
    // Cualquier error revierte la ubicación y la recepción completas.
-   const [updated]=await conn.execute(`UPDATE expedientes e
-     JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
-     SET ${managed ? "e.etapa='CONCENTRACION'," : ''}e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
-       e.seccion_fisica=?,e.posicion=?,
-       e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
-       e.notas_ubicacion=?
-     WHERE ti.transferencia_id=? AND e.deleted_at IS NULL
-       AND ${managed ? "e.etapa='TRAMITE' AND e.disponibilidad<>'PRESTADO'" : "e.etapa='CONCENTRACION'"}`,
-     [location.archiveZone,location.room,location.shelf,location.level,
-      location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
+   let updated;
+   try{
+    if(managed)await conn.query('SET @aceptacion_autorizada=1');
+    [updated]=await conn.execute(`UPDATE expedientes e
+      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+      SET ${managed ? "e.etapa='CONCENTRACION'," : ''}e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
+        e.seccion_fisica=?,e.posicion=?,
+        e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
+        e.notas_ubicacion=?
+      WHERE ti.transferencia_id=? AND e.deleted_at IS NULL
+        AND ${managed ? "e.etapa='TRAMITE' AND e.disponibilidad<>'PRESTADO'" : "e.etapa='CONCENTRACION'"}`,
+      [location.archiveZone,location.room,location.shelf,location.level,
+       location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
+   }finally{
+    if(managed){
+     try{await conn.query('SET @aceptacion_autorizada=NULL');}
+     catch(error){
+      // Descartar una sesión que no se pudo limpiar también revierte su transacción.
+      conn.destroy();
+      conn=null;
+      throw error;
+     }
+    }
+   }
    if(managed&&updated.affectedRows!==linked.length)
     throw problem('Los expedientes ya no están disponibles para la entrega',409);
    if(managed){
