@@ -23,7 +23,10 @@
 }
 .tramite-sheet__row { align-items: start; }
 .tramite-sheet__row fieldset { display: contents; }
-.tramite-sheet__row .form-field { min-width: 0; }
+.tramite-sheet__row .form-field {
+  grid-column: auto;
+  min-width: 0;
+}
 .tramite-sheet__row .form-field > span:first-child {
   position: absolute;
   width: 1px;
