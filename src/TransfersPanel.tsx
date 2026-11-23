@@ -884,6 +884,7 @@ function TransferWizard({
 }
 
 function RequestDetail({
+  onDocumentsChange,
   onAreaApprove,
   canReceive,
   currentUser,
@@ -902,6 +903,7 @@ function RequestDetail({
   currentUser: UserRecord;
   onAccept: () => void;
   onAreaApprove: () => void;
+  onDocumentsChange: (transfer: DocumentaryTransfer) => void;
   onBack: () => void;
   onHistory: () => void;
   onReceive: () => void;
@@ -913,6 +915,9 @@ function RequestDetail({
   users: UserRecord[];
 }) {
   const included = records.filter((record) => transfer.recordIds.includes(record.id));
+  const documents = transfer.documents ?? [];
+  const lastNote = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
+  const needsReceipt = lastNote >= 0 && !documents.slice(lastNote + 1).some(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile);
   const canReview =
     role === "Administrador / Coordinador" &&
     transfer.status === "Pendiente de revisión administrativa" &&
@@ -1047,6 +1052,7 @@ function RequestDetail({
           )}
         </section>
       )}
+      <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} onChange={onDocumentsChange} />
       {(canReview || canAccept) && (
         <div className="review-actions">
           <div>
@@ -1076,14 +1082,14 @@ function RequestDetail({
             <ShieldCheck size={19} />
             <span>
               <strong>Revisión del área</strong>
-              El visto bueno envía la solicitud a revisión administrativa y no cambia etapas.
+              {needsReceipt ? "Guarda primero el PDF del acuse de la última Atenta Nota." : "El visto bueno envía la solicitud a revisión administrativa."}
             </span>
           </div>
           <Button className="button--danger-outline" onClick={onReturn}>
             <RotateCcw size={16} />
             Devolver con observaciones
           </Button>
-          <Button className="button--primary" onClick={onAreaApprove}>
+          <Button className="button--primary" onClick={onAreaApprove} disabled={needsReceipt}>
             <Check size={17} />
             Dar visto bueno
           </Button>
@@ -1201,17 +1207,19 @@ function TransferDocuments({transfer,user,onChange}: {
       (hasDocument("ENTREGA") || !hasDocument("DICTAMEN_FAVORABLE")))options.push("FORMATO_FIRMADO");
   }
   const selected=options.includes(kind)?kind:(options[0] ?? "");
-  return <section className="surface reception-summary">
-    <h3>Documentos de la transferencia</h3>
-    <p>El Excel corresponde a este folio. Las notas, dictámenes y constancias se descargan en Word. Los documentos firmados y sus acuses se adjuntan como PDF.</p>
-    <a className="text-button" href={transferApi.documentUrl(transfer.id)}>Descargar formato y relación de expedientes en Excel</a>
-    <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia del Excel</a>
-    {documents.length>0 && <ul>{documents.map(doc=><li key={doc.id}>
+  return <section className="surface transfer-documents">
+    <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
+    <p>Descarga la relación del folio en Excel, los documentos en Word y los acuses o formatos firmados en PDF.</p></header>
+    <div className="transfer-documents__downloads">
+    <a className="button button--primary" href={transferApi.documentUrl(transfer.id)}>{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
+    </div>
+    {documents.length>0 && <ul className="transfer-documents__list">{documents.map(doc=><li key={doc.id}>
       <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id)}>{documentNames[doc.kind] ?? doc.kind} · {doc.date}</a>
       {!doc.hasFile && <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id,true)}>Descargar copia</a>}
       <div>{doc.detail}</div>
     </li>)}</ul>}
-    {options.length>0 && <form className="record-form-grid" onSubmit={async event=>{
+    {options.length>0 && <form className="transfer-documents__form" onSubmit={async event=>{
       event.preventDefault();
       if(busy)return;
       setBusy(true);
@@ -1237,7 +1245,7 @@ function TransferDocuments({transfer,user,onChange}: {
       <label>PDF de evidencia<input key={selected+String(documents.length)} type="file" accept="application/pdf"
         required={["ACUSE_SOLICITUD","ACUSE_TRASLADO","FORMATO_FIRMADO"].includes(selected)}
         onChange={e=>setFile(e.target.files?.[0] ?? null)} /></label>
-      <button type="submit" className="button button--primary" disabled={busy}>Guardar documento</button>
+      <button type="submit" className="button button--primary" disabled={busy}>{busy ? "Guardando…" : "Guardar documento"}</button>
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
   </section>;
@@ -1714,6 +1722,7 @@ export default function TransfersPanel({
           currentUser={currentUser}
           onAccept={() => setAcceptOpen(true)}
           onAreaApprove={approveAreaTransfer}
+          onDocumentsChange={saveTransferState}
           onBack={() => {
             setSelected(null);
             setView("list");
@@ -1727,7 +1736,6 @@ export default function TransfersPanel({
           transfer={selected}
           users={users}
         />
-        <TransferDocuments transfer={selected} user={currentUser} onChange={saveTransferState} />
         {returnOpen && (
           <ReturnModal onCancel={() => setReturnOpen(false)} onConfirm={returnTransfer} />
         )}

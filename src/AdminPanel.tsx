@@ -856,10 +856,10 @@ function TransferTestSettings() {
       .catch((error: Error) => { if(active)setError(error.message); });
     return () => { active = false; };
   }, []);
-  return <section className="surface p-5">
+  return <section className="surface transfer-documents transfer-test-settings">
     <h3>Modo de pruebas de transferencias</h3>
     <p>Permite enviar inventarios recién registrados, incluso con expedientes abiertos o con el plazo AT pendiente. Las transferencias se guardan en esta misma base de datos.</p>
-    <label className="flex items-center gap-2">
+    <label className="transfer-test-settings__switch">
       <input type="checkbox" role="switch" checked={mode === true} disabled={busy || mode === null}
         onChange={async event => {
           const enabled = event.target.checked;
