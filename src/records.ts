@@ -34,6 +34,7 @@ export type ArchivalRecord = {
   foliosCount: string;
   supportType: string;
   documentaryValues: string[];
+  catalogValuation?: Pick<CadidoSeries, "tramiteYears" | "concentrationYears" | "documentaryValues">;
   currentValidity: string;
   concentrationValidity: string;
   totalValidity: string;
@@ -72,6 +73,7 @@ export type CadidoSeries = {
   enabledAreaIds: string[];
   tramiteYears?: number | null;
   concentrationYears?: number | null;
+  documentaryValues?: string[] | null;
 };
 
 export const cadidoSections: CadidoSection[] = [

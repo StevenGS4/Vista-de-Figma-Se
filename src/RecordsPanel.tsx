@@ -608,13 +608,22 @@ function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+function valuationFor(record: ArchivalRecord) {
+  return cadidoSeries.find(item => item.id === record.cadidoSeriesId) ?? record.catalogValuation;
+}
+
 function withCatalogValidity(record: ArchivalRecord): ArchivalRecord {
-  if (/^REG-\d+$/.test(record.id)) return record;
-  const series = cadidoSeries.find(item => item.id === record.cadidoSeriesId);
-  if (series?.tramiteYears == null || series.concentrationYears == null) return record;
-  return { ...record, currentValidity: String(series.tramiteYears),
-    concentrationValidity: String(series.concentrationYears),
-    totalValidity: String(series.tramiteYears + series.concentrationYears) };
+  const series = valuationFor(record);
+  const currentValidity = series?.tramiteYears == null ? record.currentValidity : String(series.tramiteYears);
+  const concentrationValidity = series?.concentrationYears == null ? record.concentrationValidity : String(series.concentrationYears);
+  return {
+    ...record,
+    documentaryValues: series?.documentaryValues ?? record.documentaryValues,
+    currentValidity,
+    concentrationValidity,
+    totalValidity: currentValidity !== "" && concentrationValidity !== ""
+      ? String(Number(currentValidity) + Number(concentrationValidity)) : "",
+  };
 }
 
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
@@ -625,12 +634,14 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
   automaticOrder: boolean;
   remove?: () => void;
 }) {
-  const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"]];
+  const selectedSeries = valuationFor(active);
+  const fixedValues = selectedSeries?.documentaryValues;
+  const values = fixedValues
+    ? [["Administrativo", "A"], ["Legal", "L"], ["Fiscal/Contable", "F/C"]].filter(([value]) => fixedValues.includes(value))
+    : [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"]];
   const protectedRow = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
   const locked = protectedRow;
   const catalogValidity = withCatalogValidity(active);
-  const selectedSeries = cadidoSeries.find(item => item.id === active.cadidoSeriesId);
-  const automaticValidity = !/^REG-\d+$/.test(active.id) && selectedSeries?.tramiteYears != null && selectedSeries.concentrationYears != null;
   const total = catalogValidity.currentValidity !== "" && catalogValidity.concentrationValidity !== ""
     ? String(Number(catalogValidity.currentValidity) + Number(catalogValidity.concentrationValidity)) : "";
   return (
@@ -739,20 +750,21 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
           <div className="document-values">
             {values.map(([value, code]) => (
               <button
-                className={active.documentaryValues.includes(value) ? "is-selected" : ""}
+                className={catalogValidity.documentaryValues.includes(value) ? "is-selected" : ""}
                 key={value}
-                title={value} aria-label={value} aria-pressed={active.documentaryValues.includes(value)}
+                disabled={Boolean(fixedValues)}
+                title={value} aria-label={value} aria-pressed={catalogValidity.documentaryValues.includes(value)}
                 onClick={() =>
                   update(
                     "documentaryValues",
-                    active.documentaryValues.includes(value)
+                    catalogValidity.documentaryValues.includes(value)
                       ? active.documentaryValues.filter((item) => item !== value)
                       : [...active.documentaryValues, value],
                   )
                 }
                 type="button"
               >
-                {active.documentaryValues.includes(value) && <Check size={13} />}
+                {catalogValidity.documentaryValues.includes(value) && <Check size={13} />}
                 {code}
               </button>
             ))}
@@ -774,7 +786,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             }}
             type="number"
             value={catalogValidity.currentValidity}
-            readOnly={automaticValidity}
+            readOnly={selectedSeries?.tramiteYears != null}
           />
         </Field>
         <Field
@@ -795,7 +807,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             }}
             type="number"
             value={catalogValidity.concentrationValidity}
-            readOnly={automaticValidity}
+            readOnly={selectedSeries?.concentrationYears != null}
           />
         </Field>
         {isAdmin ? <Field label="Vigencia documental total">
@@ -1029,6 +1041,7 @@ function InventoryForm({
           "cadidoSeriesId",
           "cadidoCode",
           "cadidoYear",
+          "catalogValuation",
           "initialSheetNumber",
         ].map((key) => [key, header[key as keyof ArchivalRecord]]),
       ),

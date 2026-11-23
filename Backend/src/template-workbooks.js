@@ -185,7 +185,8 @@ function fillRecords(sheet,records,location,kind){
       admin:values.has('ADMINISTRATIVO')?'X':'',legal:values.has('LEGAL')?'X':'',
       fiscal:values.has('FISCAL')?'X':'',accounting:values.has('CONTABLE')?'X':'',
       at:rec.currentValidity,ac:rec.concentrationValidity,total:rec.totalValidity,
-      address:rec.archiveAddress||'',notes:rec.observations,
+      address:rec.archiveAddress||'',
+      notes:[rec.observations,values.has('FISCAL_CONTABLE')?'Valor documental: Fiscal/Contable':''].filter(Boolean).join('\n'),
     };
     for(const [key,val] of Object.entries(data)){
       const cell=sheet.getRow(r).getCell(fields[key]);

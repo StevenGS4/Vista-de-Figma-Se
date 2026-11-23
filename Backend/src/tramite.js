@@ -1,10 +1,19 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { inventoryScope,hasInventoryAccess,hasCommonHeader,validSupport } from './inventory-policy.js';
 import { roleNames } from './auth-policy.js';
 import { allocateNumbers } from './archive-numbering.js';
+
+const cadido2023 = JSON.parse(readFileSync(new URL('../data/cadido_valoracion_2023.json', import.meta.url), 'utf8'));
+
+function seriesValuation(year, code, tramiteYears, concentrationYears) {
+ const official = Number(year) === 2023 && Object.hasOwn(cadido2023, code) ? cadido2023[code] : null;
+ return official ?? {tramiteYears, concentrationYears, documentaryValues: null};
+}
 
 export const tramiteRouter = express.Router();
 tramiteRouter.use(requireAuth);
@@ -50,7 +59,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  e.numero_expediente AS recordNumber,e.codigo_clasificacion AS archiveClassificationCode,e.numero_caja AS boxNumber,e.titulo_asunto AS title,
  e.descripcion AS description,e.domicilio_resguardo AS archiveAddress,e.observaciones AS observations,
  sc.codigo AS cadidoSectionId,sc.nombre AS cadidoSectionName,sr.id AS dbSeriesId,sr.codigo AS cadidoCode,sr.nombre AS cadidoSeriesName,
- cv.anio AS cadidoYear,
+ cv.anio AS cadidoYear,sr.anios_tramite AS seriesAT,sr.anios_concentracion AS seriesAC,
  DATE_FORMAT(e.apertura,'%Y-%m-%d') AS openDate,DATE_FORMAT(e.cierre,'%Y-%m-%d') AS closeDate,
  CAST(e.legajos AS CHAR) AS filesCount,CAST(e.folios AS CHAR) AS foliosCount,
  e.soporte AS supportType,CAST(e.anios_tramite AS CHAR) AS currentValidity,
@@ -92,11 +101,12 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  }
  const valMap=new Map();
  for(const v of values)valMap.set(v.expediente_id,[...(valMap.get(v.expediente_id)||[]),v.valor]);
- const vNames={ADMINISTRATIVO:'Administrativo',LEGAL:'Legal',FISCAL:'Fiscal',CONTABLE:'Contable',TECNICO:'Técnico'};
+ const vNames={ADMINISTRATIVO:'Administrativo',LEGAL:'Legal',FISCAL:'Fiscal',CONTABLE:'Contable',FISCAL_CONTABLE:'Fiscal/Contable',TECNICO:'Técnico'};
  return rows.map(r=>({
  id:rowId(r.dbId),inventoryId:r.inventoryId,inventoryDate:r.inventoryDate,
  responsiblePosition:r.responsiblePosition,initialSheetNumber:String(r.initialSheetNumber),
  administrativeUnit:r.administrativeUnit,areaId:r.areaId,areaName:r.areaName,responsible:r.responsible,fund:r.fund,
+ catalogValuation:seriesValuation(r.cadidoYear,r.cadidoCode,r.seriesAT,r.seriesAC),
  consecutive:r.consecutive,cadidoYear:r.cadidoYear?String(r.cadidoYear):'',recordNumber:r.recordNumber,
  archiveClassificationCode:r.archiveClassificationCode||'',boxNumber:r.boxNumber||'',title:r.title,
  description:r.description||'',archiveAddress:r.archiveAddress||'',observations:r.observations||'',
@@ -158,7 +168,7 @@ async function catalog(conn,user,mode){
  return {sections:sections.map(s=>({...s,description:'Sección de catálogo'})),currentYear:latest,
   series:series.filter(s=>mode==='GLOBAL'||(Number(s.editionYear)===latest && s.enabled.split(',').includes(user.areaId)))
     .map(s=>({id:seriesId(s.id),sectionId:s.sectionCode,name:s.nombre,code:s.codigo,
-      detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(','),tramiteYears:s.anios_tramite,concentrationYears:s.anios_concentracion}))};
+      detail:'Clasificación de catálogo '+s.editionYear,year:String(s.editionYear),enabledAreaIds:s.enabled.split(','),...seriesValuation(s.editionYear,s.codigo,s.anios_tramite,s.anios_concentracion)}))};
 }
 function normalize(rows){
  if(!Array.isArray(rows)||!rows.length)throw fail('Agrega al menos un expediente');
@@ -177,7 +187,6 @@ function normalize(rows){
    const open=date(r.openDate,true),close=date(r.closeDate);
    if(close && close<open)throw fail('Cierre anterior a apertura');
    if(!validSupport(r.supportType))throw fail('Soporte documental inválido');
-   if(!Array.isArray(r.documentaryValues)||!r.documentaryValues.length)throw fail('Selecciona valores documentales');
    num(r.filesCount,'legajos',0,2147483647);num(r.foliosCount,'folios',0,2147483647);
    nullableNum(r.shelf,'estante',1,25);nullableNum(r.level,'nivel',1,4);
    nullableNum(r.physicalSection,'sección física',1,4);
@@ -194,7 +203,7 @@ async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
  if(mode!=='GLOBAL'&&header.areaId!==user.areaId)throw fail('No puedes registrar inventarios de otra área',403);
  const id=Number(String(header.cadidoSeriesId).replace(/^SER-/,'')); 
  if(!Number.isSafeInteger(id))throw fail('Serie CADIDO inexistente');
- const [series]=await conn.execute(`SELECT sr.id,sr.seccion_id,sc.codigo AS seccion_code,cv.anio AS edition_year,sr.anios_tramite,sr.anios_concentracion FROM series_cadido sr
+ const [series]=await conn.execute(`SELECT sr.id,sr.codigo,sr.seccion_id,sc.codigo AS seccion_code,cv.anio AS edition_year,sr.anios_tramite,sr.anios_concentracion FROM series_cadido sr
  JOIN secciones_cadido sc ON sc.id=sr.seccion_id
  JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
  JOIN series_areas sa ON sa.serie_id=sr.id
@@ -202,7 +211,7 @@ async function resolveCatalog(conn,header,user,mode,allowDisabled=false){
  AND sr.es_demostracion=0 AND sr.activo=1`,
  [id,header.cadidoSectionId,areas[0].id,allowDisabled?1:0]);
  if(!series.length)throw fail('Serie CADIDO no autorizada para esta área');
- return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id,editionYear:series[0].edition_year,tramiteYears:series[0].anios_tramite,concentrationYears:series[0].anios_concentracion};
+ return {areaId:areas[0].id,serieId:series[0].id,seccionId:series[0].seccion_id,editionYear:series[0].edition_year,...seriesValuation(series[0].edition_year,series[0].codigo,series[0].anios_tramite,series[0].anios_concentracion)};
 }
 function rowFields(r,inventoryId,serieId,userId){
  return {
@@ -220,7 +229,7 @@ function rowFields(r,inventoryId,serieId,userId){
   creado_por:userId,
  };
 }
-const valueCodes={Administrativo:'ADMINISTRATIVO',Legal:'LEGAL',Fiscal:'FISCAL',Contable:'CONTABLE','Técnico':'TECNICO'};
+const valueCodes={Administrativo:'ADMINISTRATIVO',Legal:'LEGAL',Fiscal:'FISCAL',Contable:'CONTABLE','Fiscal/Contable':'FISCAL_CONTABLE','Técnico':'TECNICO'};
 async function replaceValues(conn,expId,values){
  await conn.execute('DELETE FROM expediente_valores WHERE expediente_id=?',[expId]);
  for(const label of [...new Set(values)]){
@@ -331,10 +340,10 @@ async function save(req,res,next,editing=false){
      cat.editionYear!==await latestCadidoYear(conn))
     throw fail('No puedes agregar expedientes nuevos con una edición CADIDO histórica. Crea un inventario con la edición vigente.',409);
   for(const row of rows){
-   if(!/^REG-\d+$/.test(row.id) && cat.tramiteYears!=null && cat.concentrationYears!=null){
-    row.currentValidity=String(cat.tramiteYears);
-    row.concentrationValidity=String(cat.concentrationYears);
-   }
+   if(cat.tramiteYears!=null)row.currentValidity=String(cat.tramiteYears);
+   if(cat.concentrationYears!=null)row.concentrationValidity=String(cat.concentrationYears);
+   if(cat.documentaryValues)row.documentaryValues=cat.documentaryValues;
+   if(!Array.isArray(row.documentaryValues)||!row.documentaryValues.length)throw fail('Selecciona valores documentales');
   }
   if(!isAdmin){
    const [assigned]=await conn.execute('SELECT consecutivo FROM expedientes WHERE inventario_id=?',[inventoryId]);
