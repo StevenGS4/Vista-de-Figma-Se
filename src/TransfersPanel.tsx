@@ -1028,6 +1028,7 @@ function RequestDetail({
 }) {
   const [detailView, setDetailView] = useState<TransferDetailView>("tracking");
   const [documentKind, setDocumentKind] = useState("");
+  const task = transferTask(transfer, currentUser, role, permissions);
   const received = transfer.receptionStatus === "Recibida";
   const canSeeStorage = role === "Administrador / Coordinador" ||
     (role === "Encargado de área" && transfer.areaId === currentUser.areaId);
@@ -1308,7 +1309,11 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
   const documents=transfer.documents ?? [];
   const hasDocument=(kind:string)=>documents.some(doc=>doc.kind===kind);
   const options:string[]=[];
-  if(sender && transfer.status==="Pendiente de visto bueno del área")options.push("ACUSE_SOLICITUD","SOLICITUD_AMPLIACION");
+  const canRequestExtension = sender && transfer.status === "Pendiente de visto bueno del área";
+  if (canRequestExtension) {
+    options.push("ACUSE_SOLICITUD");
+    if (kind === "SOLICITUD_AMPLIACION") options.push("SOLICITUD_AMPLIACION");
+  }
   if(transfer.status==="Aceptada" && transfer.receptionStatus!=="Recibida"){
     if(sender){
       options.push("NOTA_TRASLADO");
@@ -1325,6 +1330,13 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
   const [editingId,setEditingId]=useState("");
   const [fileVersion,setFileVersion]=useState(0);
   const editing=Boolean(current && current.id===editingId);
+  const changeDocument = (nextKind: string) => {
+    setKind(nextKind);
+    setFile(null);
+    setEditingId("");
+    setDetail("");
+    setError("");
+  };
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
   return <section className="surface transfer-documents">
     <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
@@ -1332,6 +1344,14 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
     {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
     <a className="text-button" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
     <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
+    </div>}
+    {canRequestExtension && <div>
+      <button type="button" className="text-button" disabled={busy}
+        onClick={() => changeDocument(selected === "SOLICITUD_AMPLIACION" ? "ACUSE_SOLICITUD" : "SOLICITUD_AMPLIACION")}>
+        {selected === "SOLICITUD_AMPLIACION" ? "Volver al acuse de solicitud" :
+          hasDocument("SOLICITUD_AMPLIACION") ? "Consultar ampliación de plazo" : "Registrar ampliación de plazo (opcional)"}
+      </button>
+      <p>Solo corresponde si el área generadora no responde.</p>
     </div>}
     {options.length>0 && <form className="transfer-documents__form" onSubmit={async event=>{
       event.preventDefault();
@@ -1354,10 +1374,13 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
       finally{setBusy(false);}
     }}>
-      <label>Documento<select value={selected} onChange={e=>{setKind(e.target.value);setFile(null);setEditingId("");setDetail("");setError("");}}>
+      <label>Documento<select value={selected} onChange={e=>changeDocument(e.target.value)}>
         {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
       </select></label>
-      {selected === "SOLICITUD_AMPLIACION" && <p className="col-span-full">Úsala únicamente cuando el área generadora no haya respondido a la solicitud.</p>}
+      {selected === "ACUSE_SOLICITUD" && <p className="col-span-full">Adjunta el acuse de la última Atenta Nota antes del visto bueno.</p>}
+      {selected === "NOTA_TRASLADO" && <p className="col-span-full">Se usa después del dictamen favorable para solicitar el vehículo al Enlace Administrativo.</p>}
+      {selected === "ACUSE_TRASLADO" && <p className="col-span-full">Es la copia de recibido de la Atenta Nota de traslado.</p>}
+      {selected === "FORMATO_FIRMADO" && <p className="col-span-full">Adjunta la copia con firmas autógrafas que acredita la entrega.</p>}
       {selected === "ENTREGA" && <p className="col-span-full">Registro interno de la entrega física. El formato con firmas autógrafas acredita la entrega.</p>}
       {current && !editing ? <div>
         <p>Ya se guardó este tipo de evidencia.</p>
