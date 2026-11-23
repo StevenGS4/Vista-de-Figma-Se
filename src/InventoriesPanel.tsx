@@ -240,8 +240,8 @@ function InventoryList({
           <div className="inventory-info">
             <FileSpreadsheet size={18} />
             <span>
-              <strong>Relación general de transferencia primaria</strong>
-              Una fila por inventario elegible de tus áreas autorizadas; la descarga general no aplica los filtros de la tabla.
+              <strong>Consulta general para preparar transferencias</strong>
+              Esta consulta sirve para preparar la selección. El formato vinculado a una solicitud se descarga desde su folio en Transferencias.
             </span>
             <Button className="button--primary" disabled={allExportLoading} onClick={exportAll}>
               <Download size={15} /> Descargar relación XLSX

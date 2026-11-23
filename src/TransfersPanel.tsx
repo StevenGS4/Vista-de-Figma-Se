@@ -259,7 +259,7 @@ function TransferTray({
             <tbody>
               {visible.map((transfer) => {
                 const canContinue =
-                  role === "Personal de área" &&
+                  (role === "Personal de área" || role === "Encargado de área") &&
                   transfer.requestedBy === currentUser.id &&
                   ["En preparación", "Con observaciones"].includes(transfer.status);
                 return (
@@ -301,7 +301,7 @@ function TransferTray({
                             onSelect: () => onOpen(transfer, "continue"),
                           }] : []),
                           ...(transfer.status === "Aceptada" &&
-                            role !== "Personal de área" &&
+                            role === "Administrador / Coordinador" &&
                             transfer.receptionStatus !== "Recibida" ? [{
                               label: "Registrar recepción",
                               icon: <PackageCheck size={15}/>,
@@ -1158,6 +1158,8 @@ const documentNames: Record<string,string> = {
   SOLICITUD:"Atenta Nota de solicitud", ACUSE_SOLICITUD:"Acuse de solicitud",
   AUTORIZACION:"Autorización del área", SOLICITUD_AMPLIACION:"Gestión de ampliación de plazo",
   DICTAMEN_FAVORABLE:"Dictamen favorable", DICTAMEN_DESFAVORABLE:"Dictamen desfavorable",
+  RECEPCION:"Constancia interna de recepción", DIFERENCIAS:"Registro de diferencias en recepción",
+  CORRECCION_FORMATO:"Registro de corrección y reenvío a Concentración",
   OBSERVACION_AREA:"Observación del área", NOTA_TRASLADO:"Atenta Nota al Enlace Administrativo",
   ACUSE_TRASLADO:"Acuse de traslado", ENTREGA:"Registro de entrega con representante del área",
   FORMATO_FIRMADO:"Formato firmado con firmas autógrafas",
@@ -1174,15 +1176,22 @@ function TransferDocuments({transfer,user,onChange}: {
   const sender=transfer.requestedBy===user.id ||
     (transfer.areaId===user.areaId && user.roles.includes("Encargado de área"));
   const documents=transfer.documents ?? [];
+  const hasDocument=(kind:string)=>documents.some(doc=>doc.kind===kind);
   const options:string[]=[];
   if(sender && transfer.status==="Pendiente de visto bueno del área")options.push("ACUSE_SOLICITUD","SOLICITUD_AMPLIACION");
   if(transfer.status==="Aceptada" && transfer.receptionStatus!=="Recibida"){
-    if(sender)options.push("NOTA_TRASLADO","ACUSE_TRASLADO","ENTREGA");
-    if(user.roles.includes("Administrador / Coordinador"))options.push("FORMATO_FIRMADO");
+    if(sender){
+      options.push("NOTA_TRASLADO");
+      if(hasDocument("NOTA_TRASLADO"))options.push("ACUSE_TRASLADO");
+      if(hasDocument("ACUSE_TRASLADO"))options.push("ENTREGA");
+    }
+    if(user.roles.includes("Administrador / Coordinador") &&
+      (hasDocument("ENTREGA") || !hasDocument("DICTAMEN_FAVORABLE")))options.push("FORMATO_FIRMADO");
   }
   const selected=options.includes(kind)?kind:(options[0] ?? "");
   return <section className="surface reception-summary">
     <h3>Documentos de la transferencia</h3>
+    <p>El Excel corresponde a este folio. Las notas, dictámenes y constancias se descargan en Word. Los documentos firmados y sus acuses se adjuntan como PDF.</p>
     <a className="text-button" href={transferApi.documentUrl(transfer.id)}>Descargar formato y relación de expedientes en Excel</a>
     <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia del Excel</a>
     {documents.length>0 && <ul>{documents.map(doc=><li key={doc.id}>
@@ -1276,6 +1285,9 @@ function ReceptionForm({
     transfer.receptionStatus === "Pendiente" ? "Recibida" : transfer.receptionStatus,
   );
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
+  const documents=transfer.documents ?? [];
+  const missingEvidence=documents.some(doc=>doc.kind==="DICTAMEN_FAVORABLE") &&
+    (!documents.some(doc=>doc.kind==="ENTREGA") || !documents.some(doc=>doc.kind==="FORMATO_FIRMADO"));
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
   const [sourceBoxes,setSourceBoxes]=useState<ReceptionSourceBox[]>([]);
@@ -1340,6 +1352,10 @@ function ReceptionForm({
             setError("Describe las diferencias encontradas.");
             return;
           }
+          if(status==="Recibida" && missingEvidence){
+            setError("Registra la entrega y adjunta el formato firmado en Documentos de la transferencia.");
+            return;
+          }
           if(status==="Recibida" && (boxesLoading || boxesError)){
             setError(boxesError||"Consulta las cajas antes de registrar la recepción.");
             return;
@@ -1361,6 +1377,7 @@ function ReceptionForm({
           <div>
             <h3>Registrar resultado de recepción</h3>
             <p>La recepción cotejada y acreditada incorpora los expedientes a Concentración.</p>
+            {missingEvidence && <p role="status">El folio todavía requiere registro de entrega y formato firmado.</p>}
           </div>
         </div>
         <div className="reception-options">
@@ -1597,7 +1614,8 @@ export default function TransfersPanel({
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
-      setMessage(updated.folio+" enviada para visto bueno del área.");
+      setMessage(updated.folio+(updated.status==="Pendiente de revisión administrativa"
+        ? " reenviada a Concentración para dictamen." : " enviada para visto bueno del área."));
     }catch(error){ failure(error);window.alert(error instanceof Error?error.message:"No se pudo enviar la transferencia"); }
   };
   const returnTransfer=async(observation:string)=>{
@@ -1657,7 +1675,7 @@ export default function TransfersPanel({
       />
     );
 
-  if (view === "reception" && selected)
+  if (view === "reception" && selected && canReceive && selected.status === "Aceptada" && selected.receptionStatus !== "Recibida")
     return (
       <ReceptionForm
         currentUser={currentUser}

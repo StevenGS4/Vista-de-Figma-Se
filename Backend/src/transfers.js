@@ -1,5 +1,6 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
+import { makeTransferDocument } from './transfer-documents.js';
 import { readRecords } from './tramite.js';
 import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
 import { pool } from './config/database.js';
@@ -13,7 +14,9 @@ import {
 export const transfersRouter = express.Router();
 transfersRouter.use(requireAuth);
 const problem=(message,status=400)=>Object.assign(new Error(message),{status});
-const isoDate=value=>value?String(value).slice(0,10):'';
+const isoDate=value=>value instanceof Date
+ ? new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,10)
+ : value?String(value).slice(0,10):'';
 const text=(value,max=1500)=>String(value??'').trim().slice(0,max);
 const onlyIds=recordIds=>{
  if(!Array.isArray(recordIds)||!recordIds.length||recordIds.length>50000)
@@ -24,7 +27,7 @@ const onlyIds=recordIds=>{
  return ids;
 };
 async function rawTransfer(conn,id,lock=false){
- const [rows]=await conn.execute(`SELECT t.*,a.codigo AS areaCode FROM transferencias t
+ const [rows]=await conn.execute(`SELECT t.*,DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS approvalDate,a.codigo AS areaCode FROM transferencias t
  JOIN areas a ON a.id=t.area_id WHERE t.id=?${lock?' FOR UPDATE':''}`,[id]);
  return rows[0]||null;
 }
@@ -223,12 +226,13 @@ transfersRouter.post('/:id/resend',async(req,res,next)=>{
    JOIN expedientes e ON e.inventario_id=ti.inventario_id WHERE ti.transferencia_id=?`,[id]);
   if(joined.length!==requested.size||joined.some(row=>!requested.has(Number(row.id))))
    throw problem('No puedes cambiar los inventarios vinculados; conserva la selección completa',409);
-  await conn.execute(`UPDATE transferencias SET estado='PENDIENTE_VB',observaciones=NULL,
-   visto_bueno_por=NULL,visto_bueno_en=NULL,enviada_en=NOW() WHERE id=?`,[id]);
-  const correction=text(req.body?.correction,2000);
+  const correction=text(req.body?.correction,1900);
   if(correction.length<5)throw problem('Describe la corrección antes de reenviar');
-  await saveDocument(conn,id,user,'SOLICITUD','Versión corregida: '+correction);
-  await addHistory(conn,id,user,'REENVIAR','Solicitud reenviada para visto bueno');
+  const approved=Boolean(t.visto_bueno_por);
+  await conn.execute('UPDATE transferencias SET estado=?,observaciones=NULL,enviada_en=NOW() WHERE id=?',
+   [approved?'PENDIENTE_ADMIN':'PENDIENTE_VB',id]);
+  await saveDocument(conn,id,user,approved?'CORRECCION_FORMATO':'SOLICITUD','Versión corregida: '+correction);
+  await addHistory(conn,id,user,'REENVIAR',approved?'Formato corregido y reenviado a Concentración':'Solicitud reenviada para visto bueno');
   await audit(conn,user,id,'REENVIAR',{});
   await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
@@ -243,8 +247,10 @@ transfersRouter.post('/:id/approve-area',async(req,res,next)=>{
   const t=await rawTransfer(conn,id,true);
   if(!t)throw problem('Transferencia no encontrada',404);
   if(!canApproveArea(user,t))throw problem('Visto bueno no autorizado o estado incorrecto',403);
-  if(await hasDocument(conn,id,'SOLICITUD')&&!await hasDocument(conn,id,'ACUSE_SOLICITUD'))
-   throw problem('Adjunta primero el acuse de la Atenta Nota de solicitud',409);
+  const [[requestDocs]]=await conn.execute(`SELECT MAX(CASE WHEN tipo='SOLICITUD' THEN id END) AS requestId,
+   MAX(CASE WHEN tipo='ACUSE_SOLICITUD' THEN id END) AS receiptId FROM transferencia_documentos WHERE transferencia_id=?`,[id]);
+  if(requestDocs.requestId && BigInt(requestDocs.receiptId??0)<BigInt(requestDocs.requestId))
+   throw problem('Adjunta el acuse correspondiente a la última Atenta Nota de solicitud',409);
   await conn.execute(`UPDATE transferencias SET estado='PENDIENTE_ADMIN',visto_bueno_por=?,
   visto_bueno_en=NOW(),observaciones=NULL WHERE id=?`,[user.id,id]);
   await saveDocument(conn,id,user,'AUTORIZACION','El encargado del área autoriza el traslado de los expedientes de la relación anexa.');
@@ -309,16 +315,19 @@ transfersRouter.get('/:id/documentos/:documentId',async(req,res,next)=>{
  try{
   const t=await getVisible(req.auth.user,req.params.id);
   if(!/^[1-9][0-9]*$/.test(req.params.documentId))throw problem('Documento inválido');
-  const [[doc]]=await pool.execute(`SELECT tipo,detalle,pdf,actor_id,creado_en FROM transferencia_documentos
-   WHERE transferencia_id=? AND id=?`,[t.id,req.params.documentId]);
+  const [[doc]]=await pool.execute(`SELECT d.tipo,d.detalle,d.pdf,DATE_FORMAT(d.creado_en,'%Y-%m-%d') AS date,
+   CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS actor,
+   (SELECT COUNT(*) FROM transferencia_inventarios ti JOIN expedientes e ON e.inventario_id=ti.inventario_id
+    WHERE ti.transferencia_id=d.transferencia_id AND e.deleted_at IS NULL) AS recordCount
+   FROM transferencia_documentos d LEFT JOIN usuarios u ON u.id=d.actor_id
+   WHERE d.transferencia_id=? AND d.id=?`,[t.id,req.params.documentId]);
   if(!doc)throw problem('Documento no encontrado',404);
   res.set('Cache-Control','private, no-store');
   if(doc.pdf)return res.attachment(t.folio+'-'+doc.tipo+'.pdf').type('pdf').send(doc.pdf);
-  const copy=req.query.copia==='1'?'COPIA PARA CONTROL / ACUSE':'ORIGINAL';
-  res.attachment(t.folio+'-'+doc.tipo+(req.query.copia==='1'?'-copia':'')+'.txt');
-  res.type('text/plain').send([copy,'SEMARNAT · Transferencia documental primaria',t.folio,doc.tipo,
-   'Área generadora: '+t.areaCode,'Fecha: '+isoDate(doc.creado_en),doc.detalle,
-   'Anexo: relación de expedientes de la transferencia '+t.folio].join('\n'));
+  const copy=req.query.copia==='1';
+  const word=await makeTransferDocument({folio:t.folio,area:t.areaCode,kind:doc.tipo,
+   detail:doc.detalle,date:doc.date,actor:doc.actor,copy,recordCount:doc.recordCount});
+  res.attachment(t.folio+'-'+doc.tipo+(copy?'-copia':'')+'.docx').send(word);
  }catch(e){next(e);}
 });
 
@@ -351,6 +360,8 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
   if(['ACUSE_SOLICITUD','ACUSE_TRASLADO','FORMATO_FIRMADO'].includes(kind)&&!pdf)throw problem('Adjunta la evidencia en PDF');
   if(kind==='ACUSE_TRASLADO'&&!await hasDocument(conn,t.id,'NOTA_TRASLADO'))throw problem('Registra primero la Atenta Nota de traslado');
   if(kind==='ENTREGA'&&!await hasDocument(conn,t.id,'ACUSE_TRASLADO'))throw problem('Registra primero el acuse de traslado');
+  if(kind==='FORMATO_FIRMADO'&&await hasDocument(conn,t.id,'DICTAMEN_FAVORABLE')&&!await hasDocument(conn,t.id,'ENTREGA'))
+   throw problem('Registra primero la entrega con el representante del área',409);
   await saveDocument(conn,t.id,user,kind,detail,pdf);
   await conn.commit();
   res.json({transfer:await readTransfer(pool,await rawTransfer(pool,t.id))});
@@ -393,7 +404,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   const t=await rawTransfer(conn,id,true);
   if(!t)throw problem('Transferencia no encontrada',404);
   if(!canReceiveTransfer(user,t))throw problem('Solo el administrador puede recibir una transferencia aceptada',403);
-  if(date<isoDate(t.aceptada_en))throw problem('La recepción no puede ser anterior a la aceptación');
+  if(date<(t.approvalDate || isoDate(t.aceptada_en)))throw problem('La recepción no puede ser anterior a la aceptación');
   const [latest]=await conn.execute('SELECT estado FROM recepciones WHERE transferencia_id=? ORDER BY id DESC LIMIT 1',[id]);
   if(latest[0]?.estado==='RECIBIDA')throw problem('La recepción física ya está registrada',409);
   let receivedCount=0;
@@ -443,6 +454,13 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   }
   await conn.execute('INSERT INTO recepciones(transferencia_id,fecha,responsable_id,estado,observaciones) VALUES (?,?,?,?,?)',
    [id,date+' 12:00:00',user.id,state==='Recibida'?'RECIBIDA':'DIFERENCIAS',note||null]);
+  await saveDocument(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIAS',
+   state==='Recibida'
+    ? ['Fecha de recepción: '+date,'Expedientes cotejados: '+receivedCount,
+       'Ubicación: '+[req.body.location.archiveZone,req.body.location.room,
+        'Estante '+req.body.location.shelf,'Nivel '+req.body.location.level,'Sección '+req.body.location.physicalSection].join(' · '),
+       'Evidencia: consultar formato firmado adjunto al folio cuando corresponda.',note].filter(Boolean).join('\n').slice(0,2000)
+    : 'Fecha de cotejo: '+date+'\n'+note.slice(0,1900));
   await addHistory(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIA',note||(state==='Recibida'?'Recepción física cotejada y ubicaciones asignadas por el administrador':'Diferencias pendientes'));
   await audit(conn,user,id,'RECEPCION',{estado:state,expedientesUbicados:receivedCount,ubicacionesCapturadas:state==='Recibida'?1:0});
   await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
