@@ -8230,3 +8230,23 @@
 .transfer-documents__form > .button { grid-column: 1 / -1; justify-self: start; }
 .transfer-test-settings__switch { display: flex; align-items: center; gap: 10px; color: var(--green-950); font-weight: 600; font-size: 13px; }
 .transfer-test-settings__switch input { width: 18px; height: 18px; accent-color: var(--green-800); }
+
+.decision-modal .transfer-dictamen-field {
+  width: 100%;
+  text-align: left;
+  margin-block: 14px;
+}
+.transfer-dictamen-field textarea { resize: vertical; }
+.transfer-evidence {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  margin-block: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  background: var(--gray-50);
+  color: var(--green-950);
+}
+.transfer-evidence ul { list-style: disc; padding-inline-start: 18px; }
+.transfer-evidence .button { justify-self: start; white-space: normal; }
+.transfer-reception-location { padding: 16px; margin-block: 16px; }

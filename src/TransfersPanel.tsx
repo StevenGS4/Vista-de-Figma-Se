@@ -1261,13 +1261,14 @@ function AcceptModal({
   onConfirm: (detail: string) => void;
 }) {
   const [detail, setDetail] = useState("");
+  const [error, setError] = useState("");
   return (
     <div className="modal-backdrop">
       <div className="modal decision-modal decision-modal--accept">
         <div className="transfer-confirm-modal__icon">
           <CheckCircle2 size={24} />
         </div>
-        <h2>Aceptar transferencia</h2>
+        <h2>Emitir dictamen favorable</h2>
         <p>
           Se autorizará preparar el traslado de {count} expediente{count === 1 ? "" : "s"}.
         </p>
@@ -1275,12 +1276,17 @@ function AcceptModal({
           <AlertCircle size={17} />
           La recepción física se registrará posteriormente.
         </div>
-        <label>Fundamento del dictamen<textarea value={detail} onChange={e => setDetail(e.target.value)} maxLength={2000} /></label>
+        <label className="form-field transfer-dictamen-field">
+          <span>Fundamento del dictamen <b>*</b></span>
+          <textarea rows={4} value={detail} onChange={e => {setDetail(e.target.value); setError("");}} maxLength={2000}
+            placeholder="Explica por qué procede la transferencia." aria-invalid={Boolean(error)} />
+          {error && <small className="field-error" role="alert">{error}</small>}
+        </label>
         <div className="modal__footer">
           <Button className="button--secondary" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button className="button--primary" onClick={() => { if (detail.trim().length >= 5) onConfirm(detail.trim()); else window.alert("Captura el fundamento del dictamen."); }}>
+          <Button className="button--primary" onClick={() => { if (detail.trim().length >= 5) onConfirm(detail.trim()); else setError("Captura un fundamento de al menos 5 caracteres."); }}>
             <Check size={17} />
             Confirmar dictamen
           </Button>
@@ -1298,7 +1304,7 @@ function ReceptionForm({
 }: {
   currentUser: UserRecord;
   onBack: () => void;
-  onSave: (status: ReceptionStatus, date: string, notes: string, location: ReceptionLocation | null) => void;
+  onSave: (status: ReceptionStatus, date: string, notes: string, location: ReceptionLocation | null) => Promise<void>;
   transfer: DocumentaryTransfer;
 }) {
   const [status, setStatus] = useState<ReceptionStatus>(
@@ -1306,8 +1312,11 @@ function ReceptionForm({
   );
   const [date, setDate] = useState(transfer.receptionDate || todayIso());
   const documents=transfer.documents ?? [];
-  const missingEvidence=documents.some(doc=>doc.kind==="DICTAMEN_FAVORABLE") &&
-    (!documents.some(doc=>doc.kind==="ENTREGA") || !documents.some(doc=>doc.kind==="FORMATO_FIRMADO"));
+  const requiresEvidence = documents.some(doc => doc.kind === "DICTAMEN_FAVORABLE");
+  const missingDelivery = requiresEvidence && !documents.some(doc => doc.kind === "ENTREGA");
+  const missingSignedFormat = requiresEvidence && !documents.some(doc => doc.kind === "FORMATO_FIRMADO");
+  const missingEvidence = missingDelivery || missingSignedFormat;
+  const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState(transfer.receptionNotes);
   const [error, setError] = useState("");
   const [sourceBoxes,setSourceBoxes]=useState<ReceptionSourceBox[]>([]);
@@ -1366,14 +1375,16 @@ function ReceptionForm({
       </div>
       <form
         className="surface reception-form"
-        onSubmit={(event: FormEvent) => {
+        onSubmit={async (event: FormEvent) => {
           event.preventDefault();
-          if (status === "Diferencias pendientes" && !notes.trim()) {
-            setError("Describe las diferencias encontradas.");
+          if (saving) return;
+          setError("");
+          if (status === "Diferencias pendientes" && notes.trim().length < 5) {
+            setError("Describe las diferencias encontradas con al menos 5 caracteres.");
             return;
           }
           if(status==="Recibida" && missingEvidence){
-            setError("Registra la entrega y adjunta el formato firmado en Documentos de la transferencia.");
+            setError("Completa la evidencia pendiente indicada al inicio del formulario.");
             return;
           }
           if(status==="Recibida" && (boxesLoading || boxesError)){
@@ -1387,7 +1398,10 @@ function ReceptionForm({
             setError("Completa zona, sala, estante, nivel y sección física. Esta ubicación se asignará a todos los expedientes de la transferencia.");
             return;
           }
-          onSave(status,date,notes.trim(),status==="Recibida"?location:null);
+          setSaving(true);
+          try { await onSave(status,date,notes.trim(),status==="Recibida"?location:null); }
+          catch(error) { setError(error instanceof Error ? error.message : "No se pudo registrar la recepción."); }
+          finally { setSaving(false); }
         }}
       >
         <div className="step-heading">
@@ -1397,13 +1411,23 @@ function ReceptionForm({
           <div>
             <h3>Registrar resultado de recepción</h3>
             <p>La recepción cotejada y acreditada incorpora los expedientes a Concentración.</p>
-            {missingEvidence && <p role="status">El folio todavía requiere registro de entrega y formato firmado.</p>}
+
           </div>
         </div>
+        {status === "Recibida" && missingEvidence && (
+          <div className="transfer-evidence" role="status">
+            <strong>Evidencia pendiente</strong>
+            <ul>
+              {missingDelivery && <li>Registro de entrega con representante del área. Lo registra el solicitante o el encargado del área.</li>}
+              {missingSignedFormat && <li>PDF del formato con firmas autógrafas. Lo adjunta el administrador después del registro de entrega.</li>}
+            </ul>
+            <Button className="button--secondary" onClick={onBack}>Volver a Documentos de la transferencia</Button>
+          </div>
+        )}
         <div className="reception-options">
           {(["Recibida", "Diferencias pendientes"] as ReceptionStatus[]).map((item) => (
             <label className={status === item ? "is-selected" : ""} key={item}>
-              <input checked={status === item} onChange={() => setStatus(item)} type="radio" />
+              <input checked={status === item} onChange={() => {setStatus(item); setError("");}} name="reception-status" type="radio" />
               <span>
                 {item === "Recibida" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
               </span>
@@ -1436,23 +1460,23 @@ function ReceptionForm({
             <span>Responsable</span>
             <input disabled value={fullName(currentUser)} />
           </label>
-          <label className={`form-field record-field--wide ${error ? "has-error" : ""}`}>
+          <label className="form-field record-field--wide">
             <span>
-              Observaciones o diferencias{status === "Diferencias pendientes" && <b>*</b>}
+              {status === "Diferencias pendientes" ? <>Describe las diferencias <b>*</b></> : "Observaciones generales (opcional)"}
             </span>
             <textarea
               onChange={(event) => {
                 setNotes(event.target.value);
                 setError("");
               }}
-              placeholder="Registra el resultado del cotejo físico..."
+              placeholder={status === "Diferencias pendientes" ? "Indica qué faltó o no coincidió." : "Agrega una nota si hace falta."}
+              maxLength={2000}
               rows={4}
               value={notes}
             />
-            {error && <small className="field-error">{error}</small>}
           </label>
         </div>
-        {status==="Recibida" && <section className="surface" style={{padding:16,margin:"16px 0"}}>
+        {status==="Recibida" && <section className="surface transfer-reception-location">
           <div className="step-heading"><span><FolderArchive size={21}/></span><div>
             <h3>Ubicación física del inventario recibido</h3>
             <p>Captura la ubicación una sola vez. Se aplicará automáticamente a los {transfer.recordIds.length} expedientes de esta transferencia, sin repetir el formulario.</p>
@@ -1515,9 +1539,9 @@ function ReceptionForm({
           <Button className="button--secondary" onClick={onBack}>
             Cancelar
           </Button>
-          <Button className="button--primary" type="submit" disabled={status==="Recibida"&&(boxesLoading||Boolean(boxesError))}>
+          <Button className="button--primary" type="submit" disabled={saving || (status==="Recibida" && (missingEvidence || boxesLoading || Boolean(boxesError)))}>
             <Check size={17} />
-            Guardar recepción
+            {saving ? "Guardando…" : "Guardar recepción"}
           </Button>
         </div>
       </form>
@@ -1666,18 +1690,16 @@ export default function TransfersPanel({
   };
   const saveReception=async(status:ReceptionStatus,date:string,notes:string,location:ReceptionLocation|null)=>{
     if(!selected)return;
+    const updated=await transferApi.receive(selected.id,status,date,notes,location);
+    saveTransferState(updated);
     try{
-      const updated=await transferApi.receive(selected.id,status,date,notes,location);
-      saveTransferState(updated);
-      try{
-        if(status==="Recibida"){
-          const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
-          onRecordsChange([...tramite.filter(r=>r.stage!=="Archivo de concentración"),...concentracion]);
-        }
-      }catch(e){console.error("Recepción confirmada, pero falló actualizar pantalla:",e);}
-      setMessage("Recepción registrada correctamente.");
-      setView("detail");
-    }catch(error){failure(error);window.alert(error instanceof Error?error.message:"No se pudo registrar recepción");}
+      if(status==="Recibida"){
+        const [tramite,concentracion]=await Promise.all([tramiteApi.list(),concentrationApi.list()]);
+        onRecordsChange([...tramite.filter(r=>r.stage!=="Archivo de concentración"),...concentracion]);
+      }
+    }catch(e){console.error("Recepción confirmada, pero falló actualizar pantalla:",e);}
+    setMessage("Recepción registrada correctamente.");
+    setView("detail");
   };
 
   if (view === "wizard")

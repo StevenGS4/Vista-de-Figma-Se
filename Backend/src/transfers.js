@@ -437,8 +437,10 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   let receivedCount=0;
   if(state==='Recibida'){
    const managed=await hasDocument(conn,id,'DICTAMEN_FAVORABLE');
-   if(managed&&(!await hasDocument(conn,id,'ENTREGA')||!await hasDocument(conn,id,'FORMATO_FIRMADO')))
-    throw problem('Registra la entrega y adjunta el formato firmado antes de confirmar la recepción',409);
+   if(managed&&!await hasDocument(conn,id,'ENTREGA'))
+    throw problem('Falta el registro de entrega con representante del área. Lo registra el solicitante o el encargado del área.',409);
+   if(managed&&!await hasDocument(conn,id,'FORMATO_FIRMADO'))
+    throw problem('Falta adjuntar el PDF del formato con firmas autógrafas en Documentos de la transferencia.',409);
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
      WHERE ti.transferencia_id=? AND e.etapa IN ('TRAMITE','CONCENTRACION') AND e.deleted_at IS NULL
