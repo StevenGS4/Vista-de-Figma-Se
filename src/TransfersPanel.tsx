@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  Download,
   Eye,
   FileCheck2,
   FileClock,
@@ -961,23 +962,19 @@ function RequestDetail({
         <ArrowLeft size={17} />
         Volver a la bandeja
       </button>
-      <div className="surface transfer-detail-hero">
-        <div className="transfer-detail-hero__icon">
-          <Files size={23} />
+      <header className="surface flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl px-4 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="break-all text-base font-semibold text-[#002f2a]">{transfer.folio}</h2>
+          <p className="text-xs text-[#435951]">{areaName(transfer.areaId)} · {included.length} expedientes</p>
         </div>
-        <div>
-          <span>Solicitud de transferencia primaria</span>
-          <h2>{transfer.folio}</h2>
-          <p>
-            {areaName(transfer.areaId)} · {included.length} expedientes
-          </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <TransferStatusBadge status={transfer.status} />
+          {transfer.status === "Aceptada" && <ReceptionBadge status={transfer.receptionStatus} />}
+          <button type="button" className="text-button" onClick={onHistory}>
+            <History size={15} /> Historial
+          </button>
         </div>
-        <TransferStatusBadge status={transfer.status} />
-        <Button className="button--secondary" onClick={onHistory}>
-          <History size={16} />
-          Historial
-        </Button>
-      </div>
+      </header>
       {transfer.status === "Con observaciones" && (
         <div className="transfer-observation-banner">
           <MessageSquareText size={18} />
@@ -988,7 +985,7 @@ function RequestDetail({
         </div>
       )}
       <nav className="transfer-tabs" aria-label="Detalle de la transferencia">
-        {([["tracking", "Seguimiento"], ["documents", "Documentos"], ["inventory", "Inventario"]] as const).map(([value, label]) => (
+        {([["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"], ["inventory", "Inventario"]] as const).map(([value, label]) => (
           <button type="button" key={value} aria-current={detailView === value ? "true" : undefined}
             className={detailView === value ? "is-active" : ""} onClick={() => { setDocumentKind(""); setDetailView(value); }}>
             {label}{value === "documents" && <span>{documents.length}</span>}
@@ -1216,8 +1213,8 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
     <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
     <p>Descarga la relación del folio en Excel, los documentos en Word y los acuses o formatos firmados en PDF.</p></header>
     {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
-    <a className="button button--primary" href={transferApi.documentUrl(transfer.id)}>{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
-    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
+    <a className="text-button" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
+    <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
     </div>}
     {options.length>0 && <form className="transfer-documents__form" onSubmit={async event=>{
       event.preventDefault();
@@ -1262,15 +1259,43 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </>}
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
-    <details className="rounded-lg border border-[#cbd7d0] p-3" open={options.length === 0 || undefined}>
-      <summary className="cursor-pointer font-semibold">Documentos guardados ({documents.length})</summary>
-    {documents.length>0 && <ul className="transfer-documents__list mt-3">{documents.map(doc=><li key={doc.id}>
-      <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id)}>{documentNames[doc.kind] ?? doc.kind} · {doc.date}</a>
-      {!doc.hasFile && <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id,true)}>Descargar copia</a>}
-      <div>{doc.detail}</div>
-    </li>)}</ul>}
-      {documents.length === 0 && <p className="mt-2 text-sm">Aún no hay documentos guardados.</p>}
-    </details>
+    <section aria-label="Historial de documentos" className="border-t border-[#cbd7d0] pt-4">
+      <h4 className="mb-3 text-sm font-semibold text-[#002f2a]">Documentos registrados ({documents.length})</h4>
+      {documents.length > 0 ? (
+        <ol className="m-0 list-none p-0">
+          {documents.map((doc, index) => (
+            <li key={doc.id} className="relative flex items-start gap-3 pb-4 last:pb-0">
+              {index < documents.length - 1 && (
+                <span aria-hidden="true" className="absolute top-5 bottom-0 left-[9px] w-px bg-[#a9beb5]" />
+              )}
+              <span aria-hidden="true" className="relative grid size-5 shrink-0 place-items-center rounded-full bg-[#dfe9e4] text-[#1e5b4f]">
+                <Check size={12} />
+              </span>
+              <div className="min-w-0 flex-1 border-b border-[#dce4dd] pb-3">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                  <div className="min-w-0">
+                    <strong className="text-sm text-[#002f2a]">{documentNames[doc.kind] ?? doc.kind}</strong>
+                    {doc.date && <time dateTime={doc.date} className="block text-xs text-[#435951]">{formatDate(doc.date)}</time>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <a className="text-button" aria-label={`Descargar ${documentNames[doc.kind] ?? doc.kind}`} href={transferApi.documentUrl(transfer.id, doc.id)}>
+                      <Download size={14} /> Descargar {doc.hasFile ? "PDF" : "Word"}
+                    </a>
+                    {!doc.hasFile && <a className="text-button" aria-label={`Descargar copia de ${documentNames[doc.kind] ?? doc.kind}`} href={transferApi.documentUrl(transfer.id, doc.id, true)}>Copia</a>}
+                  </div>
+                </div>
+                {doc.detail && (
+                  <details className="mt-1.5 text-xs">
+                    <summary className="cursor-pointer text-[#1e5b4f]">Ver detalle</summary>
+                    <p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{doc.detail}</p>
+                  </details>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : <p>Aún no hay documentos guardados.</p>}
+    </section>
     {dialog}
   </section>;
 }
