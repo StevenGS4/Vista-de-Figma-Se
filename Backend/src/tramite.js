@@ -181,6 +181,16 @@ function normalize(rows){
       r.cadidoSeriesId!==header.cadidoSeriesId||r.inventoryId!==header.inventoryId)
      throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
+   if(!/^REG-\d+$/.test(String(r.id))){
+     const year=String(r.recordYear??'');
+     if(!/^\d{4}$/.test(year)||Number(year)<1900||Number(year)>2100)
+       throw fail('Selecciona un año válido para el código archivístico (1900–2100)');
+     const prefix='18NA'+year;
+     const reference=String(r.recordNumber??'').replace(/\s+/g,'').toUpperCase();
+     if(!reference.startsWith(prefix)||reference.length<=prefix.length||reference.length>110)
+       throw fail('La referencia interna debe comenzar con '+prefix+' y llevar un sufijo');
+     r.recordNumber=reference;
+   }
    const number=text(r.recordNumber,110).toUpperCase();
    const title=text(r.title);
    if(!number||!title||!text(r.description))throw fail('La referencia interna, el asunto y su descripción son obligatorios');

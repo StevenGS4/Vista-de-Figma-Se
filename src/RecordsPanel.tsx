@@ -626,6 +626,12 @@ function withCatalogValidity(record: ArchivalRecord): ArchivalRecord {
   };
 }
 
+const referencePrefix = (year?: string) => "18NA" + (year ?? "");
+const isSavedRecord = (record: ArchivalRecord) => /^REG-\d+$/.test(record.id);
+const fullReference = (record: ArchivalRecord) => isSavedRecord(record)
+  ? record.recordNumber.trim()
+  : referencePrefix(record.recordYear) + record.recordNumber.replace(/\s+/g, "").toUpperCase();
+
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
   errors: Errors;
@@ -666,7 +672,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
         </Field>
         <Field className="tramite-cell--short" error={errors.recordYear} label="Año del código archivístico" required>
           <input type="number" min="1900" max="2100"
-            value={active.recordYear || active.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
+            value={active.recordYear ?? ""}
             disabled={/^REG-\d+$/.test(active.id)}
             onChange={event=>{
               const year=event.target.value;
@@ -674,12 +680,17 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             }} />
         </Field>
         <Field error={errors.recordNumber} label="Referencia interna del expediente" required>
-          <input
-            maxLength={110}
-            placeholder="Captura el número propio del expediente"
-            onChange={(event) => update("recordNumber", event.target.value)}
-            value={active.recordNumber}
-          />
+          <div className="flex min-w-0 items-center gap-1">
+            {!isSavedRecord(active) && <strong className="shrink-0">{referencePrefix(active.recordYear)}</strong>}
+            <input
+              aria-label={isSavedRecord(active) ? "Referencia interna del expediente" : "Sufijo de la referencia interna"}
+              className="min-w-0"
+              maxLength={isSavedRecord(active) ? 110 : 102}
+              placeholder={isSavedRecord(active) ? undefined : "MD018"}
+              onChange={(event) => update("recordNumber", event.target.value)}
+              value={active.recordNumber}
+            />
+          </div>
         </Field>
         <Field className="record-field--wide" label="Código de clasificación archivística">
           <div className="read-only-code"><ShieldCheck size={12}/><strong title={active.archiveClassificationCode || previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}>
@@ -979,14 +990,14 @@ function InventoryForm({
       if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
       if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
         next.consecutive = "El consecutivo está duplicado.";
-      if (!/^REG-\d+$/.test(record.id) && (!record.recordYear || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
+      if (!/^REG-\d+$/.test(record.id) && (!/^\d{4}$/.test(record.recordYear ?? "") || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
         next.recordYear="Selecciona un año válido (1900–2100).";
-      if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
+      if (!record.recordNumber.trim()) next.recordNumber = isSavedRecord(record) ? "Captura la referencia interna." : "Captura el sufijo, por ejemplo MD018.";
       if (
         [...records, ...drafts].some(
           (item) =>
             item.id !== record.id &&
-            item.recordNumber.trim().toLowerCase() === record.recordNumber.trim().toLowerCase(),
+            fullReference(item).toUpperCase() === fullReference(record).toUpperCase(),
         )
       )
         next.recordNumber = "El número de expediente ya existe.";
@@ -1115,7 +1126,7 @@ function InventoryForm({
       (editing ? drafts : orderByArchiveYear(drafts)).map((draft, index) => { const record = withCatalogValidity(draft); return ({
         ...record,
         consecutive: editing ? record.consecutive : String(index + 1),
-        recordNumber: record.recordNumber.trim(),
+        recordNumber: fullReference(record),
         archiveClassificationCode: /^REG-\d+$/.test(record.id) ? (record.archiveClassificationCode||"") : "",
         room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
         archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
@@ -1184,6 +1195,7 @@ function InventoryForm({
                 preview
                 inventory={orderByArchiveYear(drafts).map(withCatalogValidity).map((record, index)=>({
                   ...record,
+                  recordNumber: record.recordNumber.trim() ? fullReference(record) : "",
                   consecutive: String(index + 1),
                   archiveClassificationCode: /^REG-\d+$/.test(record.id)
                     ? record.archiveClassificationCode
