@@ -175,24 +175,29 @@ function fillRecords(sheet,records,location,kind){
     const rec=records[i],r=start+i;
     const support=normalize(rec.supportType);
     const values=new Set((rec.documentaryValues||[]).map(normalize));
+    const classification=String(rec.archiveClassificationCode||'').trim();
+    const archivalNumber=classification.match(/^[^.]+\.\d{1,2}[CS]\.\d{1,3}\.(\d+)\.\d{4}$/i)?.[1];
+    const combinedValue=values.has('FISCAL_CONTABLE')||values.has('FISCAL/CONTABLE');
     const data={
-      seq:rec.consecutive,box:rec.boxNumber,number:rec.recordNumber,
+      seq:kind==='tramite'?i+1:rec.consecutive,box:rec.boxNumber,
+      number:kind==='tramite'?(archivalNumber||'Pendiente'):rec.recordNumber,
       classification:rec.archiveClassificationCode||(kind==='tramite'?'Pendiente':rec.cadidoCode),
       title:[rec.title,rec.description].filter(Boolean).join(' — '),
       opened:date(rec.openDate),closed:date(rec.closeDate)||(kind==='tramite'?'---':''),files:rec.filesCount,folios:rec.foliosCount,
       physical:['FISICO','MIXTO'].includes(support)?'X':'',
       electronic:['ELECTRONICO','MIXTO'].includes(support)?'X':'',
       admin:values.has('ADMINISTRATIVO')?'X':'',legal:values.has('LEGAL')?'X':'',
-      fiscal:values.has('FISCAL')?'X':'',accounting:values.has('CONTABLE')?'X':'',
+      fiscal:values.has('FISCAL')?'X':kind==='tramite'&&combinedValue?'F/C':'',accounting:values.has('CONTABLE')?'X':'',
       at:rec.currentValidity,ac:rec.concentrationValidity,total:rec.totalValidity,
       address:rec.archiveAddress||'',
-      notes:[rec.observations,values.has('FISCAL_CONTABLE')?'Valor documental: Fiscal/Contable':''].filter(Boolean).join('\n'),
+      notes:[rec.observations,kind!=='tramite'&&combinedValue?'Valor documental: Fiscal/Contable':''].filter(Boolean).join('\n'),
     };
     for(const [key,val] of Object.entries(data)){
       const cell=sheet.getRow(r).getCell(fields[key]);
       if(cell.type===ExcelJS.ValueType.Formula)
         throw new Error('No se puede sobreescribir fórmula de la plantilla en '+cell.address);
       cell.value=kind==='tramite' && key==='closed' && val==='---' ? '---' : safeCell(val==null?'':val);
+      if(kind==='tramite'&&key==='fiscal'&&combinedValue)cell.note='F/C: Fiscal/Contable, casilla conjunta en el CADIDO.';
       cell.alignment={...cell.alignment,wrapText:true,vertical:'middle'};
     }
   }
@@ -215,12 +220,23 @@ function fillSummary(sheet,records,location,kind){
     ['25',years.length?String(Math.max(...years)):'SIN DATO'],
     ['26',String(boxes.size)],['29',String(electronic)],
   ]);
-  // Peso, metros lineales y medios de almacenamiento no se inventan.
-  const substitute=text=>String(text||'').replace(/\\?\((22|23|24|25|26|29)\)/g,
+  if(kind==='tramite'){
+    const closed=records.filter(r=>r.closeDate).length;
+    replacements.set('23',closed===records.length?String(closed):closed+' cerrados y '+(records.length-closed)+' abiertos');
+    replacements.set('27',String(boxes.size*20));
+    replacements.set('28',String(boxes.size*0.40));
+    replacements.set('30',electronic?'Pendiente de indicar medio y tamaño':'No aplica');
+  }
+  const substitute=text=>String(text||'').replace(/\\?\(\s*(22|23|24|25|26|27|28|29|30)\s*\)/g,
     (full,n)=>replacements.get(n)||full);
   if(root.value && typeof root.value==='object' && Array.isArray(root.value.richText)){
     // Mantener los tramos rojos, sus fuentes y colores del pie institucional.
-    root.value={richText:root.value.richText.map(part=>({...part,text:substitute(part.text)}))};
+    const parts=root.value.richText;
+    root.value={richText:parts.map((part,index)=>{
+      const token=String(part.text||'').trim();
+      const splitMarker=/\(\s*$/.test(parts[index-1]?.text||'') && /^\s*\)/.test(parts[index+1]?.text||'');
+      return {...part,text:splitMarker && replacements.has(token)?replacements.get(token):substitute(part.text)};
+    })};
   } else root.value=substitute(original);
 }
 function cloneSheet(book,source,name) {

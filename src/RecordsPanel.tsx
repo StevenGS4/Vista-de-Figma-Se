@@ -594,7 +594,7 @@ function orderByArchiveYear(records: ArchivalRecord[]) {
 
 function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
   const columns = [
-    "Consecutivo", "Caja", "Año de la clave *", "Núm. de expediente *",
+    "Consecutivo", "Caja", "Año de la clave *", "Referencia interna *",
     "Clave archivística", "Título o asunto *", "Descripción", "Apertura *",
     "Cierre", "Legajos *", "Folios *", "Soporte documental *",
     "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
@@ -673,7 +673,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
               update("recordYear",year);
             }} />
         </Field>
-        <Field error={errors.recordNumber} label="Número de expediente" required>
+        <Field error={errors.recordNumber} label="Referencia interna del expediente" required>
           <input
             maxLength={110}
             placeholder="Captura el número propio del expediente"
@@ -692,7 +692,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
           <textarea rows={1} onChange={(event) => update("title", event.target.value)} value={active.title} />
         </Field>
-        <Field className="record-field--wide" label="Descripción del asunto">
+        <Field className="record-field--wide" error={errors.description} label="Descripción del asunto" required>
           <textarea rows={1} onChange={event=>update("description",event.target.value)} value={active.description}/>
         </Field>
       </fieldset>
@@ -991,6 +991,9 @@ function InventoryForm({
       )
         next.recordNumber = "El número de expediente ya existe.";
       if (!record.title.trim()) next.title = "Captura el asunto.";
+      else if (/^(?:generalidades|varios|diversos|documentaci[oó]n)[.!?]*$/i.test(record.title.trim()))
+        next.title = "Captura un asunto específico.";
+      if (!record.description.trim()) next.description = "Captura una descripción breve del asunto.";
     }
     if (step === 2) {
       if (!record.openDate) next.openDate = "Captura la apertura.";
@@ -1408,7 +1411,7 @@ function InventoryDetail({
                 </th>}
                 <th>Consecutivo del renglón</th>
                 <th>Caja</th>
-                <th>Número de expediente</th>
+                <th>Referencia interna</th>
                 <th>Clave archivística</th>
                 <th>Asunto</th>
                 <th>Apertura / cierre</th>
@@ -1441,7 +1444,7 @@ function InventoryDetail({
                   <td>{record.filesCount} / {record.foliosCount}</td>
                   <td>{record.supportType}</td>
                   <td>{Array.isArray(record.documentaryValues) ? record.documentaryValues.join(", ") : "—"}</td>
-                  <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años</td>
+                  <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años{!preview && record.tramiteDueDate && <div>Cumple AT: {formatDate(record.tramiteDueDate)}</div>}</td>
                   <td>{(preview || !isAdmin) && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>

@@ -128,6 +128,7 @@ async function chooseInventories(conn,ids,user){
  if(!items.length)throw problem('No se encontraron inventarios seleccionados');
  // Bloquea cada inventario en orden estable para serializar solicitudes concurrentes.
  const selected=items.sort((a,b)=>a.id-b.id);
+ const today=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Mazatlan'});
  for(const i of selected){
   const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? AND deleted_at IS NULL FOR UPDATE',[i.id]);
   if(locked[0]?.estado!=='TRAMITE')throw problem('Inventario ya transferido o reservado',409);
@@ -136,13 +137,16 @@ async function chooseInventories(conn,ids,user){
    throw problem('Solo puedes solicitar la transferencia de tus inventarios',403);
   const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
   SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed,
-  SUM(cierre IS NULL) AS openRecords
-  FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[i.id]);
+  SUM(cierre IS NULL) AS openRecords,
+  SUM(DATE_ADD(cierre, INTERVAL anios_tramite YEAR) IS NULL OR DATE_ADD(cierre, INTERVAL anios_tramite YEAR) > ?) AS pendingRetention
+  FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[today,i.id]);
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
   if(Number(all[0].openRecords))
    throw problem('Cierra los expedientes del inventario antes de solicitar su transferencia',409);
+  if(Number(all[0].pendingRetention))
+   throw problem('Todos los expedientes del inventario deben cumplir su plazo de conservación en Archivo de trámite antes de transferirse',409);
   const [links]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[i.id]);
   if(links.length)throw problem('Inventario vinculado a otra transferencia',409);
  }

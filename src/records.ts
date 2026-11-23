@@ -30,6 +30,7 @@ export type ArchivalRecord = {
   cadidoYear?: string;
   openDate: string;
   closeDate: string;
+  tramiteDueDate?: string | null;
   filesCount: string;
   foliosCount: string;
   supportType: string;

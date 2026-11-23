@@ -60,6 +60,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  e.descripcion AS description,e.domicilio_resguardo AS archiveAddress,e.observaciones AS observations,
  sc.codigo AS cadidoSectionId,sc.nombre AS cadidoSectionName,sr.id AS dbSeriesId,sr.codigo AS cadidoCode,sr.nombre AS cadidoSeriesName,
  cv.anio AS cadidoYear,sr.anios_tramite AS seriesAT,sr.anios_concentracion AS seriesAC,
+ DATE_FORMAT(DATE_ADD(e.cierre, INTERVAL e.anios_tramite YEAR),'%Y-%m-%d') AS tramiteDueDate,
  DATE_FORMAT(e.apertura,'%Y-%m-%d') AS openDate,DATE_FORMAT(e.cierre,'%Y-%m-%d') AS closeDate,
  CAST(e.legajos AS CHAR) AS filesCount,CAST(e.folios AS CHAR) AS foliosCount,
  e.soporte AS supportType,CAST(e.anios_tramite AS CHAR) AS currentValidity,
@@ -111,7 +112,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  archiveClassificationCode:r.archiveClassificationCode||'',boxNumber:r.boxNumber||'',title:r.title,
  description:r.description||'',archiveAddress:r.archiveAddress||'',observations:r.observations||'',
  cadidoSectionId:r.cadidoSectionId,cadidoSectionName:r.cadidoSectionName,cadidoSeriesId:seriesId(r.dbSeriesId),cadidoCode:r.cadidoCode,cadidoSeriesName:r.cadidoSeriesName,
- openDate:r.openDate,closeDate:r.closeDate||'',filesCount:r.filesCount,foliosCount:r.foliosCount,
+ openDate:r.openDate,closeDate:r.closeDate||'',tramiteDueDate:r.tramiteDueDate,filesCount:r.filesCount,foliosCount:r.foliosCount,
  supportType:{FISICO:'Físico',ELECTRONICO:'Electrónico',MIXTO:'Mixto'}[r.supportType],
  documentaryValues:(valMap.get(r.dbId)||[]).map(v=>vNames[v]),currentValidity:r.currentValidity,
  concentrationValidity:r.concentrationValidity,totalValidity:r.totalValidity,
@@ -181,7 +182,10 @@ function normalize(rows){
      throw fail('Todas las filas deben compartir el encabezado y clasificación CADIDO');
    const consecutivo=num(r.consecutive,'consecutivo',1,2147483647);
    const number=text(r.recordNumber,110).toUpperCase();
-   if(!number||!text(r.title))throw fail('Número de expediente y asunto son obligatorios');
+   const title=text(r.title);
+   if(!number||!title||!text(r.description))throw fail('La referencia interna, el asunto y su descripción son obligatorios');
+   if(/^(?:generalidades|varios|diversos|documentaci[oó]n)[.!?]*$/i.test(title))
+     throw fail('Captura un asunto específico para el expediente');
    if(unique.has(consecutivo)||numbers.has(number))throw fail('Número de expediente o consecutivo duplicado');
    unique.add(consecutivo);numbers.add(number);
    const open=date(r.openDate,true),close=date(r.closeDate);
