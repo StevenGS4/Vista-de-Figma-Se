@@ -3,7 +3,8 @@ export type TransferStatus =
   | "Pendiente de visto bueno del área"
   | "Pendiente de revisión administrativa"
   | "Con observaciones"
-  | "Aceptada";
+  | "Aceptada"
+  | "Cancelada";
 
 export type ReceptionStatus = "Pendiente" | "Recibida" | "Diferencias pendientes";
 

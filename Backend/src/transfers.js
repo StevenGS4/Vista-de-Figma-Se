@@ -18,9 +18,10 @@ const isoDate=value=>value instanceof Date
  ? new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,10)
  : value?String(value).slice(0,10):'';
 const text=(value,max=1500)=>String(value??'').trim().slice(0,max);
-const onlyIds=recordIds=>{
- if(!Array.isArray(recordIds)||!recordIds.length||recordIds.length>50000)
-  throw problem('Selecciona los expedientes de los inventarios completos');
+const maxTransferRecords=1000;
+const onlyIds=(recordIds,limit=maxTransferRecords)=>{
+ if(!Array.isArray(recordIds)||!recordIds.length||recordIds.length>limit)
+  throw problem('Selecciona inventarios completos. Máximo '+limit+' expedientes por solicitud.');
  const ids=recordIds.map(v=>/^REG-[1-9]\d*$/.test(v)?Number(v.slice(4)):NaN);
  if(ids.some(n=>!Number.isSafeInteger(n))||new Set(ids).size!==ids.length)
   throw problem('Identificadores de expedientes inválidos o duplicados');
@@ -29,7 +30,9 @@ const onlyIds=recordIds=>{
 async function rawTransfer(conn,id,lock=false){
  const [rows]=await conn.execute(`SELECT t.*,DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS approvalDate,a.codigo AS areaCode FROM transferencias t
  JOIN areas a ON a.id=t.area_id WHERE t.id=?${lock?' FOR UPDATE':''}`,[id]);
- return rows[0]||null;
+ const transfer=rows[0];
+ if(transfer && await hasDocument(conn,id,'CANCELACION'))transfer.estado='CANCELADA';
+ return transfer||null;
 }
 async function history(conn,id){
  const [rows]=await conn.execute(`SELECT id,usuario_id,accion,detalle,DATE_FORMAT(fecha,'%Y-%m-%d') AS date
@@ -84,7 +87,7 @@ async function readTransfer(conn,t){
  reviewerName:actorNames.reviewerName||'',
  assignedAreaManagerName:actorNames.assignedAreaManagerName||'',
  createdAt:isoDate(t.creada_en),submittedAt:isoDate(t.enviada_en),
- status:transferStates[t.estado],recordIds:records.map(r=>'REG-'+r.id),
+ status:documents.some(d=>d.kind==='CANCELACION')?'Cancelada':transferStates[t.estado],recordIds:records.map(r=>'REG-'+r.id),
  reviewerId:t.aceptada_por?String(t.aceptada_por):'',
  areaApproverId:t.visto_bueno_por?String(t.visto_bueno_por):'',
  areaApprovedAt:isoDate(t.visto_bueno_en),reviewedAt:isoDate(t.aceptada_en),
@@ -248,7 +251,7 @@ transfersRouter.post('/:id/resend',async(req,res,next)=>{
   if(!t)throw problem('Transferencia no encontrada',404);
   if(t.estado!=='OBSERVACIONES'||t.areaCode!==user.areaId||Number(t.solicitante_id)!==Number(user.id))
    throw problem('Solo el solicitante puede reenviar una transferencia observada',403);
-  const requested=new Set(onlyIds(req.body?.recordIds));
+  const requested=new Set(onlyIds(req.body?.recordIds,50000));
   const [joined]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
    JOIN expedientes e ON e.inventario_id=ti.inventario_id WHERE ti.transferencia_id=?`,[id]);
   if(joined.length!==requested.size||joined.some(row=>!requested.has(Number(row.id))))
@@ -329,6 +332,7 @@ transfersRouter.post('/:id/accept',async(req,res,next)=>{
 transfersRouter.get('/:id/relacion.xlsx',async(req,res,next)=>{
  try{
   const t=await getVisible(req.auth.user,req.params.id);
+  if(t.estado==='CANCELADA')throw problem('La solicitud fue cancelada y sus inventarios quedaron liberados',409);
   const records=await readRecords(pool,`WHERE EXISTS (SELECT 1 FROM transferencia_inventarios ti
     WHERE ti.inventario_id=i.id AND ti.transferencia_id=?)`,[t.id]);
   const book=await makeOfficialTemplateWorkbook(records,'transferencia');
@@ -358,13 +362,43 @@ transfersRouter.get('/:id/documentos/:documentId',async(req,res,next)=>{
  }catch(e){next(e);}
 });
 
+transfersRouter.post('/:id/cancelar',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user;ensureAuth(user);
+  if(!user.roles.includes('Administrador / Coordinador'))throw problem('Solo Administración puede cancelar',403);
+  const id=Number(String(req.params.id).replace(/^TR-/,''));
+  const detail=text(req.body?.detail,2000);
+  if(!Number.isSafeInteger(id)||id<1||detail.length<5)throw problem('Indica el motivo de cancelación');
+  conn=await pool.getConnection();await conn.beginTransaction();
+  const t=await rawTransfer(conn,id,true);
+  if(!t)throw problem('Solicitud no encontrada',404);
+  if(t.estado==='CANCELADA')throw problem('La solicitud ya está cancelada',409);
+  const [[received]]=await conn.execute("SELECT id FROM recepciones WHERE transferencia_id=? AND estado='RECIBIDA' LIMIT 1",[id]);
+  const [[moved]]=await conn.execute(`SELECT e.id FROM expedientes e JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+   WHERE ti.transferencia_id=? AND e.etapa<>'TRAMITE' AND e.deleted_at IS NULL LIMIT 1`,[id]);
+  if(received||moved)throw problem('La solicitud ya incorporó expedientes a Concentración',409);
+  await conn.execute(`UPDATE inventarios i JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
+   SET i.estado='TRAMITE' WHERE ti.transferencia_id=? AND i.estado='EN_TRANSFERENCIA'`,[id]);
+  const [released]=await conn.execute('DELETE FROM transferencia_inventarios WHERE transferencia_id=?',[id]);
+  await saveDocument(conn,id,user,'CANCELACION',
+   (detail+'\nInventarios liberados: '+released.affectedRows).slice(0,2000));
+  await audit(conn,user,id,'CANCELAR',{motivo:detail});
+  await conn.commit();
+  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
 transfersRouter.post('/:id/documentos',async(req,res,next)=>{
  let conn;
  try{
   const user=req.auth.user;
   const visible=await getVisible(user,req.params.id);
   const kind=req.body?.kind,detail=text(req.body?.detail,2000);
-  if(detail.length<5)throw problem('Captura el folio o los datos del documento');
+  const documentId=req.body?.documentId;
+  const remove=req.body?.remove===true;
+  if(documentId!=null&&!/^[1-9][0-9]*$/.test(String(documentId)))throw problem('Documento inválido');
+  if(remove&&!documentId)throw problem('Documento inválido');
+  if(!remove&&detail.length<5)throw problem('Captura el folio o los datos del documento');
   const encoded=req.body?.pdf;
   let pdf=null;
   if(encoded){
@@ -384,12 +418,29 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
    const [[received]]=await conn.execute("SELECT id FROM recepciones WHERE transferencia_id=? AND estado='RECIBIDA' LIMIT 1",[t.id]);
    if(received)throw problem('La entrega ya fue recibida y su documentación quedó cerrada',409);
   }
-  if(['ACUSE_SOLICITUD','ACUSE_TRASLADO','FORMATO_FIRMADO'].includes(kind)&&!pdf)throw problem('Adjunta la evidencia en PDF');
-  if(kind==='ACUSE_TRASLADO'&&!await hasDocument(conn,t.id,'NOTA_TRASLADO'))throw problem('Registra primero la Atenta Nota de traslado');
-  if(kind==='ENTREGA'&&!await hasDocument(conn,t.id,'ACUSE_TRASLADO'))throw problem('Registra primero el acuse de traslado');
-  if(kind==='FORMATO_FIRMADO'&&await hasDocument(conn,t.id,'DICTAMEN_FAVORABLE')&&!await hasDocument(conn,t.id,'ENTREGA'))
-   throw problem('Registra primero la entrega con el representante del área',409);
-  await saveDocument(conn,t.id,user,kind,detail,pdf);
+  const [[current]]=await conn.execute(`SELECT CAST(d.id AS CHAR) AS id,d.pdf IS NOT NULL AS hasFile
+   FROM transferencia_documentos d WHERE d.transferencia_id=? AND d.tipo=?
+    AND (d.tipo<>'ACUSE_SOLICITUD' OR d.id>COALESCE((SELECT MAX(n.id) FROM transferencia_documentos n
+     WHERE n.transferencia_id=d.transferencia_id AND n.tipo='SOLICITUD'),0))
+   ORDER BY d.id DESC LIMIT 1`,[t.id,kind]);
+  if(documentId && current?.id!==String(documentId))throw problem('Selecciona la evidencia vigente del folio',409);
+  if(!documentId && current)throw problem('Ya existe una evidencia vigente de este tipo. Usa Editar.',409);
+  if(remove){
+   const dependent={NOTA_TRASLADO:'ACUSE_TRASLADO',ACUSE_TRASLADO:'ENTREGA',ENTREGA:'FORMATO_FIRMADO'}[kind];
+   if(dependent&&await hasDocument(conn,t.id,dependent))throw problem('Ya hay evidencia posterior que depende de este documento',409);
+   await conn.execute('DELETE FROM transferencia_documentos WHERE transferencia_id=? AND id=?',[t.id,documentId]);
+  }else{
+   if(['ACUSE_SOLICITUD','ACUSE_TRASLADO','FORMATO_FIRMADO'].includes(kind)&&!pdf&&!current?.hasFile)
+    throw problem('Adjunta la evidencia en PDF');
+   if(kind==='ACUSE_TRASLADO'&&!await hasDocument(conn,t.id,'NOTA_TRASLADO'))throw problem('Registra primero la Atenta Nota de traslado');
+   if(kind==='ENTREGA'&&!await hasDocument(conn,t.id,'ACUSE_TRASLADO'))throw problem('Registra primero el acuse de traslado');
+   if(kind==='FORMATO_FIRMADO'&&await hasDocument(conn,t.id,'DICTAMEN_FAVORABLE')&&!await hasDocument(conn,t.id,'ENTREGA'))
+    throw problem('Registra primero la entrega con el representante del área',409);
+   if(documentId)await conn.execute('UPDATE transferencia_documentos SET detalle=?,pdf=COALESCE(?,pdf) WHERE transferencia_id=? AND id=?',
+    [detail,pdf,t.id,documentId]);
+   else await saveDocument(conn,t.id,user,kind,detail,pdf);
+  }
+  await audit(conn,user,t.id,remove?'ELIMINAR_EVIDENCIA':documentId?'EDITAR_EVIDENCIA':'GUARDAR_EVIDENCIA',{tipo:kind,documentId});
   await conn.commit();
   res.json({transfer:await readTransfer(pool,await rawTransfer(pool,t.id))});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}

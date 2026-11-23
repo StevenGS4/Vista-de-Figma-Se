@@ -143,9 +143,8 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const [status, setStatus] = useState<TransferStatus | "Todas">("Todas");
+  const [status, setStatus] = useState<TransferStatus | "Todas" | "Seguimiento">("Seguimiento");
   const [search, setSearch] = useState(initialSearch);
-  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
   const pageSize = 5;
   const visibleByRole = useMemo(() => {
@@ -156,10 +155,33 @@ function TransferTray({
       (item) => item.areaId === currentUser.areaId && item.requestedBy === currentUser.id,
     );
   }, [currentUser.areaId, role, transfers]);
+  const followUp = (transfer: DocumentaryTransfer) => transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
+  const matches = (transfer: DocumentaryTransfer, tab: typeof status) =>
+    tab === "Todas" || (tab === "Seguimiento" ? followUp(transfer) : transfer.status === tab);
+  const nextAction = (transfer: DocumentaryTransfer) => {
+    const has = (kind:string) => (transfer.documents ?? []).some(doc=>doc.kind===kind);
+    if(transfer.status==="Pendiente de visto bueno del área"){
+      const kinds=(transfer.documents??[]).map(doc=>doc.kind);
+      return kinds.lastIndexOf("SOLICITUD")>kinds.lastIndexOf("ACUSE_SOLICITUD")
+        ? "Área solicitante · adjuntar acuse" : "Encargado · dar visto bueno";
+    }
+    if(transfer.status==="Pendiente de revisión administrativa")return "Administrador · emitir dictamen";
+    if(transfer.status==="Con observaciones")return "Solicitante · corregir y reenviar";
+    if(transfer.status==="Aceptada"){
+      if(has("DICTAMEN_FAVORABLE")){
+        if(!has("NOTA_TRASLADO"))return "Área solicitante · registrar nota de traslado";
+        if(!has("ACUSE_TRASLADO"))return "Área solicitante · adjuntar acuse de traslado";
+        if(!has("ENTREGA"))return "Área solicitante · registrar entrega";
+        if(!has("FORMATO_FIRMADO"))return "Administrador · adjuntar formato firmado";
+      }
+      return "Administrador · registrar recepción física";
+    }
+    return "Solicitante · preparar envío";
+  };
   const filtered = visibleByRole.filter((transfer) => {
     const query = search.toLowerCase();
     return (
-      (status === "Todas" || transfer.status === status) &&
+      matches(transfer,status) &&
       (!query ||
         transfer.folio.toLowerCase().includes(query) ||
         areaName(transfer.areaId).toLowerCase().includes(query) ||
@@ -193,12 +215,14 @@ function TransferTray({
         <div className="transfer-tabs" role="tablist">
           {(
             [
+              "Seguimiento",
               "Todas",
               "En preparación",
               "Pendiente de visto bueno del área",
               "Pendiente de revisión administrativa",
               "Con observaciones",
               "Aceptada",
+              "Cancelada",
             ] as const
           ).map((item) => (
             <button
@@ -208,14 +232,13 @@ function TransferTray({
               onClick={() => {
                 setStatus(item);
                 setPage(1);
-                setSearched(true);
               }}
               role="tab"
             >
               {item}
               <span>
                 {
-                  visibleByRole.filter((transfer) => item === "Todas" || transfer.status === item)
+                  visibleByRole.filter((transfer) => matches(transfer,item))
                     .length
                 }
               </span>
@@ -229,20 +252,13 @@ function TransferTray({
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
-                setSearched(Boolean(event.target.value.trim()));
               }}
               placeholder="Buscar por folio, área o solicitante..."
               value={search}
             />
           </label>
         </div>
-        {!searched ? (
-          <div className="empty-state concentration-search-empty">
-            <Search size={30} />
-            <strong>Busca o selecciona un estado para consultar solicitudes</strong>
-            <p>La bandeja no carga automáticamente todas las transferencias.</p>
-          </div>
-        ) : <div className="table-scroll">
+        <div className="table-scroll">
           <table className="data-table transfer-table">
             <thead>
               <tr>
@@ -252,7 +268,7 @@ function TransferTray({
                 <th>Fecha</th>
                 <th>Inventarios / expedientes</th>
                 <th>Estado</th>
-                <th>Responsable de revisión</th>
+                <th>{status === "Seguimiento" ? "Siguiente acción" : "Responsable de revisión"}</th>
                 <th className="align-right">Acciones</th>
               </tr>
             </thead>
@@ -287,7 +303,7 @@ function TransferTray({
                     <td>
                       <TransferStatusBadge status={transfer.status} />
                     </td>
-                    <td>{reviewResponsible(transfer, users)}</td>
+                    <td>{status === "Seguimiento" ? nextAction(transfer) : reviewResponsible(transfer, users)}</td>
                     <td>
                       <RowActionsMenu
                         label={`Acciones para ${transfer.folio}`}
@@ -324,8 +340,8 @@ function TransferTray({
               <p>Cambia el filtro de estado o realiza una nueva búsqueda.</p>
             </div>
           )}
-        </div>}
-        {searched && <div className="pagination">
+        </div>
+        <div className="pagination">
           <span>
             Mostrando {visible.length ? (page - 1) * pageSize + 1 : 0}–
             {Math.min(page * pageSize, filtered.length)} de {filtered.length}
@@ -341,7 +357,7 @@ function TransferTray({
               <ChevronRight size={16} />
             </button>
           </div>
-        </div>}
+        </div>
       </section>
     </>
   );
@@ -586,6 +602,7 @@ function TransferWizard({
       setError("Selecciona al menos un inventario completo elegible para continuar.");
       return;
     }
+    if (!activeTransfer && selectedRecords.length > 1000) { setError("El máximo es de 1000 expedientes por solicitud."); return; }
     setError("");
     setStep((current) => Math.min(3, current + 1));
   };
@@ -648,7 +665,7 @@ function TransferWizard({
             {testMode && <p role="status">Modo de pruebas activo. Puedes seleccionar inventarios con expedientes abiertos o con plazo AT pendiente.</p>}
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
             {testMode===null && !settingsError ? <p role="status">Consultando modo de pruebas…</p> :
-              <p role="status">{eligibleInventories.length} inventario(s) elegible(s) para transferencia.</p>}
+              <p role="status">{eligibleInventories.length} inventario(s) elegible(s). Máximo 1000 expedientes por solicitud.</p>}
             <div className="eligible-list inventory-eligible-list">
               {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
@@ -675,6 +692,7 @@ function TransferWizard({
                               : [...current, inventoryId],
                           );
                         }}
+                        disabled={!selected && !activeTransfer && selectedRecords.length + inventoryRecords.length > 1000}
                         type="button"
                       >
                         <Check size={15} /> {selected ? "Quitar inventario" : "Seleccionar inventario completo"}
@@ -1177,6 +1195,7 @@ const documentNames: Record<string,string> = {
   AUTORIZACION:"Autorización del área", SOLICITUD_AMPLIACION:"Gestión de ampliación de plazo",
   DICTAMEN_FAVORABLE:"Dictamen favorable", DICTAMEN_DESFAVORABLE:"Dictamen desfavorable",
   RECEPCION:"Constancia interna de recepción", DIFERENCIAS:"Registro de diferencias en recepción",
+  CANCELACION:"Constancia de cancelación",
   CORRECCION_FORMATO:"Registro de corrección y reenvío a Concentración",
   OBSERVACION_AREA:"Observación del área", NOTA_TRASLADO:"Atenta Nota al Enlace Administrativo",
   ACUSE_TRASLADO:"Acuse de traslado", ENTREGA:"Registro de entrega con representante del área",
@@ -1207,13 +1226,20 @@ function TransferDocuments({transfer,user,onChange}: {
       (hasDocument("ENTREGA") || !hasDocument("DICTAMEN_FAVORABLE")))options.push("FORMATO_FIRMADO");
   }
   const selected=options.includes(kind)?kind:(options[0] ?? "");
+  const lastRequest=documents.map(doc=>doc.kind).lastIndexOf("SOLICITUD");
+  const current=[...documents].reverse().find(doc=>doc.kind===selected &&
+    (selected!=="ACUSE_SOLICITUD" || documents.indexOf(doc)>lastRequest));
+  const [editingId,setEditingId]=useState("");
+  const [fileVersion,setFileVersion]=useState(0);
+  const editing=Boolean(current && current.id===editingId);
+  const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
   return <section className="surface transfer-documents">
     <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
     <p>Descarga la relación del folio en Excel, los documentos en Word y los acuses o formatos firmados en PDF.</p></header>
-    <div className="transfer-documents__downloads">
+    {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
     <a className="button button--primary" href={transferApi.documentUrl(transfer.id)}>{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
     <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
-    </div>
+    </div>}
     {documents.length>0 && <ul className="transfer-documents__list">{documents.map(doc=><li key={doc.id}>
       <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id)}>{documentNames[doc.kind] ?? doc.kind} · {doc.date}</a>
       {!doc.hasFile && <a className="text-button" href={transferApi.documentUrl(transfer.id,doc.id,true)}>Descargar copia</a>}
@@ -1232,20 +1258,34 @@ function TransferDocuments({transfer,user,onChange}: {
           reader.onerror=()=>reject(new Error("No se pudo leer el PDF."));
           reader.readAsDataURL(file);
         }):undefined;
-        onChange(await transferApi.document(transfer.id,selected,detail,pdf));
+        onChange(await transferApi.document(transfer.id,selected,detail,pdf,editing ? current?.id : undefined));
+        setEditingId("");
+        setFileVersion(n=>n+1);
         setDetail("");
         setFile(null);
       }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
       finally{setBusy(false);}
     }}>
-      <label>Documento<select value={selected} onChange={e=>{setKind(e.target.value);setFile(null);}}>
+      <label>Documento<select value={selected} onChange={e=>{setKind(e.target.value);setFile(null);setEditingId("");setDetail("");setError("");}}>
         {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
       </select></label>
+      {current && !editing ? <div>
+        <p>Ya se guardó este tipo de evidencia.</p>
+        <Button className="button--secondary" disabled={busy} onClick={()=>{setEditingId(current.id);setDetail(current.detail);setError("");}}>Editar</Button>
+        <Button className="button--danger-outline" disabled={busy} onClick={async()=>{
+          if(!window.confirm("¿Eliminar esta evidencia del folio?"))return;
+          setBusy(true);setError("");
+          try{onChange(await transferApi.document(transfer.id,selected,"",undefined,current.id,true));}
+          catch(error){saveError(error);}
+          finally{setBusy(false);}
+        }}>Eliminar</Button>
+      </div> : <>
       <label>Folio y datos de la evidencia<textarea required minLength={5} maxLength={2000} value={detail} onChange={e=>setDetail(e.target.value)} /></label>
-      <label>PDF de evidencia<input key={selected+String(documents.length)} type="file" accept="application/pdf"
-        required={["ACUSE_SOLICITUD","ACUSE_TRASLADO","FORMATO_FIRMADO"].includes(selected)}
+      <label>PDF de evidencia<input key={selected+":"+fileVersion} type="file" accept="application/pdf"
+        required={["ACUSE_SOLICITUD","ACUSE_TRASLADO","FORMATO_FIRMADO"].includes(selected) && !(editing && current?.hasFile)}
         onChange={e=>setFile(e.target.files?.[0] ?? null)} /></label>
-      <button type="submit" className="button button--primary" disabled={busy}>{busy ? "Guardando…" : "Guardar documento"}</button>
+      <button type="submit" className="button button--primary" disabled={busy}>{busy ? "Guardando…" : editing ? "Guardar cambios" : "Guardar documento"}</button>
+      </>}
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
   </section>;
@@ -1758,6 +1798,17 @@ export default function TransfersPanel({
           transfer={selected}
           users={users}
         />
+        {role === "Administrador / Coordinador" && selected.status !== "Cancelada" && selected.receptionStatus !== "Recibida" && (
+          <section className="surface transfer-documents">
+            <Button className="button--danger-outline" onClick={async()=>{
+              const reason=window.prompt("Indica el motivo para cancelar y liberar los inventarios.")?.trim();
+              if(!reason || reason.length<5)return;
+              if(!window.confirm("¿Cancelar la solicitud completa y liberar los inventarios?"))return;
+              try{saveTransferState(await transferApi.cancel(selected.id,reason));setMessage("Solicitud cancelada.");}
+              catch(error){failure(error);}
+            }}>Cancelar solicitud</Button>
+          </section>
+        )}
         {returnOpen && (
           <ReturnModal onCancel={() => setReturnOpen(false)} onConfirm={returnTransfer} />
         )}
