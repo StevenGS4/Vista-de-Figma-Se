@@ -948,9 +948,12 @@ function TransferWizard({
   );
 }
 
+const hasStorageLocation = (record: ArchivalRecord) =>
+  record.stage === "Archivo de concentración" && Boolean(record.shelf && record.level && record.physicalSection);
+
 function TransferStorage({ records }: { records: ArchivalRecord[] }) {
   const groups = new Map<string, ArchivalRecord[]>();
-  const located = records.filter(record => record.stage === "Archivo de concentración" && record.shelf && record.level && record.physicalSection);
+  const located = records.filter(hasStorageLocation);
   for (const record of located) {
     const key = JSON.stringify([record.archiveZone, record.room, record.shelf, record.level, record.physicalSection, record.position]);
     const group = groups.get(key);
@@ -958,15 +961,16 @@ function TransferStorage({ records }: { records: ArchivalRecord[] }) {
     else groups.set(key, [record]);
   }
   return (
-    <section className="mt-4 min-w-0 rounded-xl border border-[#cbd7d0] p-3 sm:p-4">
-      <h4 className="text-sm font-semibold text-[#002f2a]">Ubicación actual en Concentración</h4>
+    <section className="surface min-w-0 overflow-hidden rounded-xl">
+      <div className="records-filter-head"><h3>Ubicación actual en Concentración</h3></div>
+      <div className="grid gap-4 bg-[#e5eae2] p-4 sm:p-5">
       {!groups.size && <p className="mt-2 text-sm">No hay una ubicación disponible para los expedientes visibles.</p>}
       {[...groups.entries()].map(([key, group]) => {
         const record = group[0];
         const boxes = [...new Set(group.map(item => item.locationBox || item.boxNumber).filter(Boolean))];
         return (
-          <div key={key} className="mt-3 grid min-w-0 gap-3 border-t border-[#cbd7d0] pt-3 [overflow-wrap:anywhere]">
-            <div className="text-sm">
+          <div key={key} className="grid min-w-0 gap-3 [overflow-wrap:anywhere]">
+            <div className="rounded-lg border border-[#b4c4ba] bg-[#f8f7f2] p-3 text-sm">
               <p>{[record.archiveZone, record.room].filter(Boolean).join(" · ")}</p>
               <p className="font-semibold">Estante {record.shelf} · Nivel {record.level} · Sección {record.physicalSection}</p>
               {record.position && <p>Posición {record.position}</p>}
@@ -986,7 +990,8 @@ function TransferStorage({ records }: { records: ArchivalRecord[] }) {
           </div>
         );
       })}
-      {located.length > 0 && located.length < records.length && <p className="mt-2 text-sm">Hay expedientes visibles sin ubicación completa.</p>}
+      {located.length > 0 && located.length < records.length && <p className="text-sm">Hay expedientes visibles sin ubicación completa.</p>}
+      </div>
     </section>
   );
 }
@@ -1034,6 +1039,7 @@ function RequestDetail({
     (role === "Encargado de área" && transfer.areaId === currentUser.areaId);
   const [expandedStep, setExpandedStep] = useState<number | null>(() => received ? trackingSteps.length - 1 : null);
   const included = records.filter((record) => transfer.recordIds.includes(record.id));
+  const showStorage = received && canSeeStorage && included.some(hasStorageLocation);
   const documents = transfer.documents ?? [];
   const lastNote = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
   const needsReceipt = lastNote >= 0 && !documents.slice(lastNote + 1).some(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile);
@@ -1059,19 +1065,19 @@ function RequestDetail({
         <ArrowLeft size={17} />
         Volver a la bandeja
       </button>
-      <header className="surface flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl px-4 py-2.5">
+      <header className="surface overflow-hidden rounded-xl"><div className="records-filter-head flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="break-all text-base font-semibold text-[#002f2a]">{transfer.folio}</h2>
-          <p className="text-xs text-[#435951]">{areaName(transfer.areaId)} · {included.length} expedientes</p>
+          <h2 className="break-words text-base font-semibold">{transfer.folio}</h2>
+          <p className="text-xs">{areaName(transfer.areaId)} · {included.length} expedientes</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <TransferStatusBadge status={transfer.status} />
           {transfer.status === "Aceptada" && <ReceptionBadge status={transfer.receptionStatus} />}
-          <button type="button" className="text-button" onClick={onHistory}>
+          <button type="button" className="button button--secondary" onClick={onHistory}>
             <History size={15} /> Historial
           </button>
         </div>
-      </header>
+      </div></header>
       {transfer.status === "Con observaciones" && (
         <div className="transfer-observation-banner">
           <MessageSquareText size={18} />
@@ -1081,9 +1087,9 @@ function RequestDetail({
           </span>
         </div>
       )}
-        <section className="surface rounded-xl px-4 py-3 text-sm">
-          <h3 className="font-semibold text-[#002f2a]">Datos de la solicitud</h3>
-          <dl className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 lg:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+        <section className="surface overflow-hidden rounded-xl text-sm">
+          <div className="records-filter-head"><h3>Datos de la solicitud</h3></div>
+          <dl className="grid bg-[#e5eae2] px-4 py-3 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 lg:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
             <dt>Solicitante</dt><dd>{requesterName(transfer, users)}</dd>
             <dt>Envío</dt><dd>{formatDate(transfer.submittedAt)}</dd>
             <dt>Encargado</dt><dd>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</dd>
@@ -1112,22 +1118,21 @@ function RequestDetail({
           <span className="demo-label">{included.length} expedientes</span>
         </div>
         <InventoryTable records={included} />
-        {received && canSeeStorage && <TransferStorage records={included} />}
+        {showStorage && <div className="mt-4"><TransferStorage records={included} /></div>}
       </section>
       )}
       {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} initialKind={documentKind} onChange={onDocumentsChange} />}
       {detailView === "tracking" && <>
-      <section className="surface rounded-xl p-5 sm:p-6">
-        <div className={received ? "mx-auto max-w-3xl" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"}>
-          <div>
-            <h3 className="mb-3 text-base font-semibold">Progreso de la transferencia</h3>
+      <div className={showStorage ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "grid gap-4"}>
+        <section className="surface min-w-0 overflow-hidden rounded-xl">
+          <div className="records-filter-head"><h3>Progreso de la transferencia</h3></div>
+          <div className="grid min-w-0 gap-4 bg-[#e5eae2] p-4 sm:p-5">
             {task.step >= 0 && <ol className="m-0 list-none p-0">
               {trackingSteps.map(({ title, kinds }, index) => {
                 const current = index === task.step;
                 const done = index < task.step;
                 const expanded = expandedStep === index;
                 const evidence = documents.filter(doc => kinds.includes(doc.kind));
-                const isReception = index === trackingSteps.length - 1;
                 return <li key={title} aria-current={current ? "step" : undefined}
                   className="relative min-h-10 pb-3 last:pb-0">
                   {index < trackingSteps.length - 1 && <span aria-hidden="true" className="absolute top-6 bottom-0 left-[11px] w-px bg-[#a9beb5]" />}
@@ -1142,7 +1147,7 @@ function RequestDetail({
                     </span>
                     <ChevronDown size={16} aria-hidden="true" className={expanded ? "rotate-180" : ""} />
                   </button>
-                  {expanded && <div className="ml-8 mt-2 rounded-lg border border-[#cbd7d0] p-3">
+                  {expanded && <div className="ml-8 mt-2 rounded-lg border border-[#b4c4ba] bg-[#f8f7f2] p-3">
                     {evidence.length > 0 ? <ul className="grid gap-2">
                       {evidence.map(doc => <li key={doc.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                         <span>{documentNames[doc.kind] ?? doc.kind}{doc.date && <small className="block text-[#435951]">{formatDate(doc.date)}</small>}</span>
@@ -1152,13 +1157,11 @@ function RequestDetail({
                     </ul> : <p className="text-sm">Sin documentos registrados para esta etapa.</p>}
                     {index === 2 && transfer.areaApprovedAt && transfer.status !== "Cancelada" &&
                       <a className="text-button mt-2" href={transferApi.documentUrl(transfer.id)}><Download size={14} /> Formato de transferencia primaria (Excel)</a>}
-                    {isReception && received && canSeeStorage && <TransferStorage records={included} />}
                   </div>}
                 </li>;
               })}
             </ol>}
-          </div>
-          {!received && <div className="rounded-xl bg-[#eaede7] p-4 self-start">
+          {!received && <div className="rounded-lg border border-[#b4c4ba] bg-[#f8f7f2] p-4">
             <p className="text-sm font-semibold text-[#1e5b4f]">{task.mine ? "Te toca a ti" : task.owner ? "Siguiente acción" : "Solicitud cerrada"}</p>
             <h3 className="mt-1 text-lg font-semibold">{task.label}</h3>
             {task.owner && <p className="mt-1 text-sm">{task.owner}</p>}
@@ -1210,8 +1213,10 @@ function RequestDetail({
                 </div>
               )}
           </div>}
-        </div>
-      </section>
+          </div>
+        </section>
+        {showStorage && <TransferStorage records={included} />}
+      </div>
       {onCancelRequest && <div className="flex justify-end"><Button className="button--danger-outline" onClick={onCancelRequest}>Cancelar solicitud</Button></div>}
       </>}
     </div>
@@ -1339,7 +1344,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
   };
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
   return <section className="surface transfer-documents">
-    <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
+    <header className="transfer-documents__heading rounded-lg border border-[#b4c4ba] bg-[#e5eae2] p-3"><h3>Documentos de la transferencia</h3>
     <p>Consulta la relación en Excel y los documentos registrados para este folio.</p></header>
     {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
     <a className="text-button" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
