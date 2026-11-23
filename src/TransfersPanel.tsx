@@ -1065,10 +1065,10 @@ function RequestDetail({
         <ArrowLeft size={17} />
         Volver a la bandeja
       </button>
-      <header className="surface overflow-hidden rounded-xl"><div className="records-filter-head flex flex-wrap items-center justify-between gap-2">
+      <header className="surface mt-3 mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-xl px-5 py-4">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="break-words text-base font-semibold">{transfer.folio}</h2>
-          <p className="text-xs">{areaName(transfer.areaId)} · {included.length} expedientes</p>
+          <h2 className="break-words text-xl font-semibold text-[#002f2a]">{transfer.folio}</h2>
+          <p className="text-sm text-[#435951]">{areaName(transfer.areaId)} · {included.length} expedientes</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <TransferStatusBadge status={transfer.status} />
@@ -1077,7 +1077,7 @@ function RequestDetail({
             <History size={15} /> Historial
           </button>
         </div>
-      </div></header>
+      </header>
       {transfer.status === "Con observaciones" && (
         <div className="transfer-observation-banner">
           <MessageSquareText size={18} />
@@ -1087,9 +1087,9 @@ function RequestDetail({
           </span>
         </div>
       )}
-        <section className="surface overflow-hidden rounded-xl text-sm">
+        <section className="surface mb-5 overflow-hidden rounded-xl text-sm">
           <div className="records-filter-head"><h3>Datos de la solicitud</h3></div>
-          <dl className="grid bg-[#e5eae2] px-4 py-3 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 lg:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+          <dl className="grid bg-[#edf0e9] px-5 py-4 grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 [&_dd]:min-w-0 [&_dd]:break-words [&_dd]:font-medium [&_dt]:text-[#435951] lg:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
             <dt>Solicitante</dt><dd>{requesterName(transfer, users)}</dd>
             <dt>Envío</dt><dd>{formatDate(transfer.submittedAt)}</dd>
             <dt>Encargado</dt><dd>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</dd>
@@ -1100,11 +1100,11 @@ function RequestDetail({
             </>}
           </dl>
         </section>
-      <nav className="transfer-tabs" aria-label="Detalle de la transferencia">
+      <nav className="mb-4 flex flex-wrap gap-2 rounded-xl border border-[#c8d4cc] bg-[#e9eee8] p-2" aria-label="Detalle de la transferencia">
         {([["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"], ["inventory", "Inventario"]] as const).map(([value, label]) => (
           <button type="button" key={value} aria-current={detailView === value ? "true" : undefined}
-            className={detailView === value ? "is-active" : ""} onClick={() => { setDocumentKind(""); setDetailView(value); }}>
-            {label}{value === "documents" && <span>{documents.length}</span>}
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e5b4f] ${detailView === value ? "border-[#789b8a] bg-[#fbfaf6] text-[#002f2a] shadow-sm" : "border-transparent text-[#35584b] hover:bg-[#dce7df]"}`} onClick={() => { setDocumentKind(""); setDetailView(value); }}>
+            {label}{value === "documents" && <span className="rounded-full bg-[#dce7df] px-1.5 text-xs text-[#244f41]">{documents.length}</span>}
           </button>
         ))}
       </nav>
@@ -1118,7 +1118,6 @@ function RequestDetail({
           <span className="demo-label">{included.length} expedientes</span>
         </div>
         <InventoryTable records={included} />
-        {showStorage && <div className="mt-4"><TransferStorage records={included} /></div>}
       </section>
       )}
       {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} initialKind={documentKind} onChange={onDocumentsChange} />}
@@ -1151,7 +1150,7 @@ function RequestDetail({
                     {evidence.length > 0 ? <ul className="grid gap-2">
                       {evidence.map(doc => <li key={doc.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                         <span>{documentNames[doc.kind] ?? doc.kind}{doc.date && <small className="block text-[#435951]">{formatDate(doc.date)}</small>}</span>
-                        <a className="text-button" aria-label={`Descargar ${documentNames[doc.kind] ?? doc.kind}`} href={transferApi.documentUrl(transfer.id, doc.id)}><Download size={14} /> Descargar</a>
+                        <a className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-[#1e5b4f] hover:bg-[#dfebe3] focus-visible:outline-2" aria-label={`Descargar ${documentNames[doc.kind] ?? doc.kind}`} href={transferApi.documentUrl(transfer.id, doc.id)}><Download size={14} /> Descargar</a>
                         {doc.detail && <details className="basis-full text-xs"><summary className="cursor-pointer text-[#1e5b4f]">Ver datos</summary><p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{doc.detail}</p></details>}
                       </li>)}
                     </ul> : <p className="text-sm">Sin documentos registrados para esta etapa.</p>}
@@ -1343,14 +1342,13 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
     setError("");
   };
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
-  return <section className="surface transfer-documents">
-    <header className="transfer-documents__heading rounded-lg border border-[#b4c4ba] bg-[#e5eae2] p-3"><h3>Documentos de la transferencia</h3>
-    <p>Consulta la relación en Excel y los documentos registrados para este folio.</p></header>
-    {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
-    <a className="text-button" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
-    <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
+  return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
+    <header className="flex items-center gap-2 text-[#002f2a]"><Files size={19} /><h3 className="text-base font-semibold">Documentos de la transferencia</h3></header>
+    {transfer.status!=="Cancelada" && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-3">
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
     </div>}
-    {canRequestExtension && <div>
+    {canRequestExtension && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] px-3 py-2 text-sm">
       <button type="button" className="text-button" disabled={busy}
         onClick={() => changeDocument(selected === "SOLICITUD_AMPLIACION" ? "ACUSE_SOLICITUD" : "SOLICITUD_AMPLIACION")}>
         {selected === "SOLICITUD_AMPLIACION" ? "Volver al acuse de solicitud" :
@@ -1358,7 +1356,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </button>
       <p>Solo corresponde si el área generadora no responde.</p>
     </div>}
-    {options.length>0 && <form className="transfer-documents__form" onSubmit={async event=>{
+    {options.length>0 && <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4" onSubmit={async event=>{
       event.preventDefault();
       if(busy)return;
       setBusy(true);
@@ -1406,7 +1404,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </>}
       {error && <p role="alert" className="field-error">{error}</p>}
     </form>}
-    <section aria-label="Historial de documentos" className="border-t border-[#cbd7d0] pt-4">
+    <section aria-label="Historial de documentos" className="min-w-0 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-4">
       <h4 className="mb-3 text-sm font-semibold text-[#002f2a]">Documentos registrados ({documents.length})</h4>
       {documents.length > 0 ? (
         <ol className="m-0 list-none p-0">
@@ -1418,7 +1416,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
               <span aria-hidden="true" className="relative grid size-5 shrink-0 place-items-center rounded-full bg-[#dfe9e4] text-[#1e5b4f]">
                 <Check size={12} />
               </span>
-              <div className="min-w-0 flex-1 border-b border-[#dce4dd] pb-3">
+              <div className="min-w-0 flex-1 rounded-md border border-[#c8d4cc] bg-[#fbfaf6] px-3 py-2.5">
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
                   <div className="min-w-0">
                     <strong className="text-sm text-[#002f2a]">{documentNames[doc.kind] ?? doc.kind}</strong>
