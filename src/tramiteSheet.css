@@ -1,4 +1,14 @@
-.tramite-sheet-scroll { min-width: 0; max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
+.tramite-sheet-scroll {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  contain: inline-size;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 6px;
+}
 .tramite-sheet {
   --sheet-columns: 65px 60px 60px 105px 140px 140px 140px 105px 105px 60px 60px 105px 126px 70px 88px 105px;
   --sheet-address: ;
@@ -24,11 +34,13 @@
 .tramite-sheet__row { align-items: start; }
 .tramite-sheet__row fieldset { display: contents; }
 .tramite-sheet__row .form-field {
+  position: relative;
   grid-column: auto;
   min-width: 0;
 }
 .tramite-sheet__row .form-field > span:first-child {
   position: absolute;
+  inset: 0 auto auto 0;
   width: 1px;
   height: 1px;
   padding: 0;
