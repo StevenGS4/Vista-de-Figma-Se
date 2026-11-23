@@ -9,11 +9,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardCheck,
   Clock3,
   Download,
   Eye,
-  FileCheck2,
   FileClock,
   FilePenLine,
   Files,
@@ -51,9 +49,7 @@ type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
 
 const transferSteps = [
   { label: "Seleccionar inventarios de trámite", icon: ListChecks },
-  { label: "Revisar información", icon: ClipboardCheck },
-  { label: "Vista previa", icon: Files },
-  { label: "Confirmar envío", icon: Send },
+  { label: "Vista previa y envío", icon: Files },
 ];
 
 const formatDate = (value: string) =>
@@ -398,9 +394,9 @@ function TransferTray({
 
 function TransferProgress({ current }: { current: number }) {
   return (
-    <div className="transfer-progress">
+    <div className="transfer-progress" style={{ gridTemplateColumns: `repeat(${transferSteps.length}, minmax(0, 1fr))` }}>
       <div className="transfer-progress__line">
-        <span style={{ width: `${(current / 3) * 100}%` }} />
+        <span style={{ width: `${(current / (transferSteps.length - 1)) * 100}%` }} />
       </div>
       {transferSteps.map((step, index) => {
         const Icon = step.icon;
@@ -408,6 +404,7 @@ function TransferProgress({ current }: { current: number }) {
           <div
             className={current === index ? "is-current" : current > index ? "is-complete" : ""}
             key={step.label}
+            aria-current={current === index ? "step" : undefined}
           >
             <span>{current > index ? <Check size={15} /> : <Icon size={16} />}</span>
             <small>Paso {index + 1}</small>
@@ -643,7 +640,7 @@ function TransferWizard({
     }
     if (!activeTransfer && selectedRecords.length > 1000) { setError("El máximo es de 1000 expedientes por solicitud."); return; }
     setError("");
-    setStep((current) => Math.min(3, current + 1));
+    setStep(1);
   };
 
   return (
@@ -701,10 +698,7 @@ function TransferWizard({
               </label>
               <span>{selectedInventoryIds.length} inventarios seleccionados</span>
             </div>
-            {testMode && <p role="status">Modo de pruebas activo. Puedes seleccionar inventarios con expedientes abiertos o con plazo AT pendiente.</p>}
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
-            {testMode===null && !settingsError ? <p role="status">Consultando modo de pruebas…</p> :
-              <p role="status">{eligibleInventories.length} inventario(s) elegible(s). Máximo 1000 expedientes por solicitud.</p>}
             <div className="eligible-list inventory-eligible-list">
               {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
@@ -715,7 +709,7 @@ function TransferWizard({
                     className={`eligible-inventory-group ${selected ? "is-selected" : ""}`}
                     key={inventoryId}
                   >
-                    <div className="eligible-inventory-group__header">
+                    <div className="eligible-inventory-group__header border-l-4 border-l-[#547e6b]">
                       <span>
                         <strong>{inventoryId}</strong>
                         <small>
@@ -741,8 +735,8 @@ function TransferWizard({
                       {visibleRows.map((record) => (
                           <div className="eligible-row-readonly" key={record.id}>
                             <span>
-                              <strong>{record.recordNumber}</strong>
-                              <small>{record.title}</small>
+                              <strong style={{ fontSize: "0.875rem" }}>{record.recordNumber}</strong>
+                              <small style={{ fontSize: "0.75rem", color: "#435951" }}>{record.title}</small>
                             </span>
                             <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                             <span className="eligible-meta">
@@ -774,67 +768,6 @@ function TransferWizard({
           </div>
         )}
         {step === 1 && (
-          <div className="transfer-step">
-            <div className="step-heading">
-              <span>
-                <ClipboardCheck size={21} />
-              </span>
-              <div>
-                <h3>Revisar información</h3>
-                <p>Confirma solicitante, área y expedientes antes de generar la vista previa.</p>
-              </div>
-            </div>
-            <div className="transfer-summary-grid">
-              <div>
-                <span>Área solicitante</span>
-                <strong>{areaName(currentUser.areaId)}</strong>
-              </div>
-              <div>
-                <span>Usuario solicitante</span>
-                <strong>{fullName(currentUser)}</strong>
-              </div>
-              <div>
-                <span>Expedientes incluidos</span>
-                <strong>{selectedRecords.length}</strong>
-              </div>
-              <div>
-                <span>Tipo de inventario</span>
-                <strong>Transferencia primaria</strong>
-              </div>
-              <div>
-                <span>Inventarios de origen</span>
-                <strong>{new Set(selectedRecords.map((record) => record.inventoryId)).size}</strong>
-              </div>
-            </div>
-            <div className="origin-inventory-summary">
-              {[...new Set(selectedRecords.map((record) => record.inventoryId))].map((id) => (
-                <div key={id}>
-                  <FolderArchive size={16} />
-                  <span>
-                    <strong>{id}</strong>
-                    <small>
-                      {selectedRecords.filter((record) => record.inventoryId === id).length}{" "}
-                      expedientes incluidos integralmente
-                    </small>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="selected-records-review">
-              {selectedRecords.map((record) => (
-                <div key={record.id}>
-                  <FileCheck2 size={17} />
-                  <span>
-                    <strong>{record.recordNumber}</strong>
-                    <small>{record.title}</small>
-                  </span>
-                  <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {step === 2 && (
           <div className="transfer-step transfer-step--wide">
             <div className="step-heading">
               <span>
@@ -848,6 +781,11 @@ function TransferWizard({
                 </p>
               </div>
             </div>
+            <dl className="mb-4 grid gap-3 rounded-lg border border-[#b4c4ba] bg-[#e5eae2] px-4 py-3 text-sm sm:grid-cols-3">
+              <div><dt className="text-xs text-[#435951]">Solicitante</dt><dd className="font-semibold">{fullName(currentUser)}</dd></div>
+              <div><dt className="text-xs text-[#435951]">Área solicitante</dt><dd className="font-semibold">{areaName(currentUser.areaId)}</dd></div>
+              <div><dt className="text-xs text-[#435951]">Selección</dt><dd className="font-semibold">{selectedInventoryIds.length} inventarios · {selectedRecords.length} expedientes</dd></div>
+            </dl>
             <div className="origin-inventory-summary transfer-preview-origins">
               {[...new Set(selectedRecords.map((record) => record.inventoryId))].map((id) => {
                 const origin = selectedRecords.filter((record) => record.inventoryId === id);
@@ -871,40 +809,6 @@ function TransferWizard({
             </div>
           </div>
         )}
-        {step === 3 && (
-          <div className="transfer-step confirm-transfer-step">
-            <div className="confirm-transfer-step__icon">
-              <Send size={25} />
-            </div>
-            <h3>{activeTransfer ? "Reenviar solicitud corregida" : "Confirmar envío"}</h3>
-            <p>
-              La solicitud contiene{" "}
-              <strong>
-                {selectedRecords.length} expediente{selectedRecords.length === 1 ? "" : "s"}
-              </strong>{" "}
-              de
-              {` ${areaName(currentUser.areaId)}`}.
-            </p>
-            <div className="confirm-rules">
-              <div>
-                <CheckCircle2 size={17} />
-                <span>Se conservarán los identificadores originales.</span>
-              </div>
-              <div>
-                <Clock3 size={17} />
-                <span>El estado cambiará a Pendiente de visto bueno del área.</span>
-              </div>
-              <div>
-                <ShieldCheck size={17} />
-                <span>Los expedientes continuarán en Archivo de trámite.</span>
-              </div>
-            </div>
-            <Button className="button--primary" onClick={() => setConfirmOpen(true)}>
-              <Send size={17} />
-              {activeTransfer ? "Reenviar solicitud" : "Enviar a revisión"}
-            </Button>
-          </div>
-        )}
         <div className="record-wizard__footer">
           <Button className="button--ghost" onClick={onCancel}>
             Cancelar
@@ -913,16 +817,19 @@ function TransferWizard({
             {step > 0 && (
               <Button
                 className="button--secondary"
-                onClick={() => setStep((current) => current - 1)}
+                onClick={() => setStep(0)}
               >
                 <ChevronLeft size={17} />
                 Anterior
               </Button>
             )}
-            {step < 3 && (
-            <Button className="button--primary" disabled={!selectedInventoryIds.length} onClick={next}>
-                Continuar
-                <ArrowRight size={17} />
+            {step === 0 ? (
+              <Button className="button--primary" disabled={!selectedInventoryIds.length} onClick={next}>
+                Continuar <ArrowRight size={17} />
+              </Button>
+            ) : (
+              <Button className="button--primary" onClick={() => setConfirmOpen(true)}>
+                <Send size={17} /> {activeTransfer ? "Reenviar solicitud" : "Enviar a revisión"}
               </Button>
             )}
           </div>
