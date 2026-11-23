@@ -169,7 +169,12 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const [scope, setScope] = useState("active");
+  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas"] as const;
+  const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
+  const [mineOnly, setMineOnly] = useState(false);
+  const [area, setArea] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(1);
   const pageSize = 5;
@@ -180,18 +185,31 @@ function TransferTray({
     return transfers.filter(
       (item) => item.areaId === currentUser.areaId && item.requestedBy === currentUser.id,
     );
-  }, [currentUser.areaId, role, transfers]);
-  const followUp = (transfer: DocumentaryTransfer) => transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
-  const pending = visibleByRole.filter(item => transferTask(item, currentUser, role, permissions).mine).length;
-  const filtered = visibleByRole.filter((transfer) => {
-    const query = search.toLowerCase();
-    return (
-      (scope === "all" || (scope === "mine" ? transferTask(transfer, currentUser, role, permissions).mine : followUp(transfer))) &&
-      (!query ||
-        transfer.folio.toLowerCase().includes(query) ||
-        areaName(transfer.areaId).toLowerCase().includes(query) ||
-        requesterName(transfer, users).toLowerCase().includes(query))
-    );
+  }, [currentUser.areaId, currentUser.id, role, transfers]);
+  const matchesView = (transfer: DocumentaryTransfer, currentView: typeof view) => {
+    switch (currentView) {
+      case "Seguimiento": return transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
+      case "Pendiente": return ["En preparación", "Pendiente de visto bueno del área", "Pendiente de revisión administrativa"].includes(transfer.status);
+      case "Con observaciones": return transfer.status === "Con observaciones";
+      case "Aceptadas": return transfer.status === "Aceptada";
+      case "Todas": return true;
+    }
+  };
+  const isMyTask = (transfer: DocumentaryTransfer) => transferTask(transfer, currentUser, role, permissions).mine;
+  const pending = visibleByRole.filter(isMyTask).length;
+  const areas = [...new Set(visibleByRole.map(transfer => transfer.areaId))]
+    .sort((left, right) => areaName(left).localeCompare(areaName(right), "es"));
+  const query = search.trim().toLowerCase();
+  const invalidDates = Boolean(from && to && from > to);
+  const filtered = visibleByRole.filter(transfer => {
+    const date = (transfer.submittedAt || transfer.createdAt || "").slice(0, 10);
+    return matchesView(transfer, view) &&
+      (!mineOnly || isMyTask(transfer)) &&
+      (!area || transfer.areaId === area) &&
+      (!from || date >= from) &&
+      (!to || Boolean(date && date <= to)) &&
+      (!query || [transfer.folio, areaName(transfer.areaId), requesterName(transfer, users)]
+        .some(value => value.toLowerCase().includes(query)));
   });
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -213,13 +231,22 @@ function TransferTray({
       <section className="surface transfer-tray">
         <div className="records-filter-head">
           <div>
-            <h3>Seguimiento</h3>
-            <p>{visibleByRole.filter(followUp).length} solicitudes en curso</p>
+            <h3>Bandeja de transferencias</h3>
+            <p>{visibleByRole.filter(item => matchesView(item, "Seguimiento")).length} solicitudes en curso</p>
           </div>
-          {pending > 0 && <button type="button" className="button button--secondary" onClick={() => { setScope("mine"); setPage(1); }}>
+          {pending > 0 && <button type="button" className="button button--secondary" onClick={() => { setView("Seguimiento"); setMineOnly(true); setPage(1); }}>
             <Clock3 size={16} /> {pending} {pending === 1 ? "acción pendiente" : "acciones pendientes"}
           </button>}
         </div>
+        <nav className="transfer-tabs" aria-label="Estado de las transferencias">
+          {views.map(item => (
+            <button type="button" key={item} className={view === item ? "is-active" : ""}
+              aria-current={view === item ? "true" : undefined}
+              onClick={() => { setView(item); setPage(1); }}>
+              {item}<span>{visibleByRole.filter(transfer => matchesView(transfer, item)).length}</span>
+            </button>
+          ))}
+        </nav>
         <div className="transfer-searchbar flex flex-wrap items-center justify-between gap-3">
           <label className="search-box">
             <Search size={17} />
@@ -232,11 +259,27 @@ function TransferTray({
               value={search}
             />
           </label>
-          <select className="rounded-lg border border-[#a9beb5] bg-white px-3 py-2 text-sm" aria-label="Mostrar solicitudes" value={scope} onChange={event => { setScope(event.target.value); setPage(1); }}>
-            <option value="active">En curso</option>
-            <option value="mine">Me toca a mí</option>
-            <option value="all">Todas, incluidas las cerradas</option>
-          </select>
+          {areas.length > 1 && <label className="grid gap-1 text-xs font-semibold">
+            Área
+            <select className="filter-select rounded-lg border px-2 py-2" value={area} onChange={event => { setArea(event.target.value); setPage(1); }}>
+              <option value="">Todas las áreas</option>
+              {areas.map(id => <option key={id} value={id}>{areaName(id)}</option>)}
+            </select>
+          </label>}
+          <label className="grid gap-1 text-xs font-semibold">Envío o creación desde
+            <input type="date" className="filter-date rounded-lg border px-2 py-2" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold">Hasta
+            <input type="date" className="filter-date rounded-lg border px-2 py-2" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={mineOnly} onChange={event => { setMineOnly(event.target.checked); setPage(1); }} />
+            Me toca a mí
+          </label>
+          <Button className="button--secondary" onClick={() => {
+            setSearch(""); setArea(""); setFrom(""); setTo(""); setMineOnly(false); setPage(1);
+          }}>Limpiar filtros</Button>
+          {invalidDates && <p role="alert" className="w-full text-sm text-[#75163c]">La fecha inicial debe ser anterior o igual a la fecha final.</p>}
         </div>
         <div className="table-scroll">
           <table className="data-table transfer-table">
