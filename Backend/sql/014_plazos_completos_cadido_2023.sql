@@ -277,9 +277,13 @@ VALUES
 
 START TRANSACTION;
 
+-- Permitir esta actualización acotada y restaurar el ajuste de la sesión.
+SET @cadido_014_safe_updates = @@SESSION.SQL_SAFE_UPDATES;
+SET SESSION SQL_SAFE_UPDATES = 0;
+
 UPDATE series_cadido s
 JOIN catalogos_cadido_versiones v ON v.id = s.catalogo_version_id
-JOIN plazos_cadido_2023 p ON BINARY p.codigo = BINARY s.codigo
+JOIN plazos_cadido_2023 p ON CAST(p.codigo AS BINARY) = CAST(s.codigo AS BINARY)
 SET s.anios_tramite = p.anios_tramite,
     s.anios_concentracion = p.anios_concentracion
 WHERE v.anio = 2023
@@ -287,8 +291,11 @@ WHERE v.anio = 2023
     AND (s.anios_tramite IS NULL OR s.anios_tramite = p.anios_tramite)
     AND (s.anios_concentracion IS NULL OR s.anios_concentracion = p.anios_concentracion);
 
-SELECT ROW_COUNT() AS series_actualizadas;
+SET @cadido_014_actualizadas = ROW_COUNT();
+SET SESSION SQL_SAFE_UPDATES = @cadido_014_safe_updates;
 COMMIT;
+
+SELECT @cadido_014_actualizadas AS series_actualizadas;
 
 SELECT COUNT(*) AS series_del_pdf
 FROM plazos_cadido_2023;
@@ -296,7 +303,7 @@ FROM plazos_cadido_2023;
 SELECT COUNT(DISTINCT s.codigo) AS series_del_pdf_en_catalogo_2023
 FROM series_cadido s
 JOIN catalogos_cadido_versiones v ON v.id = s.catalogo_version_id
-JOIN plazos_cadido_2023 p ON BINARY p.codigo = BINARY s.codigo
+JOIN plazos_cadido_2023 p ON CAST(p.codigo AS BINARY) = CAST(s.codigo AS BINARY)
 WHERE v.anio = 2023;
 
 -- Si existen diferencias, revisar los plazos capturados antes de corregirlos.
@@ -307,7 +314,7 @@ SELECT v.id AS catalogo_version_id, p.codigo, p.pagina_pdf,
        p.anios_concentracion AS concentracion_pdf
 FROM series_cadido s
 JOIN catalogos_cadido_versiones v ON v.id = s.catalogo_version_id
-JOIN plazos_cadido_2023 p ON BINARY p.codigo = BINARY s.codigo
+JOIN plazos_cadido_2023 p ON CAST(p.codigo AS BINARY) = CAST(s.codigo AS BINARY)
 WHERE v.anio = 2023
     AND (NOT (s.anios_tramite <=> p.anios_tramite)
          OR NOT (s.anios_concentracion <=> p.anios_concentracion))
@@ -319,7 +326,7 @@ WHERE NOT EXISTS (
     SELECT 1
     FROM series_cadido s
     JOIN catalogos_cadido_versiones v ON v.id = s.catalogo_version_id
-    WHERE v.anio = 2023 AND BINARY p.codigo = BINARY s.codigo
+    WHERE v.anio = 2023 AND CAST(p.codigo AS BINARY) = CAST(s.codigo AS BINARY)
 )
 ORDER BY p.pagina_pdf, p.codigo;
 
