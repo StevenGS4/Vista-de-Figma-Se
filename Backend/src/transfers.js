@@ -446,14 +446,6 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
      WHERE ti.transferencia_id=? AND e.etapa IN ('TRAMITE','CONCENTRACION') AND e.deleted_at IS NULL
      ORDER BY e.id FOR UPDATE`,[id]);
    if(!linked.length)throw problem('No hay expedientes para recibir',409);
-   if(managed){
-    const [moved]=await conn.execute(`UPDATE expedientes e JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
-     SET e.etapa='CONCENTRACION'
-     WHERE ti.transferencia_id=? AND e.etapa='TRAMITE' AND e.deleted_at IS NULL AND e.disponibilidad<>'PRESTADO'`,[id]);
-    if(moved.affectedRows!==linked.length)throw problem('Los expedientes ya no están disponibles para la entrega',409);
-    await conn.execute(`UPDATE inventarios i JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
-     SET i.estado='CONCENTRACION' WHERE ti.transferencia_id=? AND i.estado='EN_TRANSFERENCIA'`,[id]);
-   }
    let location;
    try{location=validateSharedReceptionLocation(req.body?.location,linked.map(row=>row.id));}
    catch(error){throw problem(error.message);}
@@ -461,13 +453,20 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    // Cualquier error revierte la ubicación y la recepción completas.
    const [updated]=await conn.execute(`UPDATE expedientes e
      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
-     SET e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
+     SET ${managed ? "e.etapa='CONCENTRACION'," : ''}e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
        e.seccion_fisica=?,e.posicion=?,
        e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
        e.notas_ubicacion=?
-     WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'`,
+     WHERE ti.transferencia_id=? AND e.deleted_at IS NULL
+       AND ${managed ? "e.etapa='TRAMITE' AND e.disponibilidad<>'PRESTADO'" : "e.etapa='CONCENTRACION'"}`,
      [location.archiveZone,location.room,location.shelf,location.level,
       location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
+   if(managed&&updated.affectedRows!==linked.length)
+    throw problem('Los expedientes ya no están disponibles para la entrega',409);
+   if(managed){
+    await conn.execute(`UPDATE inventarios i JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
+     SET i.estado='CONCENTRACION' WHERE ti.transferencia_id=? AND i.estado='EN_TRANSFERENCIA'`,[id]);
+   }
    receivedCount=linked.length;
    // affectedRows puede ser menor que el conteo cuando una ubicación idéntica ya estaba guardada.
    const [verified]=await conn.execute(`SELECT e.id FROM expedientes e
@@ -493,5 +492,10 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   await addHistory(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIA',note||(state==='Recibida'?'Recepción física cotejada y ubicaciones asignadas por el administrador':'Diferencias pendientes'));
   await audit(conn,user,id,'RECEPCION',{estado:state,expedientesUbicados:receivedCount,ubicacionesCapturadas:state==='Recibida'?1:0});
   await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
- }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+ }catch(e){
+  if(conn)await conn.rollback();
+  if(e.code==='ER_SIGNAL_EXCEPTION'||e.sqlState==='45000')
+   return res.status(409).json({error:'MySQL rechazó la recepción: '+(e.sqlMessage||e.message||'validación de la base de datos')});
+  next(e);
+ }finally{conn?.release();}
 });
