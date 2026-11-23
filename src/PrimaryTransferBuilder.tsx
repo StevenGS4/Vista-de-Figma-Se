@@ -127,14 +127,14 @@ export default function PrimaryTransferBuilder({
   <div className="record-form-top">
    <div>
     <button className="text-button" type="button" onClick={onBack}><ArrowLeft size={16}/> Volver a tipos de inventario</button>
-    <h2>Relación de transferencia primaria</h2>
-    <p>Construye una relación personalizada por fechas, área, usuarios, códigos CADIDO, inventarios y expedientes.</p>
+    <h2>Concentrado documental</h2>
+    <p>Genera un concentrado de expedientes por fechas, área, usuarios, códigos CADIDO, inventarios y expedientes.</p>
    </div>
    <span className="record-mode"><FileSpreadsheet size={16}/> Reporte documental</span>
   </div>
   <section className="surface primary-builder__note">
    <ShieldCheck size={19}/>
-   <span>La descarga genera un reporte institucional; no envía, autoriza, acepta ni cambia la etapa archivística de los expedientes. Los inventarios ya concentrados pueden incluirse como relación histórica.</span>
+   <span>Este reporte reúne los expedientes seleccionados en una hoja. El formato de Transferencia Documental Primaria se descarga desde la solicitud en el módulo Transferencias.</span>
   </section>
   <nav className="primary-builder__tabs" aria-label="Pasos de preparación">
    <button type="button" className={tab==="filters"?"is-active":""} onClick={()=>setTab("filters")}><SlidersHorizontal size={16}/> 1. Filtros</button>

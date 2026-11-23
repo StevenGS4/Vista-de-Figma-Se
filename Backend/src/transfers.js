@@ -335,8 +335,14 @@ transfersRouter.get('/:id/relacion.xlsx',async(req,res,next)=>{
   if(t.estado==='CANCELADA')throw problem('La solicitud fue cancelada y sus inventarios quedaron liberados',409);
   const records=await readRecords(pool,`WHERE EXISTS (SELECT 1 FROM transferencia_inventarios ti
     WHERE ti.inventario_id=i.id AND ti.transferencia_id=?)`,[t.id]);
-  const book=await makeOfficialTemplateWorkbook(records,'transferencia');
-  res.attachment(t.folio+'-transferencia-primaria'+(req.query.copia==='1'?'-copia':'')+'.xlsx');
+  if(!records.length)throw problem('La solicitud no contiene expedientes activos',404);
+  const approved=Boolean(t.visto_bueno_por);
+  const copy=req.query.copia==='1';
+  const book=await makeOfficialTemplateWorkbook(records,'transferencia',{
+   folio:t.folio,approved,approvedAt:isoDate(t.visto_bueno_en),copy,
+  });
+  const type=approved?'transferencia-documental-primaria':'relacion-de-expedientes';
+  res.attachment(t.folio+'-'+type+(copy?'-copia':'')+'.xlsx');
   res.set('Cache-Control','private, no-store');
   await book.xlsx.write(res);res.end();
  }catch(e){next(e);}

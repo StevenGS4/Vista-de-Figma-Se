@@ -257,7 +257,7 @@ function sheetName(kind,index,total){
   return kind==='transferencia'?'INVENTARIO A.TP.':
     kind==='concentracion'?'INVENTARIO A.C.':'INVENTARIO A.T.';
 }
-export async function makeOfficialTemplateWorkbook(records,kind){
+export async function makeOfficialTemplateWorkbook(records,kind,transfer){
   const templateName=TEMPLATES[kind];
   if(!templateName)throw new Error('Tipo de plantilla no soportado: '+kind);
   if(records.length>MAX_ROWS)throw new Error('El inventario supera el límite de exportación');
@@ -303,6 +303,12 @@ export async function makeOfficialTemplateWorkbook(records,kind){
     // Un consecutivo único del consolidado: 1..N (en vez de reiniciar por inventario).
     const consolidated=sorted.map((r,i)=>({...r,consecutive:String(i+1)}));
     fillHeader(source,first,singleLayout);
+    if(transfer){
+      fillCell(source,'G3',transfer.approved?'FORMATO DE TRANSFERENCIA DOCUMENTAL PRIMARIA':'RELACIÓN DE EXPEDIENTES PARA TRANSFERENCIA');
+      source.mergeCells('B19:W19');
+      fillCell(source,'B19',['Folio: '+transfer.folio,transfer.copy?'Copia':'Original',
+        transfer.approvedAt&&'Visto bueno: '+date(transfer.approvedAt)].filter(Boolean).join(' · '));
+    }
     fillRecords(source,consolidated,singleLayout);
     fillSummary(source,consolidated,singleLayout);
     const extra=Math.max(0,consolidated.length-(singleLayout.summaryRow-singleLayout.start));

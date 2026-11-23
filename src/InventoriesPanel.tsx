@@ -34,7 +34,7 @@ const types = {
     accent: "wine",
   },
   transferencia: {
-    name: "Relación de inventarios para transferencia primaria",
+    name: "Concentrado documental",
     description: "Consolidado documental con filtros de fecha, CADIDO, área, usuario y selección de inventarios o expedientes.",
     icon: FolderArchive,
     accent: "gold",
@@ -240,11 +240,11 @@ function InventoryList({
           <div className="inventory-info">
             <FileSpreadsheet size={18} />
             <span>
-              <strong>Consulta general para preparar transferencias</strong>
+              <strong>Reporte de consulta</strong>
               Esta consulta sirve para preparar la selección. El formato vinculado a una solicitud se descarga desde su folio en Transferencias.
             </span>
             <Button className="button--primary" disabled={allExportLoading} onClick={exportAll}>
-              <Download size={15} /> Descargar relación XLSX
+              <Download size={15} /> Descargar concentrado XLSX
             </Button>
           </div>
         )}
@@ -254,7 +254,7 @@ function InventoryList({
             <FileSpreadsheet size={18} />
             <span>
               <strong>{visible.length} inventarios · {visible.reduce((sum, group) => sum + group.records.length, 0)} expedientes</strong>
-              Consulta la relación de inventarios seleccionados.
+              Consulta el concentrado de expedientes seleccionados.
             </span>
           </div>
         )}

@@ -13,7 +13,7 @@ function condition(user,scope){
  if(scope==='AREA')return {sql:"WHERE e.etapa='CONCENTRACION' AND a.codigo=?",args:[user.areaId]};
  return {sql:"WHERE e.etapa='CONCENTRACION' AND a.codigo=? AND i.creado_por=?",args:[user.areaId,user.id]};
 }
-async function enrichRecords(records){
+export async function enrichConcentrationRecords(records){
  if(!records.length)return [];
  const extra=new Map();
  // Fragmentar las consultas para evitar listas SQL gigantes y límites de parámetros.
@@ -56,7 +56,7 @@ async function listFor(user,oneId=null){
  const {sql,args}=condition(user,scope);
  const suffix=oneId?" AND e.id=?":'';
  const records=await readRecords(pool,sql+suffix,oneId?[...args,oneId]:args);
- return enrichRecords(records);
+ return enrichConcentrationRecords(records);
 }
 concentrationRouter.get('/expedientes',async(req,res,next)=>{
  try {res.json({records:await listFor(req.auth.user)});}

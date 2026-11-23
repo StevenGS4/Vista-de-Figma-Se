@@ -263,7 +263,7 @@ export const primaryTransferApi={
   const link=document.createElement('a');
   link.href=URL.createObjectURL(blob);
   link.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||
-    'relacion_transferencia_primaria_seleccionada.xlsx';
+    'concentrado_documental_seleccionado.xlsx';
   document.body.appendChild(link);
   link.click();
   link.remove();
