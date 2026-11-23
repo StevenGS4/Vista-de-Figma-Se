@@ -680,11 +680,11 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             }} />
         </Field>
         <Field error={errors.recordNumber} label="Referencia interna del expediente" required>
-          <div className="flex min-w-0 items-center gap-1">
-            {!isSavedRecord(active) && <strong className="shrink-0">{referencePrefix(active.recordYear)}</strong>}
+          <div className="flex min-w-0 items-center gap-0.5">
+            {!isSavedRecord(active) && <strong className="tramite-sheet__validity shrink-0">{referencePrefix(active.recordYear)}</strong>}
             <input
               aria-label={isSavedRecord(active) ? "Referencia interna del expediente" : "Sufijo de la referencia interna"}
-              className="min-w-0"
+              className="min-w-0 flex-1"
               maxLength={isSavedRecord(active) ? 110 : 102}
               placeholder={isSavedRecord(active) ? undefined : "MD018"}
               onChange={(event) => update("recordNumber", event.target.value)}
