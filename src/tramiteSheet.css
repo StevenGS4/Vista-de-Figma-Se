@@ -1,10 +1,29 @@
-.tramite-sheet-scroll { overflow-x: auto; max-width: 100%; padding-bottom: 8px; }
-.tramite-sheet { width: max-content; min-width: 100%; }
-.tramite-sheet__row { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--gray-200); align-items: flex-start; }
+.tramite-sheet-scroll { min-width: 0; }
+.tramite-sheet { display: grid; gap: 8px; min-width: 0; }
+.tramite-sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: 7px;
+}
 .tramite-sheet__row:nth-child(odd) { background: var(--gray-50); }
 .tramite-sheet__row fieldset { display: contents; }
-.tramite-sheet__row .form-field { width: 175px; flex: 0 0 175px; min-width: 0; }
-.tramite-sheet__row .record-field--wide { width: 245px; flex-basis: 245px; }
+.tramite-sheet__row .form-field { flex: 0 1 124px; min-width: 0; max-width: 100%; }
+.tramite-sheet__row .tramite-cell--short { flex-basis: 82px; }
+.tramite-sheet__row .tramite-cell--values { flex-basis: 174px; }
+.tramite-sheet__row .record-field--wide { flex: 1 1 180px; max-width: 310px; }
+.tramite-sheet__row .form-field :is(input, select) { height: 34px; padding-inline: 7px; }
+.tramite-sheet__row .form-field textarea {
+  min-height: 34px;
+  field-sizing: content;
+  overflow-wrap: anywhere;
+  padding: 6px 7px;
+}
+.tramite-sheet__row .read-only-code { overflow-wrap: anywhere; }
 .tramite-sheet__row .document-values { display: flex; flex-wrap: wrap; gap: 4px; }
 .tramite-sheet__row .document-values button { font-size: 10px; }
 .tramite-sheet__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }

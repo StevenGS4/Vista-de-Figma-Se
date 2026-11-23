@@ -596,16 +596,16 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
   return (
     <div className="tramite-sheet__row" id={active.id} role="group" aria-label={`Expediente ${active.consecutive}`}>
       <fieldset disabled={protectedRow}>
-        {isAdmin && <Field error={errors.consecutive} label="Consecutivo del renglón" required>
+        {isAdmin && <Field className="tramite-cell--short" error={errors.consecutive} label="Consecutivo del renglón" required>
           <input
             inputMode="numeric"
             onChange={(event) => update("consecutive", event.target.value)}
             value={active.consecutive}
           />
         </Field>}
-        {!isAdmin && <div className="form-field"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
-        <Field label="Número de caja">
-          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
+        {!isAdmin && <div className="form-field tramite-cell--short"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
+        <Field className="tramite-cell--short" label="Número de caja">
+          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} placeholder="Hasta 6 dígitos"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -613,8 +613,8 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
             value={active.boxNumber}
           />
         </Field>
-        <Field error={errors.recordYear} label="Año del código archivístico" required>
-          <input type="number" min="1900" max="2100" style={{maxWidth:145}}
+        <Field className="tramite-cell--short" error={errors.recordYear} label="Año del código archivístico" required>
+          <input type="number" min="1900" max="2100"
             value={active.recordYear || active.archiveClassificationCode?.match(/\.(\d{4})$/)?.[1] || String(new Date().getFullYear())}
             disabled={/^REG-\d+$/.test(active.id)}
             onChange={event=>{
@@ -640,28 +640,18 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
         </Field>
 
         <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
-          <input onChange={(event) => { update("title", event.target.value); }} value={active.title} />
+          <textarea rows={1} onChange={(event) => update("title", event.target.value)} value={active.title} />
         </Field>
         <Field className="record-field--wide" label="Descripción del asunto">
-          <textarea rows={2} onChange={event=>update("description",event.target.value)} value={active.description}/>
+          <textarea rows={1} onChange={event=>update("description",event.target.value)} value={active.description}/>
         </Field>
       </fieldset>
       <fieldset disabled={locked}>
-        {isAdmin && <Field className="record-field--wide" label="Título o descripción del asunto" required>
-          <textarea
-            onChange={(event) => {
-              update("title", event.target.value);
-              update("description", event.target.value);
-            }}
-            rows={3}
-            value={active.title}
-          />
-        </Field>}
+        
         <Field error={errors.openDate} label="Inicio / Apertura" required>
           <input
             onChange={(event) => update("openDate", event.target.value)}
             type="date"
-            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.openDate}
           />
         </Field>
@@ -674,25 +664,22 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
             min={active.openDate}
             onChange={(event) => update("closeDate", event.target.value)}
             type="date"
-            style={isAdmin ? undefined : {maxWidth:205}}
             value={active.closeDate}
           />
         </Field>
-        <Field error={errors.filesCount} label="Número de legajos" required>
+        <Field className="tramite-cell--short" error={errors.filesCount} label="Número de legajos" required>
           <input
             min="1"
             onChange={(event) => update("filesCount", event.target.value)}
             type="number"
-            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.filesCount}
           />
         </Field>
-        <Field error={errors.foliosCount} label="Número de folios" required>
+        <Field className="tramite-cell--short" error={errors.foliosCount} label="Número de folios" required>
           <input
             min="1"
             onChange={(event) => update("foliosCount", event.target.value)}
             type="number"
-            style={isAdmin ? undefined : {maxWidth:155}}
             value={active.foliosCount}
           />
         </Field>
@@ -706,7 +693,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
             <option>Mixto</option>
           </select>
         </Field>
-        <div className="form-field">
+        <div className="form-field tramite-cell--values">
           <span>
             Valor documental<b>*</b>
           </span>
@@ -734,7 +721,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
             <small className="field-error">{errors.documentaryValues}</small>
           )}
         </div>
-        <Field error={errors.currentValidity} label="Años en archivo de trámite" required>
+        <Field className="tramite-cell--short" error={errors.currentValidity} label="Años en archivo de trámite" required>
           <input
             min="0"
             onChange={(event) => {
@@ -746,11 +733,11 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
               );
             }}
             type="number"
-            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.currentValidity}
           />
         </Field>
         <Field
+          className="tramite-cell--short"
           error={errors.concentrationValidity}
           label="Años en archivo de concentración"
           required
@@ -766,7 +753,6 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
               );
             }}
             type="number"
-            style={isAdmin ? undefined : {maxWidth:120}}
             value={active.concentrationValidity}
           />
         </Field>
@@ -786,7 +772,7 @@ function SpreadsheetRow({ active, errors, isAdmin, update, remove }: {
         <Field className="record-field--wide" label="Observaciones del expediente">
           <textarea
             onChange={(event) => update("observations", event.target.value)}
-            rows={4}
+            rows={1}
             value={active.observations}
           />
         </Field>
@@ -1108,7 +1094,7 @@ function InventoryForm({
           {currentStep === 1 && (
             <>
               <StepHeading title="Expedientes y revisión" icon={<FolderTree size={21} />}
-                description="Captura un expediente por fila y desplázate hacia la derecha para ver todos sus campos." />
+                description="Cada expediente tiene su propio bloque. Completa sus campos de izquierda a derecha y continúa debajo." />
               <div className="tramite-sheet-scroll" role="region" aria-label="Captura de expedientes" tabIndex={0}>
                 <div className="tramite-sheet">
                   {drafts.map(record => (
