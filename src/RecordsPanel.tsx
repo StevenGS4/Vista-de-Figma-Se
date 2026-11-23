@@ -616,7 +616,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
   automaticOrder: boolean;
   remove?: () => void;
 }) {
-  const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"], ["Técnico", "T"]];
+  const values = [["Administrativo", "A"], ["Legal", "L"], ["Fiscal", "F"], ["Contable", "C"]];
   const protectedRow = active.stage === "Archivo de concentración" || Boolean(active.transferReference);
   const locked = protectedRow;
   const total = active.currentValidity !== "" && active.concentrationValidity !== ""
