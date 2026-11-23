@@ -24,12 +24,14 @@ async function enrichRecords(records){
    DATE_FORMAT(r.fecha,'%Y-%m-%d') AS recepcion_fecha,
    CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS recepcion_responsable,
    r.observaciones AS recepcion_observaciones,
-   r.estado AS recepcion_estado
+   r.estado AS recepcion_estado,
+   d.acceso,d.tradicion,d.topografia_m,d.topografia_n,d.topografia_p
    FROM expedientes e
    JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
    JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'
    LEFT JOIN recepciones r ON r.id=(SELECT MAX(r2.id) FROM recepciones r2 WHERE r2.transferencia_id=t.id)
    LEFT JOIN usuarios u ON u.id=r.responsable_id
+   LEFT JOIN expedientes_datos_concentracion d ON d.expediente_id=e.id
    WHERE e.id IN (${ids.map(()=>'?').join(',')})`,ids);
   for(const row of rows)extra.set(Number(row.id),row);
  }
@@ -37,6 +39,11 @@ async function enrichRecords(records){
   const row=extra.get(Number(record.id.replace(/^REG-/,'')));
   return {...record,
     archiveZone:row?.archivo_zona||'Ubicación pendiente de asignación',
+    receptionConfirmed:row?.recepcion_estado==='RECIBIDA',
+    concentrationData:{
+      access:row?.acceso||'', tradition:row?.tradicion||'',
+      m:row?.topografia_m||'', n:row?.topografia_n||'', p:row?.topografia_p||'',
+    },
     receptionDate:row?.recepcion_fecha||'',
     receptionResponsible:row?.recepcion_responsable||'',
     receptionNotes:row?.recepcion_observaciones||'',
@@ -99,6 +106,51 @@ concentrationRouter.put('/expedientes/:id/ubicacion',async(req,res,next)=>{
   await conn.commit();
   const [record]=await listFor(user,id);
   res.json({record});
+ }catch(error){if(conn)await conn.rollback();next(error);}
+ finally{conn?.release();}
+});
+
+function parseInventoryData(body){
+ if(!body || ['access','tradition','m','n','p'].some(key=>typeof body[key]!=='string'))
+  throw fail('Completa los campos del inventario con valores válidos.');
+ const {access,tradition}=body;
+ const [m,n,p]=['m','n','p'].map(key=>body[key].trim());
+ if(!['','P','C','R'].includes(access)||!['','ORIGINAL','COPIA','AMBAS'].includes(tradition)||
+   [m,n,p].some(value=>value.length>100))
+  throw fail('Los datos del inventario no son válidos.');
+ return {access,tradition,m,n,p};
+}
+
+concentrationRouter.put('/expedientes/:id/datos-inventario',requireAdmin,async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user;
+  if(!canEditConcentrationLocation(user))throw fail('Solo el administrador puede actualizar los datos del inventario',403);
+  const id=Number(/^REG-([1-9][0-9]*)$/.exec(req.params.id)?.[1]);
+  if(!Number.isSafeInteger(id))throw fail('ID de expediente inválido');
+  const data=parseInventoryData(req.body);
+  conn=await pool.getConnection();
+  await conn.beginTransaction();
+  const [[record]]=await conn.execute(`SELECT e.id FROM expedientes e
+   JOIN inventarios i ON i.id=e.inventario_id
+   WHERE e.id=? AND e.etapa='CONCENTRACION' AND i.estado='CONCENTRACION'
+     AND e.deleted_at IS NULL AND i.deleted_at IS NULL FOR UPDATE`,[id]);
+  if(!record)throw fail('Expediente activo de Concentración no encontrado',404);
+  const [[receipt]]=await conn.execute(`SELECT r.estado FROM expedientes e
+   JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+   JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'
+   JOIN recepciones r ON r.transferencia_id=t.id
+   WHERE e.id=? ORDER BY r.id DESC LIMIT 1`,[id]);
+  if(receipt?.estado!=='RECIBIDA')throw fail('Primero confirma la recepción física',409);
+  const values=[data.access,data.tradition,data.m,data.n,data.p].map(value=>value||null);
+  await conn.execute(`INSERT INTO expedientes_datos_concentracion
+   (expediente_id,acceso,tradicion,topografia_m,topografia_n,topografia_p) VALUES (?,?,?,?,?,?)
+   ON DUPLICATE KEY UPDATE acceso=?,tradicion=?,topografia_m=?,topografia_n=?,topografia_p=?`,
+   [id,...values,...values]);
+  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+   [user.id,'expedientes',id,'ACTUALIZAR_DATOS_CONCENTRACION',JSON.stringify(data)]);
+  await conn.commit();
+  res.json({data});
  }catch(error){if(conn)await conn.rollback();next(error);}
  finally{conn?.release();}
 });

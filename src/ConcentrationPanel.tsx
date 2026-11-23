@@ -25,13 +25,14 @@ import { concentrationApi } from "./api";
 import LocationShelf from "./LocationShelf";
 import {
   ArchivalRecord,
+  type ConcentrationInventoryData,
   RecordAvailability,
   cadidoSections,
   cadidoSeries,
   locationSummary,
 } from "./records";
 
-type PanelView = "list" | "detail" | "location";
+type PanelView = "list" | "detail" | "location" | "inventory-data";
 type LocationErrors = Partial<
   Record<"archiveZone" | "room" | "shelf" | "level" | "physicalSection", string>
 >;
@@ -70,10 +71,81 @@ function AvailabilityBadge({ value }: { value: RecordAvailability }) {
   );
 }
 
+const accessLabels: Record<string, string> = { P: "Pública", C: "Confidencial", R: "Reservada" };
+const traditionLabels: Record<string, string> = { ORIGINAL: "Original", COPIA: "Copia", AMBAS: "Original y copia" };
+const topographicKeys = ["m", "n", "p"] as const;
+
+function hasPendingInventoryData(record: ArchivalRecord) {
+  const data = record.concentrationData;
+  return record.receptionConfirmed && (!data?.access || !data.tradition || !topographicKeys.some(key => data[key]));
+}
+
+function EditInventoryData({record, onCancel, onSave}: {
+  record: ArchivalRecord;
+  onCancel: () => void;
+  onSave: (data: ConcentrationInventoryData) => Promise<void>;
+}) {
+  const [data, setData] = useState<ConcentrationInventoryData>(record.concentrationData ?? {
+    access: "", tradition: "", m: "", n: "", p: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const update = (key: keyof ConcentrationInventoryData, value: string) =>
+    setData(current => ({ ...current, [key]: value }));
+  const field = "grid gap-1 text-sm font-medium text-[#244f41]";
+  const control = "w-full rounded-md border border-[#a9beb5] bg-[#fbfaf6] px-3 py-2";
+  return (
+    <section className="surface overflow-hidden rounded-xl">
+      <div className="records-filter-head"><h3>Datos del inventario · {record.title}</h3></div>
+      <form className="grid gap-4 p-5" onSubmit={async event => {
+        event.preventDefault();
+        if (saving) return;
+        setSaving(true);
+        setError("");
+        try { await onSave(data); }
+        catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudieron guardar los datos."); }
+        finally { setSaving(false); }
+      }}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className={field}>Condiciones de acceso
+            <select className={control} value={data.access} onChange={event => update("access", event.target.value)}>
+              <option value="">Pendiente</option>
+              {Object.entries(accessLabels).map(([key, label]) => <option key={key} value={key}>{key} · {label}</option>)}
+            </select>
+          </label>
+          <label className={field}>Tradición documental
+            <select className={control} value={data.tradition} onChange={event => update("tradition", event.target.value)}>
+              <option value="">Pendiente</option>
+              {Object.entries(traditionLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        <fieldset className="grid gap-3 rounded-lg border border-[#c8d4cc] p-3">
+          <legend className="px-1 font-semibold">Ubicación topográfica del formato</legend>
+          <p className="text-sm"><strong>Ubicación física registrada:</strong> {[record.archiveZone, record.room, locationSummary(record), record.position && `Posición ${record.position}`].filter(Boolean).join(" · ")}</p>
+          <p className="text-sm">Captura solo las casillas que correspondan según la nomenclatura de tu oficina.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {topographicKeys.map(key => <label className={field} key={key}>{key.toUpperCase()}
+              <input className={control} value={data[key]} maxLength={100} onChange={event => update(key, event.target.value)} />
+            </label>)}
+          </div>
+        </fieldset>
+        {error && <p role="alert" className="field-error">{error}</p>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" className="button button--secondary" onClick={onCancel} disabled={saving}>Cancelar</button>
+          <button type="submit" className="button button--primary" disabled={saving}>{saving ? "Guardando…" : "Guardar datos"}</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function ConcentrationList({
   initialSearch = "",
   canEditLocation,
   canViewDetail,
+  pendingOnly,
+  onEditInventoryData,
   onEditLocation,
   onView,
   records,
@@ -81,6 +153,8 @@ function ConcentrationList({
   initialSearch?: string;
   canEditLocation: boolean;
   canViewDetail: boolean;
+  pendingOnly: boolean;
+  onEditInventoryData: (record: ArchivalRecord) => void;
   onEditLocation: (record: ArchivalRecord) => void;
   onView: (record: ArchivalRecord) => void;
   records: ArchivalRecord[];
@@ -90,7 +164,7 @@ function ConcentrationList({
   const [cadido, setCadido] = useState("");
   const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
-  const [searched, setSearched] = useState(Boolean(initialSearch));
+  const [searched, setSearched] = useState(Boolean(initialSearch) || pendingOnly);
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
@@ -261,7 +335,7 @@ function ConcentrationList({
             Inventarios recientes autorizados
           </button>
         </div>
-        {!searched ? (
+        {!searched && !pendingOnly ? (
           <div className="empty-state concentration-search-empty">
             <Search size={30} />
             <strong>Utiliza la búsqueda para consultar inventarios</strong>
@@ -375,6 +449,11 @@ function ConcentrationList({
                                                 icon: <Files size={16}/>,
                                                 onSelect: () => onView(record),
                                               }] : []),
+                                              ...(canEditLocation && record.receptionConfirmed ? [{
+                                                label: "Completar datos del inventario",
+                                                icon: <Pencil size={15}/>,
+                                                onSelect: () => onEditInventoryData(record),
+                                              }] : []),
                                               ...(canEditLocation ? [{
                                                 label: "Editar ubicación",
                                                 icon: <MapPin size={15}/>,
@@ -470,11 +549,13 @@ function ConcentrationDetail({
   canEditLocation,
   onBack,
   onEditLocation,
+  onEditInventoryData,
   record,
 }: {
   canEditLocation: boolean;
   onBack: () => void;
   onEditLocation: () => void;
+  onEditInventoryData: () => void;
   record: ArchivalRecord;
 }) {
   return (
@@ -554,6 +635,14 @@ function ConcentrationDetail({
             value={formatDate(record.transferAcceptedDate)}
           />
           <DetailField label="Resultado" value="Aceptada administrativamente" />
+        </DetailSection>
+        <DetailSection icon={<FileCheck2 size={17} />} title="Datos del inventario de Concentración">
+          <DetailField label="Condiciones de acceso" value={accessLabels[record.concentrationData?.access ?? ""] || "Pendiente"} />
+          <DetailField label="Tradición documental" value={traditionLabels[record.concentrationData?.tradition ?? ""] || "Pendiente"} />
+          {topographicKeys.map(key => <DetailField key={key} label={`Ubicación · ${key.toUpperCase()}`} value={record.concentrationData?.[key] || "—"} />)}
+          {canEditLocation && record.receptionConfirmed && (
+            <Button className="button--secondary" onClick={onEditInventoryData}><Pencil size={15} /> Editar datos</Button>
+          )}
         </DetailSection>
         <DetailSection icon={<Truck size={17} />} title="Seguimiento de recepción física">
           <DetailField label="Fecha de recepción" value={formatDate(record.receptionDate)} />
@@ -780,10 +869,11 @@ export default function ConcentrationPanel({
   role: Role;
 }) {
   const [view, setView] = useState<PanelView>("list");
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [selected, setSelected] = useState<ArchivalRecord | null>(null);
   const [message, setMessage] = useState("");
   useEffect(() => {
-    if (!message.startsWith("Ubicación física actualizada")) return;
+    if (!message) return;
     const timer=window.setTimeout(()=>setMessage(""),4000);
     return ()=>window.clearTimeout(timer);
   },[message]);
@@ -816,6 +906,25 @@ export default function ConcentrationPanel({
     }
   };
 
+  const pending = concentrationRecords.filter(hasPendingInventoryData);
+  const openInventoryData = (record: ArchivalRecord) => {
+    setSelected(record);
+    setView("inventory-data");
+  };
+
+  if (view === "inventory-data" && selected && canEditLocation)
+    return (
+      <EditInventoryData key={selected.id} record={selected} onCancel={() => setView("detail")}
+        onSave={async data => {
+          const concentrationData = await concentrationApi.saveInventoryData(selected.id, data);
+          const updated = { ...selected, concentrationData };
+          onRecordsChange(records.map(record => record.id === updated.id ? { ...record, concentrationData } : record));
+          setSelected(updated);
+          setMessage("Datos del inventario actualizados.");
+          setView("detail");
+        }} />
+    );
+
   if (view === "location" && selected)
     return (
       <EditLocation onCancel={() => setView("detail")} onSave={saveLocation} record={selected} />
@@ -837,14 +946,23 @@ export default function ConcentrationPanel({
             setView("list");
           }}
           onEditLocation={() => setView("location")}
+          onEditInventoryData={() => openInventoryData(selected)}
           record={selected}
         />
       </>
     );
 
   return (
+    <>
+    {canEditLocation && <nav className="transfer-tabs mb-4" aria-label="Vista de Concentración">
+      <button type="button" aria-current={!pendingOnly ? "true" : undefined} className={!pendingOnly ? "is-active" : ""} onClick={() => setPendingOnly(false)}>Inventarios</button>
+      <button type="button" aria-current={pendingOnly ? "true" : undefined} className={pendingOnly ? "is-active" : ""} onClick={() => setPendingOnly(true)}>Pendientes de asignar <span>{pending.length}</span></button>
+    </nav>}
     <ConcentrationList
-      initialSearch={initialSearch}
+      key={pendingOnly ? "pending" : "all"}
+      initialSearch={pendingOnly ? "" : initialSearch}
+      pendingOnly={pendingOnly}
+      onEditInventoryData={openInventoryData}
       canEditLocation={canEditLocation}
       canViewDetail={canViewDetail}
       onEditLocation={(record) => {
@@ -856,7 +974,8 @@ export default function ConcentrationPanel({
         setSelected(record);
         setView("detail");
       }}
-      records={concentrationRecords}
+      records={pendingOnly ? pending : concentrationRecords}
     />
+    </>
   );
 }

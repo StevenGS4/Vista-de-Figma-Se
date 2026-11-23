@@ -25,7 +25,7 @@ export const usersApi={
  })).user),
 };
 
-import type { ArchivalRecord, CadidoSection, CadidoSeries } from './records';
+import type { ArchivalRecord, CadidoSection, CadidoSeries, ConcentrationInventoryData } from './records';
 export const tramiteApi = {
   catalog:()=>request<{sections:CadidoSection[],series:CadidoSeries[]}>('/api/tramite/catalogo'),
   list:async()=>((await request<{records:ArchivalRecord[]}>('/api/tramite/inventarios')).records),
@@ -79,6 +79,11 @@ export const transferApi={
 };
 
 export const concentrationApi={
+ saveInventoryData:async(id:string,data:ConcentrationInventoryData)=>
+  (await request<{data:ConcentrationInventoryData}>(
+   '/api/concentracion/expedientes/'+encodeURIComponent(id)+'/datos-inventario',
+   {method:'PUT',body:JSON.stringify(data)}
+  )).data,
  list:async()=>((await request<{records:ArchivalRecord[]}>('/api/concentracion/expedientes')).records),
  saveLocation:async(record:ArchivalRecord)=>{
   const body={

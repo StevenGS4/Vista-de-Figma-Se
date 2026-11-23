@@ -1,7 +1,17 @@
 export type RecordStage = "Archivo de trámite" | "Archivo de concentración";
 export type RecordAvailability = "En archivo" | "Prestado";
 
+export type ConcentrationInventoryData = {
+  access: string;
+  tradition: string;
+  m: string;
+  n: string;
+  p: string;
+};
+
 export type ArchivalRecord = {
+  receptionConfirmed?: boolean;
+  concentrationData?: ConcentrationInventoryData;
   id: string;
   inventoryId: string;
   inventoryDeletedAt?: string;
