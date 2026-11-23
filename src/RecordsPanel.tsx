@@ -592,6 +592,22 @@ function orderByArchiveYear(records: ArchivalRecord[]) {
   });
 }
 
+function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
+  const columns = [
+    "Consecutivo", "Caja", "Año de la clave *", "Núm. de expediente *",
+    "Clave archivística", "Título o asunto *", "Descripción", "Apertura *",
+    "Cierre", "Legajos *", "Folios *", "Soporte documental *",
+    "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
+    "Vigencia total", ...(isAdmin ? ["Domicilio de resguardo"] : []),
+    "Observaciones", "Acción",
+  ];
+  return (
+    <div className="tramite-sheet__header">
+      {columns.map(column => <span key={column}>{column}</span>)}
+    </div>
+  );
+}
+
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
   errors: Errors;
@@ -770,7 +786,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
         </Field>
         {isAdmin ? <Field label="Vigencia documental total">
           <input disabled value={total || active.totalValidity} />
-        </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong>{total || active.totalValidity || "Pendiente"} años</strong></div>}
+        </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong className="tramite-sheet__validity">{total || active.totalValidity || "Pendiente"} años</strong></div>}
         {isAdmin && <Field
           className="record-field--wide"
           label="Domicilio y referencia general de resguardo"
@@ -1109,7 +1125,8 @@ function InventoryForm({
               <StepHeading title="Expedientes y revisión" icon={<FolderTree size={21} />}
                 description="Completa un expediente por fila. Desplázate hacia la derecha para ver los campos de control documental." />
               <div className="tramite-sheet-scroll" role="region" aria-label="Captura de expedientes" tabIndex={0}>
-                <div className="tramite-sheet">
+                <div className={isAdmin ? "tramite-sheet tramite-sheet--admin" : "tramite-sheet"}>
+                  <SpreadsheetHeader isAdmin={isAdmin} />
                   {drafts.map(record => (
                     <SpreadsheetRow key={record.id} active={record} isAdmin={isAdmin} automaticOrder={!editing}
                       errors={record.id === activeId ? errors : {}}

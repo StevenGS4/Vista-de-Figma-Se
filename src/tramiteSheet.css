@@ -1,22 +1,37 @@
 .tramite-sheet-scroll { min-width: 0; max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
-.tramite-sheet { width: max-content; min-width: 100%; }
-.tramite-sheet__row {
-  display: flex;
+.tramite-sheet {
+  --sheet-columns: 65px 60px 60px 105px 140px 140px 140px 105px 105px 60px 60px 105px 126px 70px 88px 105px;
+  --sheet-address: ;
+  width: max-content;
+  min-width: 100%;
+}
+.tramite-sheet--admin { --sheet-address: 140px; }
+.tramite-sheet__header, .tramite-sheet__row {
+  display: grid;
+  grid-template-columns: var(--sheet-columns) var(--sheet-address) 140px 98px;
   gap: 6px;
-  align-items: flex-start;
   padding: 7px 8px;
   border-bottom: 1px solid var(--gray-200);
 }
-.tramite-sheet__row:nth-child(odd) { background: var(--gray-50); }
+.tramite-sheet__header {
+  align-items: center;
+  background: var(--green-950, #123f36);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.tramite-sheet__row { align-items: start; }
 .tramite-sheet__row fieldset { display: contents; }
-.tramite-sheet__row .form-field { flex: 0 0 105px; min-width: 0; }
-.tramite-sheet__row .tramite-cell--short { flex-basis: 60px; }
-.tramite-sheet__row .tramite-cell--values { flex-basis: 126px; }
-.tramite-sheet__row .record-field--wide { flex-basis: 140px; }
+.tramite-sheet__row .form-field { min-width: 0; }
 .tramite-sheet__row .form-field > span:first-child {
-  display: block;
-  min-height: 26px;
-  line-height: 1.2;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .tramite-sheet__row .form-field :is(input, select, textarea, .read-only-code) {
   box-sizing: border-box;
@@ -29,14 +44,27 @@
 .tramite-sheet__row .read-only-code { gap: 4px; }
 .tramite-sheet__row .read-only-code strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tramite-sheet__row .document-values { display: flex; flex-wrap: nowrap; gap: 3px; }
-.tramite-sheet__row .document-values button { min-width: 0; padding-inline: 4px; font-size: 10px; }
-.tramite-sheet__row > .button { margin-top: 31px; white-space: nowrap; }
+.tramite-sheet__row .document-values button { min-width: 0; padding-inline: 4px; height: 32px; font-size: 10px; }
+.tramite-sheet__row > .button { height: 32px; min-height: 32px; padding-inline: 6px; white-space: nowrap; }
 .tramite-sheet__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+.tramite-sheet__header > :first-child,
 .tramite-sheet__row fieldset:first-child > .form-field:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
-  align-self: stretch;
-  background: var(--white);
+  text-align: center;
 }
-.tramite-sheet__row:nth-child(odd) fieldset:first-child > .form-field:first-child { background: var(--gray-50); }
+.tramite-sheet__header > :first-child { background: var(--green-950, #123f36); }
+.tramite-sheet__row fieldset:first-child > .form-field:first-child { background: var(--white, #fff); }
+.tramite-sheet__row:nth-child(even) { background: var(--gray-50); }
+.tramite-sheet__row:nth-child(even) fieldset:first-child > .form-field:first-child { background: var(--gray-50); }
+.tramite-sheet__row fieldset:first-child > .form-field:first-child input { text-align: center; }
+.tramite-sheet__row fieldset:first-child > .form-field:first-child > strong,
+.tramite-sheet__validity {
+  display: grid;
+  align-items: center;
+  min-height: 32px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+}
