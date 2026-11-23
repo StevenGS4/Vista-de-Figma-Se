@@ -622,7 +622,7 @@ function RowPicker({
         <table className="data-table">
           <thead>
             <tr>
-              <th>Consecutivo</th>
+              <th>Consecutivo del renglón</th>
               <th>Caja</th>
               <th>Número de expediente</th>
               <th>Código CADIDO</th>
@@ -639,7 +639,6 @@ function RowPicker({
                 record.recordNumber &&
                 record.title &&
                 record.openDate &&
-                record.closeDate &&
                 record.foliosCount &&
                 record.shelf,
               );
@@ -649,7 +648,7 @@ function RowPicker({
                   <td>{record.boxNumber || "—"}</td>
                   <td>{record.recordNumber || "Nueva fila"}</td>
                   <td>
-                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode || "Pendiente"}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || "Pendiente"}</span>
                   </td>
                   <td>{record.title || "Sin capturar"}</td>
                   <td>
@@ -734,14 +733,14 @@ function ExpedientsStep({
         onSelect={onSelect}
       />
       <fieldset className="record-form-grid row-detail-editor" disabled={protectedRow}>
-        {isAdmin && <Field error={errors.consecutive} label="Número consecutivo" required>
+        {isAdmin && <Field error={errors.consecutive} label="Consecutivo del renglón" required>
           <input
             inputMode="numeric"
             onChange={(event) => update("consecutive", event.target.value)}
             value={active.consecutive}
           />
         </Field>}
-        {!isAdmin && <div className="form-field"><span>Consecutivo del inventario</span><strong>{active.consecutive}</strong></div>}
+        {!isAdmin && <div className="form-field"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
         <Field label="Número de caja">
           <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} style={{maxWidth:145}} placeholder="Hasta 6 dígitos"
             onChange={(event) => {
@@ -760,7 +759,7 @@ function ExpedientsStep({
               update("recordYear",year);
             }} />
         </Field>
-        <Field error={errors.recordNumber} label="Número de expediente" required>
+        <Field error={errors.recordNumber} label="Número de expediente" hint="Referencia registrada por el área. La clave archivística se asigna al guardar." required>
           <input
             maxLength={110}
             placeholder="Captura el número propio del expediente"
@@ -866,7 +865,7 @@ function ControlStep({
         <Field
           error={errors.closeDate}
           label="Fecha de cierre"
-          required
+          hint="Déjala vacía mientras el expediente siga abierto."
         >
           <input
             min={active.openDate}
@@ -1139,8 +1138,7 @@ function InventoryForm({
     }
     if (step === 2) {
       if (!record.openDate) next.openDate = "Captura la apertura.";
-      if (!record.closeDate) next.closeDate = "Captura la fecha de cierre.";
-      else if (record.closeDate < record.openDate)
+      if (record.closeDate && record.closeDate < record.openDate)
         next.closeDate = "El cierre es anterior a la apertura.";
       if (!record.filesCount || Number(record.filesCount) < 1)
         next.filesCount = "Captura los legajos.";
@@ -1474,7 +1472,7 @@ function InventoryDetail({
         <div className="section-heading">
           <div>
             <span className="section-kicker">Encabezado del inventario</span>
-            <h2>{preview ? "Vista previa · " : ""}{header.inventoryId}</h2>
+            <h2>{preview ? "Vista previa · " : ""}Folio del inventario: {header.inventoryId || "Pendiente"}</h2>
             <p>
               {areaName(header.areaId)} · {formatDate(header.inventoryDate)}
             </p>
@@ -1568,10 +1566,10 @@ function InventoryDetail({
                       ? [...new Set([...selectedRows,...rows.map(r=>r.id)])]
                       : selectedRows.filter(id=>!rows.some(r=>r.id===id)))} />
                 </th>}
-                <th>Consecutivo</th>
+                <th>Consecutivo del renglón</th>
                 <th>Caja</th>
                 <th>Número de expediente</th>
-                <th>CADIDO</th>
+                <th>Clave archivística</th>
                 <th>Asunto</th>
                 <th>Apertura / cierre</th>
                 <th>Legajos / folios</th>
@@ -1596,7 +1594,7 @@ function InventoryDetail({
                   <td>{record.boxNumber}</td>
                   <td>{record.recordNumber}</td>
                   <td>
-                    <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
+                    <span className="cadido-code">{record.archiveClassificationCode || "Pendiente"}</span>
                   </td>
                   <td><strong>{record.title}</strong>{record.description && <div>{record.description}</div>}</td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
