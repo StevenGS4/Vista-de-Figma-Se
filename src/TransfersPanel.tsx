@@ -509,6 +509,14 @@ function TransferWizard({
   onSubmit: (recordIds: string[], existing: DocumentaryTransfer | null) => void;
   transfers: DocumentaryTransfer[];
 }) {
+  const [testMode, setTestMode] = useState<boolean | null>(null);
+  const [settingsError, setSettingsError] = useState("");
+  useEffect(() => {
+    let active = true;
+    transferApi.settings().then(({testMode}) => { if(active)setTestMode(testMode); })
+      .catch((error: Error) => { if(active)setSettingsError(error.message); });
+    return () => { active = false; };
+  }, []);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<string[]>(() => [
@@ -525,6 +533,7 @@ function TransferWizard({
       .filter(
         (transfer) =>
           transfer.id !== activeTransfer?.id &&
+          (transfer.status === "Aceptada" ||
           [
             "En preparación",
             "Pendiente de visto bueno del área",
@@ -532,7 +541,7 @@ function TransferWizard({
             "Con observaciones",
           ].includes(
             transfer.status,
-          ),
+          )),
       )
       .flatMap((transfer) => transfer.recordIds),
   );
@@ -548,7 +557,7 @@ function TransferWizard({
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mazatlan" });
   for (const record of areaRecords) {
     if (!activeTransfer?.recordIds.includes(record.id) &&
-      (!record.tramiteDueDate || record.tramiteDueDate > today || record.availability === "Prestado"))
+      (record.availability === "Prestado" || (!testMode && (!record.tramiteDueDate || record.tramiteDueDate > today))))
       blockedInventoryIds.add(record.inventoryId);
   }
   const eligible = areaRecords.filter(record => !blockedInventoryIds.has(record.inventoryId));
@@ -636,7 +645,10 @@ function TransferWizard({
               </label>
               <span>{selectedInventoryIds.length} inventarios seleccionados</span>
             </div>
-            <p role="status">{eligibleInventories.length} inventario(s) elegible(s) para transferencia.</p>
+            {testMode && <p role="status">Modo de pruebas activo. Puedes seleccionar inventarios con expedientes abiertos o con plazo AT pendiente.</p>}
+            {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
+            {testMode===null && !settingsError ? <p role="status">Consultando modo de pruebas…</p> :
+              <p role="status">{eligibleInventories.length} inventario(s) elegible(s) para transferencia.</p>}
             <div className="eligible-list inventory-eligible-list">
               {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));

@@ -131,7 +131,7 @@ async function audit(conn,user,id,action,detail){
 function ensureAuth(user){
  if(user.mustChangePassword)throw problem('Debes cambiar tu contraseña',403);
 }
-async function chooseInventories(conn,ids,user){
+async function chooseInventories(conn,ids,user,testMode){
  const placeholders=ids.map(()=>'?').join(',');
  const [items]=await conn.query(`SELECT i.id,i.folio,i.estado,i.area_id,i.creado_por,a.codigo AS areaCode,
  COUNT(e.id) AS total,
@@ -159,9 +159,9 @@ async function chooseInventories(conn,ids,user){
   if(Number(all[0].countRows)!==Number(i.total) ||
    Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
     throw problem('Inventario con expediente en concentración o préstamo activo',409);
-  if(Number(all[0].openRecords))
+  if(!testMode&&Number(all[0].openRecords))
    throw problem('Cierra los expedientes del inventario antes de solicitar su transferencia',409);
-  if(Number(all[0].pendingRetention))
+  if(!testMode&&Number(all[0].pendingRetention))
    throw problem('Todos los expedientes del inventario deben cumplir su plazo de conservación en Archivo de trámite antes de transferirse',409);
   const [links]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[i.id]);
   if(links.length)throw problem('Inventario vinculado a otra transferencia',409);
@@ -174,6 +174,31 @@ async function chooseInventories(conn,ids,user){
   throw problem('La solicitud debe incluir todos los expedientes de cada inventario',400);
  return selected;
 }
+async function transferTestMode(conn,lock=false){
+ const [[setting]]=await conn.execute('SELECT modo_pruebas FROM configuracion_transferencias WHERE id=1'+(lock?' FOR SHARE':''));
+ return Number(setting?.modo_pruebas)===1;
+}
+transfersRouter.get('/configuracion',async(req,res,next)=>{
+ try{
+  ensureAuth(req.auth.user);
+  res.set('Cache-Control','private, no-store');
+  res.json({testMode:await transferTestMode(pool)});
+ }catch(e){next(e);}
+});
+transfersRouter.put('/configuracion',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user;ensureAuth(user);
+  if(!user.roles.includes('Administrador / Coordinador'))throw problem('Solo Administración puede cambiar el modo de pruebas',403);
+  const {testMode}=req.body??{};
+  if(typeof testMode!=='boolean')throw problem('Modo de pruebas inválido');
+  conn=await pool.getConnection();await conn.beginTransaction();
+  await conn.execute('UPDATE configuracion_transferencias SET modo_pruebas=? WHERE id=1',[Number(testMode)]);
+  await audit(conn,user,1,'CONFIGURAR_MODO_PRUEBAS',{testMode});
+  await conn.commit();
+  res.json({testMode});
+ }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
+});
 transfersRouter.get('/',async(req,res,next)=>{
  try{ensureAuth(req.auth.user);res.json({transfers:await visibleTransfers(req.auth.user)});}
  catch(e){next(e);}
@@ -185,7 +210,8 @@ transfersRouter.post('/',async(req,res,next)=>{
   if(!canSubmitTransfer(user))throw problem('El rol actual no puede solicitar transferencias',403);
   const ids=onlyIds(req.body?.recordIds);
   conn=await pool.getConnection();await conn.beginTransaction();
-  const inventoryList=await chooseInventories(conn,ids,user);
+  const testMode=await transferTestMode(conn,true);
+  const inventoryList=await chooseInventories(conn,ids,user,testMode);
   const [area]=await conn.execute('SELECT id FROM areas WHERE codigo=?',[user.areaId]);
   if(!area.length)throw problem('Área no encontrada');
   const folio='TP-'+new Date().getFullYear()+'-'+randomUUID().slice(0,14).toUpperCase();
@@ -200,7 +226,8 @@ transfersRouter.post('/',async(req,res,next)=>{
   await saveDocument(conn,created.insertId,user,'SOLICITUD','Al titular del área generadora: se solicita autorización para trasladar los expedientes de la relación anexa.');
   await addHistory(conn,created.insertId,user,'PREPARAR','Inventarios completos seleccionados: '+inventoryList.length);
   await addHistory(conn,created.insertId,user,'ENVIAR','Solicitud enviada a visto bueno del encargado de área');
-  await audit(conn,user,created.insertId,'SOLICITAR',{inventarios:inventoryList.map(i=>i.folio)});
+  if(testMode)await addHistory(conn,created.insertId,user,'PREPARAR','Solicitud creada en modo de pruebas: se omitió la validación de cierre y plazo AT.');
+  await audit(conn,user,created.insertId,'SOLICITAR',{inventarios:inventoryList.map(i=>i.folio),testMode});
   await conn.commit();
   const t=await rawTransfer(pool,created.insertId);
   res.status(201).json({transfer:await readTransfer(pool,t)});

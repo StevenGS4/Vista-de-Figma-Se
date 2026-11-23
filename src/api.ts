@@ -55,6 +55,9 @@ export const tramiteApi = {
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
 export type ReceptionSourceBox={recordId:string;boxNumber:string};
 export const transferApi={
+ settings:()=>request<{testMode:boolean}>('/api/transferencias/configuracion'),
+ setTestMode:(testMode:boolean)=>request<{testMode:boolean}>('/api/transferencias/configuracion',
+  {method:'PUT',body:JSON.stringify({testMode})}),
  documentUrl:(id:string,documentId?:string,copy=false)=>API_BASE+'/api/transferencias/'+encodeURIComponent(id)+'/'+
    (documentId?'documentos/'+encodeURIComponent(documentId)+(copy?'?copia=1':''):'relacion.xlsx'+(copy?'?copia=1':'')),
  document:async(id:string,kind:string,detail:string,pdf?:string)=>(await request<{transfer:DocumentaryTransfer}>(

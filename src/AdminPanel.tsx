@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { usersApi } from "./api";
+import { usersApi, transferApi } from "./api";
 import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
 import AdminDisposalsPanel from "./AdminDisposalsPanel";
@@ -33,7 +33,7 @@ import {
   roles,
 } from "./data";
 
-type AdminTab = "users" | "areas" | "permissions" | "activity" | "disposals";
+type AdminTab = "users" | "areas" | "permissions" | "activity" | "disposals" | "transfer-tests";
 type AdminView = "list" | "form" | "detail";
 type FieldErrors = Partial<Record<keyof UserFormState | "roles", string>>;
 
@@ -845,6 +845,36 @@ function PermissionMatrix({
   );
 }
 
+function TransferTestSettings() {
+  const [mode, setMode] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    transferApi.settings()
+      .then(({testMode}) => { if(active)setMode(testMode); })
+      .catch((error: Error) => { if(active)setError(error.message); });
+    return () => { active = false; };
+  }, []);
+  return <section className="surface p-5">
+    <h3>Modo de pruebas de transferencias</h3>
+    <p>Permite enviar inventarios recién registrados, incluso con expedientes abiertos o con el plazo AT pendiente. Las transferencias se guardan en esta misma base de datos.</p>
+    <label className="flex items-center gap-2">
+      <input type="checkbox" role="switch" checked={mode === true} disabled={busy || mode === null}
+        onChange={async event => {
+          const enabled = event.target.checked;
+          setBusy(true);
+          setError("");
+          try { setMode((await transferApi.setTestMode(enabled)).testMode); }
+          catch(error) { setError(error instanceof Error ? error.message : "No se pudo guardar la configuración."); }
+          finally { setBusy(false); }
+        }} />
+      {mode === null ? "Modo sin confirmar" : mode ? "Modo de pruebas activado" : "Modo de pruebas apagado"}
+    </label>
+    {error && <p role="alert" className="field-error">{error}</p>}
+  </section>;
+}
+
 export default function AdminPanel({
   onRolePermissionsChange,
   onUsersChange,
@@ -981,6 +1011,8 @@ export default function AdminPanel({
         </button>
         <button aria-selected={tab === "disposals"} className={tab === "disposals" ? "is-active" : ""}
           onClick={() => setTab("disposals")} role="tab" type="button">Bajas</button>
+        <button aria-selected={tab === "transfer-tests"} className={tab === "transfer-tests" ? "is-active" : ""}
+          onClick={() => setTab("transfer-tests")} role="tab" type="button">Pruebas</button>
       </div>
 
       {toast && (
@@ -1014,6 +1046,7 @@ export default function AdminPanel({
       )}
       {tab === "areas" && <AdminAreasPanel />}
       {tab === "disposals" && <AdminDisposalsPanel />}
+      {tab === "transfer-tests" && <TransferTestSettings />}
       {tab === "activity" && <AreaControlPanel mode="admin" />}
       {tab === "permissions" && (
         <PermissionMatrix onChange={onRolePermissionsChange} rolePermissions={rolePermissions} />
