@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -114,7 +115,13 @@ function userName(users: UserRecord[], id: string) {
 function requesterName(transfer: DocumentaryTransfer, users: UserRecord[]) {
   return transfer.requesterName || userName(users, transfer.requestedBy);
 }
-const trackingSteps = ["Solicitud y acuse", "Visto bueno", "Dictamen", "Traslado y entrega", "Recepción"];
+const trackingSteps = [
+  { title: "Solicitud y acuse", kinds: ["SOLICITUD", "ACUSE_SOLICITUD", "SOLICITUD_AMPLIACION"] },
+  { title: "Visto bueno", kinds: ["AUTORIZACION", "OBSERVACION_AREA"] },
+  { title: "Dictamen", kinds: ["DICTAMEN_FAVORABLE", "DICTAMEN_DESFAVORABLE", "CORRECCION_FORMATO"] },
+  { title: "Traslado y entrega", kinds: ["NOTA_TRASLADO", "ACUSE_TRASLADO", "ENTREGA"] },
+  { title: "Recepción", kinds: ["FORMATO_FIRMADO", "RECEPCION", "DIFERENCIAS"] },
+];
 
 function transferTask(transfer: DocumentaryTransfer, user: UserRecord, role: Role, permissions: string[]) {
   const documents = transfer.documents ?? [];
@@ -941,6 +948,49 @@ function TransferWizard({
   );
 }
 
+function TransferStorage({ records }: { records: ArchivalRecord[] }) {
+  const groups = new Map<string, ArchivalRecord[]>();
+  const located = records.filter(record => record.stage === "Archivo de concentración" && record.shelf && record.level && record.physicalSection);
+  for (const record of located) {
+    const key = JSON.stringify([record.archiveZone, record.room, record.shelf, record.level, record.physicalSection, record.position]);
+    const group = groups.get(key);
+    if (group) group.push(record);
+    else groups.set(key, [record]);
+  }
+  return (
+    <section className="mt-4 min-w-0 rounded-xl border border-[#cbd7d0] p-3 sm:p-4">
+      <h4 className="text-sm font-semibold text-[#002f2a]">Ubicación actual en Concentración</h4>
+      {!groups.size && <p className="mt-2 text-sm">No hay una ubicación disponible para los expedientes visibles.</p>}
+      {[...groups.entries()].map(([key, group]) => {
+        const record = group[0];
+        const boxes = [...new Set(group.map(item => item.locationBox || item.boxNumber).filter(Boolean))];
+        return (
+          <div key={key} className="mt-3 grid min-w-0 gap-3 border-t border-[#cbd7d0] pt-3 [overflow-wrap:anywhere]">
+            <div className="text-sm">
+              <p>{[record.archiveZone, record.room].filter(Boolean).join(" · ")}</p>
+              <p className="font-semibold">Estante {record.shelf} · Nivel {record.level} · Sección {record.physicalSection}</p>
+              {record.position && <p>Posición {record.position}</p>}
+              {boxes.length > 0 && <p>{boxes.length === 1 ? "Caja" : "Cajas"} {boxes.join(", ")}</p>}
+              <p>{group.length} {group.length === 1 ? "expediente" : "expedientes"} en esta ubicación</p>
+            </div>
+            <LocationShelf level={record.level} section={record.physicalSection} />
+            <details className="text-sm">
+              <summary className="cursor-pointer text-[#1e5b4f]">Ver ubicación por expediente</summary>
+              <ul className="mt-2 grid max-h-48 gap-1 overflow-auto">
+                {group.map(item => <li key={item.id}>
+                  {item.recordNumber || item.id} · {item.locationBox || item.boxNumber ? `Caja ${item.locationBox || item.boxNumber}` : "Sin caja registrada"}
+                  {item.locationNotes && <small className="block">{item.locationNotes}</small>}
+                </li>)}
+              </ul>
+            </details>
+          </div>
+        );
+      })}
+      {located.length > 0 && located.length < records.length && <p className="mt-2 text-sm">Hay expedientes visibles sin ubicación completa.</p>}
+    </section>
+  );
+}
+
 function RequestDetail({
   onDocumentsChange,
   onCancelRequest,
@@ -978,7 +1028,10 @@ function RequestDetail({
 }) {
   const [detailView, setDetailView] = useState<TransferDetailView>("tracking");
   const [documentKind, setDocumentKind] = useState("");
-  const task = transferTask(transfer, currentUser, role, permissions);
+  const received = transfer.receptionStatus === "Recibida";
+  const canSeeStorage = role === "Administrador / Coordinador" ||
+    (role === "Encargado de área" && transfer.areaId === currentUser.areaId);
+  const [expandedStep, setExpandedStep] = useState<number | null>(() => received ? trackingSteps.length - 1 : null);
   const included = records.filter((record) => transfer.recordIds.includes(record.id));
   const documents = transfer.documents ?? [];
   const lastNote = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
@@ -1027,6 +1080,19 @@ function RequestDetail({
           </span>
         </div>
       )}
+        <section className="surface rounded-xl px-4 py-3 text-sm">
+          <h3 className="font-semibold text-[#002f2a]">Datos de la solicitud</h3>
+          <dl className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 lg:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+            <dt>Solicitante</dt><dd>{requesterName(transfer, users)}</dd>
+            <dt>Envío</dt><dd>{formatDate(transfer.submittedAt)}</dd>
+            <dt>Encargado</dt><dd>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</dd>
+            {transfer.areaApproverId && <><dt>Visto bueno</dt><dd>{transfer.areaApproverName || userName(users, transfer.areaApproverId)}</dd></>}
+            {transfer.status === "Aceptada" && <>
+              <dt>Dictamen</dt><dd>{formatDate(transfer.acceptedAt)} · {transfer.reviewerName || userName(users, transfer.reviewerId)}</dd>
+              <dt>Recepción</dt><dd><ReceptionBadge status={transfer.receptionStatus} />{transfer.receptionDate && <> · {formatDate(transfer.receptionDate)}</>}{transfer.receptionResponsible && <> · {transfer.receptionResponsibleName || userName(users, transfer.receptionResponsible)}</>}</dd>
+            </>}
+          </dl>
+        </section>
       <nav className="transfer-tabs" aria-label="Detalle de la transferencia">
         {([["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"], ["inventory", "Inventario"]] as const).map(([value, label]) => (
           <button type="button" key={value} aria-current={detailView === value ? "true" : undefined}
@@ -1045,32 +1111,53 @@ function RequestDetail({
           <span className="demo-label">{included.length} expedientes</span>
         </div>
         <InventoryTable records={included} />
+        {received && canSeeStorage && <TransferStorage records={included} />}
       </section>
       )}
       {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} initialKind={documentKind} onChange={onDocumentsChange} />}
       {detailView === "tracking" && <>
       <section className="surface rounded-xl p-5 sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className={received ? "mx-auto max-w-3xl" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"}>
           <div>
             <h3 className="mb-3 text-base font-semibold">Progreso de la transferencia</h3>
             {task.step >= 0 && <ol className="m-0 list-none p-0">
-              {trackingSteps.map((title, index) => {
+              {trackingSteps.map(({ title, kinds }, index) => {
                 const current = index === task.step;
                 const done = index < task.step;
+                const expanded = expandedStep === index;
+                const evidence = documents.filter(doc => kinds.includes(doc.kind));
+                const isReception = index === trackingSteps.length - 1;
                 return <li key={title} aria-current={current ? "step" : undefined}
-                  className="relative flex min-h-10 items-start gap-3 pb-3 last:pb-0">
+                  className="relative min-h-10 pb-3 last:pb-0">
                   {index < trackingSteps.length - 1 && <span aria-hidden="true" className="absolute top-6 bottom-0 left-[11px] w-px bg-[#a9beb5]" />}
-                  <span aria-hidden="true" className={`relative grid size-6 shrink-0 place-items-center rounded-full border text-xs font-semibold ${current ? "border-[#1e5b4f] bg-[#1e5b4f] text-white" : done ? "border-[#a9beb5] bg-[#dfe9e4] text-[#002f2a]" : "border-[#a9beb5] bg-white text-[#435951]"}`}>
-                    {done ? <Check size={14} /> : index + 1}
-                  </span>
-                  <span className={current ? "font-semibold text-[#002f2a]" : ""}>{title}
-                    <small className="block text-[#435951]">{current ? "En curso" : done ? "Completado" : "Pendiente"}</small>
-                  </span>
+                  <button type="button" aria-expanded={expanded} onClick={() => setExpandedStep(expanded ? null : index)}
+                    className="relative flex w-full cursor-pointer items-start gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2">
+                    <span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-full border text-xs font-semibold ${current ? "border-[#1e5b4f] bg-[#1e5b4f] text-white" : done ? "border-[#a9beb5] bg-[#dfe9e4] text-[#002f2a]" : "border-[#a9beb5] bg-white text-[#435951]"}`}>
+                      {done ? <Check size={14} /> : index + 1}
+                    </span>
+                    <span className="flex-1">
+                      <strong>{title}</strong>
+                      <small className="block text-[#435951]">{current ? "En curso" : done ? "Completado" : "Pendiente"}</small>
+                    </span>
+                    <ChevronDown size={16} aria-hidden="true" className={expanded ? "rotate-180" : ""} />
+                  </button>
+                  {expanded && <div className="ml-8 mt-2 rounded-lg border border-[#cbd7d0] p-3">
+                    {evidence.length > 0 ? <ul className="grid gap-2">
+                      {evidence.map(doc => <li key={doc.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+                        <span>{documentNames[doc.kind] ?? doc.kind}{doc.date && <small className="block text-[#435951]">{formatDate(doc.date)}</small>}</span>
+                        <a className="text-button" aria-label={`Descargar ${documentNames[doc.kind] ?? doc.kind}`} href={transferApi.documentUrl(transfer.id, doc.id)}><Download size={14} /> Descargar</a>
+                        {doc.detail && <details className="basis-full text-xs"><summary className="cursor-pointer text-[#1e5b4f]">Ver datos</summary><p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{doc.detail}</p></details>}
+                      </li>)}
+                    </ul> : <p className="text-sm">Sin documentos registrados para esta etapa.</p>}
+                    {index === 2 && transfer.areaApprovedAt && transfer.status !== "Cancelada" &&
+                      <a className="text-button mt-2" href={transferApi.documentUrl(transfer.id)}><Download size={14} /> Formato de transferencia primaria (Excel)</a>}
+                    {isReception && received && canSeeStorage && <TransferStorage records={included} />}
+                  </div>}
                 </li>;
               })}
             </ol>}
           </div>
-          <div className="rounded-xl bg-[#eaede7] p-4 self-start">
+          {!received && <div className="rounded-xl bg-[#eaede7] p-4 self-start">
             <p className="text-sm font-semibold text-[#1e5b4f]">{task.mine ? "Te toca a ti" : task.owner ? "Siguiente acción" : "Solicitud cerrada"}</p>
             <h3 className="mt-1 text-lg font-semibold">{task.label}</h3>
             {task.owner && <p className="mt-1 text-sm">{task.owner}</p>}
@@ -1121,21 +1208,8 @@ function RequestDetail({
                   No puedes aprobar una transferencia solicitada por tu propia cuenta.
                 </div>
               )}
-          </div>
+          </div>}
         </div>
-        <details className="mt-4 border-t border-[#cbd7d0] pt-3 text-sm">
-          <summary className="cursor-pointer font-semibold">Datos de la solicitud</summary>
-          <dl className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2">
-            <dt>Solicitante</dt><dd>{requesterName(transfer, users)}</dd>
-            <dt>Envío</dt><dd>{formatDate(transfer.submittedAt)}</dd>
-            <dt>Encargado</dt><dd>{transfer.assignedAreaManagerName || "Sin encargado registrado"}</dd>
-            {transfer.areaApproverId && <><dt>Visto bueno</dt><dd>{transfer.areaApproverName || userName(users, transfer.areaApproverId)}</dd></>}
-            {transfer.status === "Aceptada" && <>
-              <dt>Dictamen</dt><dd>{formatDate(transfer.acceptedAt)} · {transfer.reviewerName || userName(users, transfer.reviewerId)}</dd>
-              <dt>Recepción</dt><dd><ReceptionBadge status={transfer.receptionStatus} />{transfer.receptionDate && <> · {formatDate(transfer.receptionDate)}</>}{transfer.receptionResponsible && <> · {transfer.receptionResponsibleName || userName(users, transfer.receptionResponsible)}</>}</dd>
-            </>}
-          </dl>
-        </details>
       </section>
       {onCancelRequest && <div className="flex justify-end"><Button className="button--danger-outline" onClick={onCancelRequest}>Cancelar solicitud</Button></div>}
       </>}
@@ -1210,14 +1284,14 @@ function ReturnModal({
 
 const documentNames: Record<string,string> = {
   SOLICITUD:"Atenta Nota de solicitud", ACUSE_SOLICITUD:"Acuse de solicitud",
-  AUTORIZACION:"Autorización del área", SOLICITUD_AMPLIACION:"Gestión de ampliación de plazo",
+  AUTORIZACION:"Autorización del área", SOLICITUD_AMPLIACION:"Ampliación de plazo (si el área no responde)",
   DICTAMEN_FAVORABLE:"Dictamen favorable", DICTAMEN_DESFAVORABLE:"Dictamen desfavorable",
   RECEPCION:"Constancia interna de recepción", DIFERENCIAS:"Registro de diferencias en recepción",
   CANCELACION:"Constancia de cancelación",
   CORRECCION_FORMATO:"Registro de corrección y reenvío a Concentración",
   OBSERVACION_AREA:"Observación del área", NOTA_TRASLADO:"Atenta Nota al Enlace Administrativo",
-  ACUSE_TRASLADO:"Acuse de traslado", ENTREGA:"Registro de entrega con representante del área",
-  FORMATO_FIRMADO:"Formato firmado con firmas autógrafas",
+  ACUSE_TRASLADO:"Acuse de traslado", ENTREGA:"Registro interno de entrega con representante del área",
+  FORMATO_FIRMADO:"Formato de transferencia con firmas autógrafas",
 };
 
 function TransferDocuments({transfer,user,initialKind,onChange}: {
@@ -1254,7 +1328,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
   return <section className="surface transfer-documents">
     <header className="transfer-documents__heading"><h3>Documentos de la transferencia</h3>
-    <p>Descarga la relación del folio en Excel, los documentos en Word y los acuses o formatos firmados en PDF.</p></header>
+    <p>Consulta la relación en Excel y los documentos registrados para este folio.</p></header>
     {transfer.status!=="Cancelada" && <div className="transfer-documents__downloads">
     <a className="text-button" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
     <a className="text-button" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
@@ -1283,6 +1357,8 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       <label>Documento<select value={selected} onChange={e=>{setKind(e.target.value);setFile(null);setEditingId("");setDetail("");setError("");}}>
         {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
       </select></label>
+      {selected === "SOLICITUD_AMPLIACION" && <p className="col-span-full">Úsala únicamente cuando el área generadora no haya respondido a la solicitud.</p>}
+      {selected === "ENTREGA" && <p className="col-span-full">Registro interno de la entrega física. El formato con firmas autógrafas acredita la entrega.</p>}
       {current && !editing ? <div>
         <p>Ya se guardó este tipo de evidencia.</p>
         <Button className="button--secondary" disabled={busy} onClick={()=>{setEditingId(current.id);setDetail(current.detail);setError("");}}>Editar</Button>
@@ -1861,6 +1937,7 @@ export default function TransfersPanel({
           </div>
         )}
         <RequestDetail
+          key={`${selected.id}:${selected.receptionStatus}`}
           canReceive={canReceive}
           currentUser={currentUser}
           onAccept={() => setAcceptOpen(true)}
