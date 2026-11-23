@@ -2,7 +2,7 @@
 -- Requiere el esquema de la migración 008_areas_cadido_versionado.sql.
 -- 22 secciones y 260 series. 4S se escribe con la letra S.
 -- Actualiza por edición y código, sin duplicar series ni tocar asignaciones por área.
--- Conserva los IDs, las demás ediciones y el estado activo/inactivo de las series existentes.
+-- Conserva los IDs y las demás ediciones. Activa las series oficiales de 2023.
 SET NAMES utf8mb4;
 USE semarnat_archivistico_academico_2026;
 
@@ -314,9 +314,11 @@ CREATE PROCEDURE cargar_cadido_completo_2023()
 BEGIN
   DECLARE version_2023 BIGINT UNSIGNED;
   DECLARE coincidencias INT;
+  DECLARE safe_anterior BOOLEAN DEFAULT @@SESSION.SQL_SAFE_UPDATES;
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     ROLLBACK;
+    SET SESSION SQL_SAFE_UPDATES=safe_anterior;
     RESIGNAL;
   END;
 
@@ -341,6 +343,7 @@ BEGIN
     ALTER TABLE series_cadido ADD COLUMN valor_documental_oficial VARCHAR(120) NULL;
   END IF;
 
+  SET SESSION SQL_SAFE_UPDATES=0;
   START TRANSACTION;
   INSERT INTO catalogos_cadido_versiones (anio,nombre,referencia,activo)
   VALUES (2023,'CADIDO SEMARNAT 2023','CADIDO VALIDADO (SELLADO).pdf',1)
@@ -352,15 +355,26 @@ BEGIN
   SELECT codigo,nombre,0 FROM tmp_cadido_secciones
   ON DUPLICATE KEY UPDATE nombre=VALUES(nombre),es_demostracion=0;
 
+  -- Primero actualiza únicamente los códigos ya presentes en la edición 2023.
+  UPDATE series_cadido s
+  JOIN tmp_cadido_series src ON CAST(s.codigo AS BINARY)=CAST(src.codigo AS BINARY)
+  JOIN secciones_cadido se ON CAST(se.codigo AS BINARY)=CAST(src.seccion AS BINARY)
+  SET s.seccion_id=se.id,s.nombre=src.nombre,s.activo=1,s.es_demostracion=0,
+      s.valor_documental_oficial=src.valor_documental,
+      s.anios_tramite=src.anios_tramite,s.anios_concentracion=src.anios_concentracion
+  WHERE s.catalogo_version_id=version_2023;
+
+  -- Después agrega los códigos faltantes de esa edición.
   INSERT INTO series_cadido (seccion_id,codigo,nombre,activo,es_demostracion,
     catalogo_version_id,valor_documental_oficial,anios_tramite,anios_concentracion)
   SELECT se.id,src.codigo,src.nombre,1,0,version_2023,
     src.valor_documental,src.anios_tramite,src.anios_concentracion
   FROM tmp_cadido_series src
   JOIN secciones_cadido se ON CAST(se.codigo AS BINARY)=CAST(src.seccion AS BINARY)
-  ON DUPLICATE KEY UPDATE seccion_id=VALUES(seccion_id),nombre=VALUES(nombre),
-    es_demostracion=0,valor_documental_oficial=VALUES(valor_documental_oficial),
-    anios_tramite=VALUES(anios_tramite),anios_concentracion=VALUES(anios_concentracion);
+  WHERE NOT EXISTS (
+    SELECT 1 FROM series_cadido s WHERE s.catalogo_version_id=version_2023
+      AND CAST(s.codigo AS BINARY)=CAST(src.codigo AS BINARY)
+  );
 
   SELECT COUNT(*) INTO coincidencias
   FROM tmp_cadido_series src
@@ -370,13 +384,17 @@ BEGIN
   WHERE CAST(se.codigo AS BINARY)=CAST(src.seccion AS BINARY)
     AND CAST(s.nombre AS BINARY)=CAST(src.nombre AS BINARY)
     AND CAST(s.valor_documental_oficial AS BINARY)=CAST(src.valor_documental AS BINARY)
-    AND s.anios_tramite=src.anios_tramite AND s.anios_concentracion=src.anios_concentracion;
+    AND s.activo=1 AND s.anios_tramite=src.anios_tramite AND s.anios_concentracion=src.anios_concentracion;
   IF coincidencias<>260 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='La comparación contra las 260 series no coincide. Se revierte la carga.';
   END IF;
   COMMIT;
+  SET SESSION SQL_SAFE_UPDATES=safe_anterior;
 
   SELECT 22 AS secciones_del_pdf, coincidencias AS series_verificadas;
+  SELECT codigo AS serie_4S,nombre,anios_tramite AS AT,anios_concentracion AS AC
+  FROM series_cadido WHERE catalogo_version_id=version_2023 AND codigo LIKE '4S.%'
+  ORDER BY codigo;
   SELECT se.codigo AS seccion,s.codigo AS serie,s.nombre,s.valor_documental_oficial,
     s.anios_tramite AS AT,s.anios_concentracion AS AC,
     s.anios_tramite+s.anios_concentracion AS vigencia_total,s.activo
