@@ -227,6 +227,7 @@ loansRouter.post('/',async(req,res,next)=>{
 
 loansRouter.post('/:id/returns',async(req,res,next)=>{
  let conn;
+ const completed=[];
  try{
   const user=req.auth.user;guard(user);
   const idText=String(req.params.id);
@@ -244,38 +245,41 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
    throw fail('Indica el estado de cada expediente recibido');
 
   conn=await pool.getConnection();
-  await conn.beginTransaction();
   const [[loan]]=await conn.execute(`SELECT estado,DATE_FORMAT(fecha_prestamo,'%Y-%m-%d') AS loanDate
-   FROM prestamos WHERE id=? FOR UPDATE`,[id]);
+   FROM prestamos WHERE id=?`,[id]);
   if(!loan)throw fail('Préstamo no encontrado',404);
   if(loan.estado!=='ACTIVO')throw fail('El préstamo ya está cerrado',409);
   if(date<loan.loanDate)throw fail('La devolución no puede anteceder al préstamo');
-  const [pending]=await conn.execute('SELECT expediente_id FROM prestamo_expedientes WHERE prestamo_id=? AND devuelto_en IS NULL FOR UPDATE',[id]);
+  const [pending]=await conn.execute('SELECT expediente_id FROM prestamo_expedientes WHERE prestamo_id=? AND devuelto_en IS NULL',[id]);
   const wanted=new Set(pending.map(row=>Number(row.expediente_id)));
   if(ids.some(expId=>!wanted.has(expId)))throw fail('Uno o más expedientes ya fueron devueltos o no pertenecen al préstamo',409);
 
-  for(const [code,label] of Object.entries(conditionLabel)){
-   const matching=ids.filter(expId=>conditions['REG-'+expId]===code);
-   if(!matching.length)continue;
-   const prefix='Estado al recibir: '+label+'. Recibido físicamente por: '+receiver;
+  for(const expId of ids){
+   const recordId='REG-'+expId;
+   const condition=conditions[recordId];
+   const prefix='Estado al recibir: '+conditionLabel[condition]+'. Recibido físicamente por: '+receiver;
    const observation=(prefix+(notes?' | '+notes:'')).slice(0,2000);
-   await conn.query(`UPDATE prestamo_expedientes SET devuelto_en=NOW(),recibido_devolucion_por=?,observaciones_devolucion=?
-    WHERE prestamo_id=? AND expediente_id IN (${matching.map(()=>'?').join(',')})`,
-    [user.id,observation,id,...matching]);
-   await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
-    [matching.map(expId=>[id,expId,user.id,'DEVOLUCION',observation])]);
+   // El procedimiento valida el pendiente y cambia la disponibilidad con el permiso del trigger.
+   await conn.query('CALL sp_devolver_expediente(?,?,?)',[id,expId,user.id]);
+   completed.push(recordId);
+   await conn.beginTransaction();
+   await conn.execute('UPDATE prestamo_expedientes SET observaciones_devolucion=? WHERE prestamo_id=? AND expediente_id=?',
+    [observation,id,expId]);
+   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds:[recordId],receivedBy:receiver,conditions:{[recordId]:condition}})]);
+   await conn.commit();
   }
-  await conn.query(`UPDATE expedientes SET disponibilidad='EN_ARCHIVO' WHERE id IN (${ids.map(()=>'?').join(',')})`,ids);
-  if(ids.length===wanted.size)
-   await conn.execute("UPDATE prestamos SET estado='DEVUELTO',cerrado_en=NOW() WHERE id=?",[id]);
-  const recordIds=ids.map(expId=>'REG-'+expId);
-  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds,receivedBy:receiver,
-     conditions:Object.fromEntries(recordIds.map(recordId=>[recordId,conditions[recordId]]))})]);
-  await conn.commit();
   res.json({loan:await oneLoan(id,conn)});
  }catch(e){
   if(conn)await conn.rollback();
+  if(completed.length){
+   console.error('Devolución aplicada con error posterior:',e.code||e.message);
+   const reason=e.sqlState==='45000'||e.code==='ER_SIGNAL_EXCEPTION'?' Motivo: '+e.message:'';
+   return res.status(409).json({error:'Se registró la devolución de '+completed.length+
+    ' de '+(req.body?.recordIds?.length??completed.length)+' expedientes. Revisa el préstamo actualizado antes de continuar.'+reason});
+  }
+  if(e.sqlState==='45000'||e.code==='ER_SIGNAL_EXCEPTION')
+   return res.status(409).json({error:'MySQL no pudo registrar la devolución. Motivo: '+e.message});
   next(e);
  }finally{conn?.release();}
 });

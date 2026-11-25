@@ -706,8 +706,8 @@ function LoanForm({
           if (validate()) setConfirmOpen(true);
         }}
       >
-        <section className="loan-form-section">
-          <div className="step-heading">
+        <section className="form-section">
+          <div className="form-section__title">
             <span>
               <Files size={21} />
             </span>
@@ -754,16 +754,16 @@ function LoanForm({
               En archivo
             </span>
           </div>}
-          <ul className="grid gap-2">
+          {records.length > 1 && <ul className="grid gap-2">
             {records.map(item => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8d4cc] p-3">
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8d4cc] bg-[#fbfaf6] p-3">
                 <span><strong className="block">{item.title}</strong><small className="text-[#687570]">{item.recordNumber}</small></span>
               </li>
             ))}
-          </ul>
+          </ul>}
         </section>
-        <section className="loan-form-section">
-          <div className="step-heading">
+        <section className="form-section">
+          <div className="form-section__title">
             <span>
               <UserCheck size={21} />
             </span>
@@ -1131,38 +1131,43 @@ function ReturnForm({
           if (!Object.keys(next).length) setConfirmOpen(true);
         }}
       >
-        <div className="return-loan-summary">
-          <BriefcaseBusiness size={20} />
-          <div>
-            <span>Préstamo activo</span>
-            <strong>{loan.folio}</strong>
-            <small>
-              {loan.requesterName} · previsto {formatDate(loan.expectedReturnDate)}
-            </small>
+        <section className="form-section">
+          <div className="form-section__title">
+            <span><BriefcaseBusiness size={15} /></span>
+            <div>
+              <h3>Datos de la devolución</h3>
+              <p>{loan.folio} · {loan.requesterName} · devolución prevista {formatDate(loan.expectedReturnDate)}</p>
+            </div>
           </div>
-          <span className="record-id">{inventoryLoan ? loan.inventoryFolio || "Inventario completo" : record?.recordNumber}</span>
-        </div>
-        <div className="record-form-grid return-fields">
-          <LoanField error={errors.date} label="Fecha real de devolución" required>
-            <input
-              min={loan.loanDate}
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-            />
-          </LoanField>
-          <LoanField error={errors.receivedBy} label="Persona que recibe la devolución" required>
-            <input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} />
-          </LoanField>
-          <LoanField label="Observaciones">
-            <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
-          </LoanField>
-        </div>
+          <div className="record-form-grid">
+            <LoanField error={errors.date} label="Fecha real de devolución" required>
+              <input
+                min={loan.loanDate}
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </LoanField>
+            <LoanField error={errors.receivedBy} label="Persona que recibe la devolución" required>
+              <input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} />
+            </LoanField>
+            <div className="col-span-full">
+              <LoanField label="Observaciones">
+                <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
+              </LoanField>
+            </div>
+          </div>
+        </section>
         {pendingItems.length > 0 && (
           <section className="form-section">
-            <div className="form-section__title"><h3>Recepción por expediente</h3></div>
-            <p>{selectedIds.length} de {pendingItems.length} expedientes pendientes marcados como recibidos.</p>
-            <div className="table-scroll">
+            <div className="form-section__title">
+              <span><PackageCheck size={15} /></span>
+              <div>
+                <h3>Recepción por expediente</h3>
+                <p>{selectedIds.length} de {pendingItems.length} expedientes pendientes marcados como recibidos.</p>
+              </div>
+            </div>
+            <div className="table-scroll rounded-lg border border-[#c8d4cc] bg-[#fbfaf6]">
               <table className="data-table">
                 <thead><tr>{allowsPartialReturn && <th>Recibido</th>}<th>Expediente</th><th>Asunto</th><th>Estado al recibir</th></tr></thead>
                 <tbody>{pendingItems.map(item => {
@@ -1174,7 +1179,7 @@ function ReturnForm({
                           ? current.filter(id => id !== item.id) : [...current, item.id])} /></td>}
                       <td>{item.number}</td><td>{item.title}</td>
                       <td><label className="filter-select">
-                        <select aria-label={`Estado de ${item.number}`} disabled={!checked}
+                        <select className="w-full" aria-label={`Estado de ${item.number}`} disabled={!checked}
                           value={checked ? conditions[item.id] ?? "" : ""} onChange={event => {
                             const value = event.target.value as LoanReturnCondition;
                             setConditions(current => ({ ...current, [item.id]: value }));
