@@ -143,7 +143,7 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const views = ["Seguimiento", "Mis transferencias", "Transferencias de mi equipo", "Todas", "Pendiente", "Con observaciones", "Aceptadas"] as const;
+  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas", "Mis transferencias", "Transferencias de mi equipo"] as const;
   const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
   const [mineOnly, setMineOnly] = useState(false);
   const [area, setArea] = useState("");
@@ -227,7 +227,7 @@ function TransferTray({
             <Clock3 size={16} /> {pending} {pending === 1 ? "acción pendiente" : "acciones pendientes"}
           </button>}
         </div>
-        <nav className="transfer-tabs" aria-label="Vistas de transferencias">
+        <nav className="transfer-tabs flex-wrap" aria-label="Vistas de transferencias">
           {views.filter(item => item !== "Transferencias de mi equipo" || role === "Encargado de área").map(item => (
             <button type="button" key={item} className={view === item ? "is-active" : ""}
               aria-current={view === item ? "true" : undefined}
