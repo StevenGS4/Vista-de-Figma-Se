@@ -265,17 +265,6 @@ function ConcentrationList({
               ))}
             </select>
           </label>
-          <label className="search-box">
-            <Search size={17} />
-            <input
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por número de expediente, asunto o código CADIDO..."
-              value={search}
-            />
-          </label>
           <label className="filter-select">
             <select
               aria-label="Filtrar por área"
@@ -311,20 +300,38 @@ function ConcentrationList({
               <option>Prestado</option>
             </select>
           </label>
-          <label className="grid gap-1 text-xs">Desde
-            <input className="filter-date" type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} />
-          </label>
-          <label className="grid gap-1 text-xs">Hasta
-            <input className="filter-date" type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} />
-          </label>
-          <button className="clear-filters" disabled={!hasFilters} onClick={clear}>
-            <FilterX size={16} />
-            Limpiar
-          </button>
-          <button className="button button--primary" onClick={() => { setPage(1); setExpandedInventory(filtered[0]?.id ?? null); }}>
-            <Search size={16} />
-            Buscar
-          </button>
+          <div className="concentration-filters__secondary">
+            <div className="concentration-filters__dates">
+              <label className="filter-date">Desde
+                <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} />
+              </label>
+              <label className="filter-date">Hasta
+                <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} />
+              </label>
+            </div>
+            <div className="concentration-filters__actions">
+              <label className="search-box">
+                <Search size={17} />
+                <input
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  aria-label="Buscar por número de expediente, asunto o código CADIDO"
+                  placeholder="Expediente, asunto o código CADIDO"
+                  value={search}
+                />
+              </label>
+              <button className="clear-filters" disabled={!hasFilters} onClick={clear}>
+                <FilterX size={16} />
+                Limpiar
+              </button>
+              <button className="button button--primary" onClick={() => { setPage(1); setExpandedInventory(filtered[0]?.id ?? null); }}>
+                <Search size={16} />
+                Buscar
+              </button>
+            </div>
+          </div>
         </div>
         <div className="concentration-quick-access">
           <button

@@ -4158,12 +4158,45 @@
 
 .concentration-filters {
   display: grid;
-  grid-template-columns: minmax(210px, 1.45fr) minmax(125px, 0.85fr) minmax(150px, 1fr) minmax(155px, 1fr) minmax(118px, 0.75fr) max-content max-content;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 9px;
   align-items: center;
   padding: 14px 20px;
   border-bottom: 1px solid var(--gray-200);
   background: var(--gray-50);
+}
+
+.concentration-filters__secondary {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.concentration-filters__dates {
+  flex: 1 1 290px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  min-width: 0;
+}
+
+.concentration-filters__actions {
+  flex: 2 1 450px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  min-width: 0;
+}
+
+.concentration-filters__actions .search-box {
+  flex: 1 1 230px;
+  width: auto;
+}
+
+.concentration-filters :is(.filter-select, .filter-date, .search-box, .clear-filters, .button--primary) {
+  height: 40px;
 }
 
 .availability-key {
@@ -4181,7 +4214,6 @@
   text-transform: uppercase;
 }
 
-.concentration-filters .search-box,
 .concentration-filters .filter-select {
   width: 100%;
   min-width: 0;
@@ -4284,41 +4316,7 @@
   background: var(--gray-50);
 }
 
-@media (max-width: 1120px) {
-  .concentration-filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .concentration-filters .search-box {
-    grid-column: 1 / -1;
-  }
-
-  .concentration-filters > .clear-filters {
-    grid-column: 2;
-    justify-self: end;
-  }
-
-  .concentration-filters > .button--primary {
-    justify-self: end;
-  }
-}
-
 @media (max-width: 760px) {
-  .concentration-filters {
-    grid-template-columns: 1fr;
-  }
-
-  .concentration-filters .search-box,
-  .concentration-filters > .clear-filters {
-    grid-column: auto;
-  }
-
-  .concentration-filters > .clear-filters,
-  .concentration-filters > .button--primary {
-    width: 100%;
-    justify-self: stretch;
-  }
-
   .concentration-location-form {
     padding: 22px 18px 0;
   }
