@@ -69,7 +69,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  e.estante AS shelf,e.nivel AS level,e.seccion_fisica AS physicalSection,
  d.acceso,d.tradicion,d.topografia_m,d.topografia_n,d.topografia_p,
  e.posicion AS position,e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes,
- e.etapa AS stage,e.disponibilidad AS availability,CAST(e.creado_por AS CHAR) AS createdBy,
+ e.etapa AS stage,e.disponibilidad AS availability,CAST(e.creado_por AS CHAR) AS createdBy,CAST(i.creado_por AS CHAR) AS inventoryCreatedBy,
  t.folio AS transferReference,DATE_FORMAT(t.enviada_en,'%Y-%m-%d') AS transferDate,
  DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS transferAcceptedDate,
  DATE_FORMAT(i.deleted_at,'%Y-%m-%d %H:%i:%s') AS inventoryDeletedAt,
@@ -123,7 +123,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  concentrationData:{access:r.acceso||'',tradition:r.tradicion||'',m:r.topografia_m||'',n:r.topografia_n||'',p:r.topografia_p||''},
  position:r.position||'',locationBox:r.locationBox||'',locationNotes:r.locationNotes||'',
  stage:r.stage==='CONCENTRACION'?'Archivo de concentración':'Archivo de trámite',
- availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,
+ availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,inventoryCreatedBy:r.inventoryCreatedBy,
  transferReference:r.transferReference||'',transferDate:r.transferDate||'',
  transferAcceptedDate:r.transferAcceptedDate||'',receptionDate:'',receptionResponsible:'',receptionNotes:'',
  inventoryDeletedAt:r.inventoryDeletedAt||'',recordDeletedAt:r.recordDeletedAt||'',
@@ -193,7 +193,7 @@ function normalize(rows){
      throw fail('El número de expediente debe tener hasta 110 caracteres');
    const number=r.recordNumber.trim().toUpperCase();
    const title=text(r.title);
-   if(!number||!title||!text(r.description))throw fail('El número de expediente, el asunto y su descripción son obligatorios');
+   if(!number||!title)throw fail('El número de expediente y el asunto o descripción son obligatorios');
    if(r.concentrationData!==undefined){
      const data=r.concentrationData;
      if(!data||!['','P','C','R'].includes(data.access)||!['','ORIGINAL','COPIA','AMBAS'].includes(data.tradition))

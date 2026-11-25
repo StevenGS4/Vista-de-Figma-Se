@@ -60,6 +60,7 @@ export type ArchivalRecord = {
   stage: RecordStage;
   availability: RecordAvailability;
   createdBy: string;
+  inventoryCreatedBy?: string;
   transferReference: string;
   transferDate: string;
   transferAcceptedDate: string;

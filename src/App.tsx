@@ -990,7 +990,7 @@ function Application({
                 protectedRecordIds={
                   new Set(
                     transfers
-                      .filter((transfer) => transfer.status !== "Aceptada")
+                      .filter((transfer) => transfer.status !== "Cancelada")
                       .flatMap((transfer) => transfer.recordIds),
                   )
                 }

@@ -203,7 +203,6 @@ function InventoryList({
   records: ArchivalRecord[];
 }) {
   const [search, setSearch] = useState(initialSearch);
-  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [cadidoYear, setCadidoYear] = useState("");
   const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
@@ -211,14 +210,14 @@ function InventoryList({
   >(initialSearch ? "Todos los autorizados" : "Recientes activos");
   const inventories = useMemo(
     () =>
-      groupInventories(records).filter(({ header, id, records: rows }, index) => {
+      groupInventories(records).filter(({ header, id, records: rows }) => {
         const query = search.trim().toLowerCase();
         const transferred = rows.every((record) => record.stage === "Archivo de concentración");
         const matchesView =
           quickView === "Todos los autorizados" ||
           (quickView === "Transferidos" && transferred) ||
           (quickView === "Todos los activos" && !transferred) ||
-          (quickView === "Recientes activos" && !transferred && index < 5);
+          (quickView === "Recientes activos" && !transferred);
         return (
           matchesView &&
           (!cadidoYear || header.cadidoYear === cadidoYear) &&
@@ -238,6 +237,14 @@ function InventoryList({
       }),
     [quickView, records, search, cadidoYear, cadidoCodeFilter],
   );
+  const recent = quickView === "Recientes activos" && !search.trim();
+  const listed = recent
+    ? inventories.flatMap(inventory => inventory.records
+        .filter(record => record.stage === "Archivo de trámite")
+        .map(record => ({ ...inventory, recentRecord: record })))
+        .sort((a, b) => Number(b.recentRecord.id.slice(4)) - Number(a.recentRecord.id.slice(4)))
+        .slice(0, 5)
+    : inventories.map(inventory => ({ ...inventory, recentRecord: undefined }));
   return (
     <>
       <div className="records-page-heading">
@@ -271,7 +278,6 @@ function InventoryList({
             <input
               onChange={(event) => {
                 setSearch(event.target.value);
-                setSearched(Boolean(event.target.value.trim()));
               }}
               placeholder="Buscar inventario, expediente, asunto, caja o CADIDO..."
               value={search}
@@ -283,7 +289,6 @@ function InventoryList({
               value={quickView}
               onChange={(event) => {
                 setQuickView(event.target.value as typeof quickView);
-                setSearched(true);
               }}
             >
               <option>Recientes activos</option>
@@ -292,29 +297,23 @@ function InventoryList({
               <option>Todos los autorizados</option>
             </select>
           </label>
-          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);setSearched(true);}}>
+          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);}}>
             <option value="">Todas las ediciones CADIDO</option>
             {[...new Set(records.map(r=>r.cadidoYear||"Sin versión"))].sort().map(v=><option key={v} value={v==="Sin versión"?"":v}>{v}</option>)}
           </select></label>
-          <label className="filter-select"><select aria-label="Filtrar código CADIDO histórico" value={cadidoCodeFilter} onChange={e=>{setCadidoCodeFilter(e.target.value);setSearched(true);}}>
+          <label className="filter-select"><select aria-label="Filtrar código CADIDO histórico" value={cadidoCodeFilter} onChange={e=>{setCadidoCodeFilter(e.target.value);}}>
             <option value="">Todos los códigos</option>
             {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(code=><option key={code} value={code}>{code}</option>)}
           </select></label>
-          <Button className="button--primary" onClick={() => setSearched(true)}>
+          <Button className="button--primary" onClick={() => { if (search.trim() && quickView === "Recientes activos") setQuickView("Todos los activos"); }}>
             <Search size={16} /> Buscar
           </Button>
         </div>
-        {!searched ? (
-          <div className="empty-state concentration-search-empty">
-            <Search size={30} />
-            <strong>Utiliza la búsqueda o una vista rápida</strong>
-            <p>No se muestran inventarios automáticamente al entrar al módulo.</p>
-          </div>
-        ) : <div className="table-scroll">
+        <div className="table-scroll">
           <table className="data-table records-table">
             <thead>
               <tr>
-                <th>Inventario de trámite</th>
+                <th>{recent ? "Expediente reciente" : "Inventario de trámite"}</th>
                 <th>Unidad administrativa</th>
                 <th>Área generadora</th>
                 <th>Fondo</th>
@@ -327,17 +326,17 @@ function InventoryList({
               </tr>
             </thead>
             <tbody>
-              {inventories.map(({ header, id, records: rows }) => {
+              {listed.map(({ header, id, records: rows, recentRecord }) => {
                 const transferred = rows.filter(
                   (record) => record.stage === "Archivo de concentración",
                 ).length;
                 return (
-                  <tr key={id}>
+                  <tr key={recentRecord?.id ?? id}>
                     <td>
                       <button className="record-number-link" onClick={() => onOpen(id)}>
-                        {seriesName(header.cadidoSeriesId) === "Sin asignar" ? "Inventario de trámite" : seriesName(header.cadidoSeriesId)}
+                        {recentRecord?.title || (seriesName(header.cadidoSeriesId) === "Sin asignar" ? "Inventario de trámite" : seriesName(header.cadidoSeriesId))}
                       </button>
-                      <span className="block break-words text-xs font-normal text-[#52605a]">{id}</span>
+                      <span className="block break-words text-xs font-normal text-[#52605a]">{recentRecord ? `${recentRecord.recordNumber} · ${id}` : id}</span>
                     </td>
                     <td>{header.administrativeUnit}</td>
                     <td>{areaName(header.areaId)}</td>
@@ -390,14 +389,14 @@ function InventoryList({
               })}
             </tbody>
           </table>
-          {!inventories.length && (
+          {!listed.length && (
             <div className="empty-state">
               <Files size={30} />
               <strong>No encontramos inventarios</strong>
               <p>Prueba con otro término de búsqueda.</p>
             </div>
           )}
-        </div>}
+        </div>
       </section>
     </>
   );
@@ -596,7 +595,7 @@ function orderByArchiveYear(records: ArchivalRecord[]) {
 function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
   const columns = [
     "Consecutivo", "Caja", "Año de la clave *", "Número de expediente *",
-    "Clave archivística", "Título o asunto *", "Descripción", "Apertura *",
+    "Clave archivística", "Asunto o descripción *", "Apertura *",
     "Cierre", "Legajos *", "Folios *", "Soporte documental *",
     "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
     "Vigencia total", ...(isAdmin ? ["Domicilio de resguardo"] : []),
@@ -628,6 +627,11 @@ function withCatalogValidity(record: ArchivalRecord): ArchivalRecord {
 }
 
 const fullReference = (record: ArchivalRecord) => record.recordNumber.trim();
+
+function documentSubject(record: ArchivalRecord) {
+  if (!record.description || record.description === record.title) return record.title;
+  return record.title + (record.title.length === 350 ? "" : "\n") + record.description;
+}
 
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
@@ -689,11 +693,14 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
           </strong></div>
         </Field>
 
-        <Field className="record-field--wide" error={errors.title} label="Título o asunto" required>
-          <textarea rows={1} onChange={(event) => update("title", event.target.value)} value={active.title} />
-        </Field>
-        <Field className="record-field--wide" error={errors.description} label="Descripción del asunto" required>
-          <textarea rows={1} onChange={event=>update("description",event.target.value)} value={active.description}/>
+        <Field className="record-field--wide" error={errors.title} label="Asunto o descripción" required>
+          <textarea rows={1} maxLength={Math.max(350, documentSubject(active).length)}
+            value={documentSubject(active)}
+            onChange={(event) => {
+              const value = event.target.value;
+              update("title", value.slice(0, 350));
+              update("description", value.slice(350));
+            }} />
         </Field>
       </fieldset>
       <fieldset disabled={locked}>
@@ -898,7 +905,7 @@ function InventoryForm({
 }) {
   const isAdmin = role === "Administrador / Coordinador";
   const canDeleteExisting = isAdmin || role === "Encargado de área" ||
-    (existing.length > 0 && existing.every(record => record.createdBy === user.id));
+    (existing.length > 0 && existing.every(record => (record.inventoryCreatedBy ?? record.createdBy) === user.id));
   const editing = existing.length > 0;
   const makeInitial = () => {
     if (editing) return existing.map(item => ({
@@ -1028,7 +1035,6 @@ function InventoryForm({
       if (!record.title.trim()) next.title = "Captura el asunto.";
       else if (/^(?:generalidades|varios|diversos|documentaci[oó]n)[.!?]*$/i.test(record.title.trim()))
         next.title = "Captura un asunto específico.";
-      if (!record.description.trim()) next.description = "Captura una descripción breve del asunto.";
     }
     if (step === 2) {
       if (!record.openDate) next.openDate = "Captura la apertura.";
@@ -1447,13 +1453,19 @@ function InventoryDetail({
                       : selectedRows.filter(id=>!rows.some(r=>r.id===id)))} />
                 </th>}
                 <th>Consecutivo del renglón</th>
-                <th>Caja</th>
-                <th>Asunto e identificación</th>
-                <th>Apertura / cierre</th>
-                <th>Legajos / folios</th>
+                <th>Número de caja</th>
+                <th>Número de expediente</th>
+                <th>Clave archivística</th>
+                <th>Asunto o descripción</th>
+                <th>Apertura</th>
+                <th>Cierre</th>
+                <th>Legajos</th>
+                <th>Folios</th>
                 <th>Soporte</th>
                 <th>Valor documental</th>
-                <th>Vigencias T / C / total</th>
+                <th>Vigencia en Trámite</th>
+                <th>Vigencia en Concentración</th>
+                <th>Vigencia total</th>
                 <th>Ubicación</th>
                 <th>Observaciones</th>
                 <th>Etapa</th>
@@ -1470,16 +1482,18 @@ function InventoryDetail({
                   </td>}
                   <td>{record.consecutive}</td>
                   <td>{record.boxNumber}</td>
-                  <td><strong>{record.title}</strong>
-                    {record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">{record.archiveClassificationCode}</span>}
-                    {record.recordNumber && record.recordNumber !== record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">Núm. de expediente {record.recordNumber}</span>}
-                    {record.description && <div>{record.description}</div>}
-                  </td>
-                  <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
-                  <td>{record.filesCount} / {record.foliosCount}</td>
+                  <td>{record.recordNumber}</td>
+                  <td>{record.archiveClassificationCode}</td>
+                  <td className="whitespace-pre-wrap">{documentSubject(record)}</td>
+                  <td>{formatDate(record.openDate)}</td>
+                  <td>{record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>
+                  <td>{record.filesCount}</td>
+                  <td>{record.foliosCount}</td>
                   <td>{record.supportType}</td>
                   <td>{Array.isArray(record.documentaryValues) ? record.documentaryValues.join(", ") : "—"}</td>
-                  <td>{record.currentValidity} / {record.concentrationValidity} / {record.totalValidity} años{!preview && record.tramiteDueDate && <div>Cumple AT: {formatDate(record.tramiteDueDate)}</div>}</td>
+                  <td>{record.currentValidity}{!preview && record.tramiteDueDate && <div>Cumple AT: {formatDate(record.tramiteDueDate)}</div>}</td>
+                  <td>{record.concentrationValidity}</td>
+                  <td>{record.totalValidity}</td>
                   <td>{(preview || !isAdmin) && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
@@ -1545,7 +1559,7 @@ export default function RecordsPanel({
     ? records
     : records.filter(
         (record) =>
-          record.areaId === user.areaId && (isAreaManager || record.createdBy === user.id),
+          record.areaId === user.areaId && (isAreaManager || (record.inventoryCreatedBy ?? record.createdBy) === user.id),
       );
   const selected = authorized.filter((record) => record.inventoryId === selectedId);
   const deleteInventory = async (id: string) => {
@@ -1611,8 +1625,7 @@ export default function RecordsPanel({
       <InventoryDetail
         isAdmin={isAdmin}
         canEdit={
-          permissions.includes("edit-records") &&
-          selected.every(
+          !loadError && selected.every(
             (record) =>
               record.stage === "Archivo de trámite" &&
               !Boolean(record.transferReference) &&
@@ -1643,7 +1656,7 @@ export default function RecordsPanel({
         initialSearch={initialSearch}
         canCreate={!loadError && permissions.includes("register-records")}
         canDelete={!loadError && (role === "Personal de área" || role === "Encargado de área" || isAdmin)}
-        canEdit={permissions.includes("edit-records")}
+        canEdit={!loadError}
         onCreate={() => {
           setSelectedId("");
           setView("form");
