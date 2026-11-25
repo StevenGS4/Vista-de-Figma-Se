@@ -8,7 +8,8 @@ import { requireAuth } from './auth.js';
 import { validateSharedReceptionLocation } from './reception-locations.js';
 import {
  transferStates,canSubmitTransfer,canApproveArea,canReviewAdmin,
- canReceiveTransfer,canViewTransfer
+ canReceiveTransfer,canViewTransfer,canManageAreaTransfer,
+ canViewInternalTransferDocuments,canViewTransferDocument
 } from './transfer-policy.js';
 
 export const transfersRouter = express.Router();
@@ -60,7 +61,7 @@ async function hasDocument(conn,id,kind){
  const [[row]]=await conn.execute('SELECT id FROM transferencia_documentos WHERE transferencia_id=? AND tipo=? LIMIT 1',[id,kind]);
  return Boolean(row);
 }
-async function readTransfer(conn,t){
+async function readTransfer(conn,t,user){
  const [documents]=await conn.execute(`SELECT CAST(id AS CHAR) AS id,tipo AS kind,detalle AS detail,
   DATE_FORMAT(creado_en,'%Y-%m-%d') AS date,pdf IS NOT NULL AS hasFile
   FROM transferencia_documentos WHERE transferencia_id=? ORDER BY id`,[t.id]);
@@ -89,6 +90,7 @@ async function readTransfer(conn,t){
  LEFT JOIN usuarios u ON u.id=r.responsable_id
  WHERE r.transferencia_id=? ORDER BY r.id DESC LIMIT 1`,[t.id]);
  const rec=receptions[0];
+ const canViewInternal=canViewInternalTransferDocuments(user);
  return {
  id:'TR-'+t.id,folio:t.folio,areaId:t.areaCode,requestedBy:String(t.solicitante_id),
  requesterName:actorNames.requesterName||'',
@@ -100,12 +102,14 @@ async function readTransfer(conn,t){
  reviewerId:t.aceptada_por?String(t.aceptada_por):'',
  areaApproverId:t.visto_bueno_por?String(t.visto_bueno_por):'',
  areaApprovedAt:isoDate(t.visto_bueno_en),reviewedAt:isoDate(t.aceptada_en),
- acceptedAt:isoDate(t.aceptada_en),observation:t.observaciones||'',
+ acceptedAt:isoDate(t.aceptada_en),observation:canViewInternal?(t.observaciones||''):'',
  receptionStatus:!rec?'Pendiente':rec.estado==='RECIBIDA'?'Recibida':
   rec.estado==='DIFERENCIAS'?'Diferencias pendientes':'Pendiente',
  receptionDate:rec?.date||'',receptionResponsible:rec?String(rec.responsable_id):'',
  receptionResponsibleName:rec?.responsibleName||'',
- documents,receptionNotes:rec?.observaciones||'',history:await history(conn,t.id),
+ documents:documents.filter(doc=>canViewTransferDocument(user,doc.kind)),
+ receptionNotes:canViewInternal?(rec?.observaciones||''):'',
+ history:(await history(conn,t.id)).map(event=>canViewInternal?event:{...event,detail:''}),
  };
 }
 async function visibleTransfers(user){
@@ -122,7 +126,7 @@ async function visibleTransfers(user){
    ORDER BY t.id DESC LIMIT 2000`,[user.areaId,user.id]);
  }else throw problem('No tienes permiso para ver transferencias',403);
  const out=[];
- for(const t of rows)out.push(await readTransfer(pool,t));
+ for(const t of rows)out.push(await readTransfer(pool,t,user));
  return out;
 }
 async function getVisible(user,id){
@@ -225,7 +229,7 @@ transfersRouter.post('/',async(req,res,next)=>{
   await audit(conn,user,created.insertId,'SOLICITAR',{expedientes:ids,testMode});
   await conn.commit();
   const t=await rawTransfer(pool,created.insertId);
-  res.status(201).json({transfer:await readTransfer(pool,t)});
+  res.status(201).json({transfer:await readTransfer(pool,t,user)});
  }catch(e){if(conn)await conn.rollback();
   if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'Expediente ya vinculado a una transferencia'});
   next(e);
@@ -241,8 +245,8 @@ transfersRouter.post('/:id/resend',async(req,res,next)=>{
   if(!Number.isSafeInteger(id))throw problem('ID incorrecto');
   const t=await rawTransfer(conn,id,true);
   if(!t)throw problem('Transferencia no encontrada',404);
-  if(t.estado!=='OBSERVACIONES'||t.areaCode!==user.areaId||Number(t.solicitante_id)!==Number(user.id))
-   throw problem('Solo el solicitante puede reenviar una transferencia observada',403);
+  if(t.estado!=='OBSERVACIONES'||!canManageAreaTransfer(user,t))
+   throw problem('La corrección y el reenvío corresponden al responsable de la transferencia',403);
   const requested=new Set(onlyIds(req.body?.recordIds,50000));
   const [joined]=await conn.execute(`SELECT e.id FROM transferencia_expedientes_v ti
    JOIN expedientes e ON e.id=ti.expediente_id WHERE ti.transferencia_id=?`,[id]);
@@ -256,7 +260,7 @@ transfersRouter.post('/:id/resend',async(req,res,next)=>{
   await saveDocument(conn,id,user,approved?'CORRECCION_FORMATO':'SOLICITUD','Versión corregida: '+correction);
   await addHistory(conn,id,user,'REENVIAR',approved?'Formato corregido y reenviado a Concentración':'Solicitud reenviada para visto bueno');
   await audit(conn,user,id,'REENVIAR',{});
-  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 transfersRouter.post('/:id/approve-area',async(req,res,next)=>{
@@ -278,7 +282,7 @@ transfersRouter.post('/:id/approve-area',async(req,res,next)=>{
   await saveDocument(conn,id,user,'AUTORIZACION','El encargado del área autoriza el traslado de los expedientes de la relación anexa.');
   await addHistory(conn,id,user,'VISTO_BUENO','Encargado del área otorga visto bueno sin modificar etapa');
   await audit(conn,user,id,'VISTO_BUENO',{});
-  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 transfersRouter.post('/:id/observe',async(req,res,next)=>{
@@ -298,7 +302,7 @@ transfersRouter.post('/:id/observe',async(req,res,next)=>{
   await saveDocument(conn,id,user,canReviewAdmin(user,t)?'DICTAMEN_DESFAVORABLE':'OBSERVACION_AREA',note);
   await addHistory(conn,id,user,'OBSERVAR',note);
   await audit(conn,user,id,'OBSERVAR',{});
-  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 transfersRouter.post('/:id/accept',async(req,res,next)=>{
@@ -317,7 +321,7 @@ transfersRouter.post('/:id/accept',async(req,res,next)=>{
   await addHistory(conn,id,user,'ACEPTAR','Dictamen favorable. Pendiente de traslado y recepción física.');
   await audit(conn,user,id,'DICTAMEN_FAVORABLE',{});
   await conn.commit();
-  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 
@@ -328,7 +332,7 @@ transfersRouter.get('/:id/relacion.xlsx',async(req,res,next)=>{
   const records=await readRecords(pool,`WHERE EXISTS (SELECT 1 FROM transferencia_expedientes_v ti
     WHERE ti.expediente_id=e.id AND ti.transferencia_id=?)`,[t.id]);
   if(!records.length)throw problem('La solicitud no contiene expedientes activos',404);
-  const approved=Boolean(t.visto_bueno_por);
+  const approved=Boolean(t.visto_bueno_por)&&canViewInternalTransferDocuments(req.auth.user);
   const copy=req.query.copia==='1';
   const book=await makeOfficialTemplateWorkbook(records,'transferencia',{
    folio:t.folio,approved,approvedAt:isoDate(t.visto_bueno_en),copy,
@@ -350,7 +354,7 @@ transfersRouter.get('/:id/documentos/:documentId',async(req,res,next)=>{
     WHERE ti.transferencia_id=d.transferencia_id AND e.deleted_at IS NULL) AS recordCount
    FROM transferencia_documentos d LEFT JOIN usuarios u ON u.id=d.actor_id
    WHERE d.transferencia_id=? AND d.id=?`,[t.id,req.params.documentId]);
-  if(!doc)throw problem('Documento no encontrado',404);
+  if(!doc||!canViewTransferDocument(req.auth.user,doc.tipo))throw problem('Documento no encontrado',404);
   res.set('Cache-Control','private, no-store');
   if(doc.pdf)return res.attachment(t.folio+'-'+doc.tipo+'.pdf').type('pdf').send(doc.pdf);
   const copy=req.query.copia==='1';
@@ -384,7 +388,7 @@ transfersRouter.post('/:id/cancelar',async(req,res,next)=>{
    (detail+'\nExpedientes liberados: '+selection.total).slice(0,2000));
   await audit(conn,user,id,'CANCELAR',{motivo:detail});
   await conn.commit();
-  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 transfersRouter.post('/:id/documentos',async(req,res,next)=>{
@@ -402,11 +406,9 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
   conn=await pool.getConnection();await conn.beginTransaction();
   const t=await rawTransfer(conn,visible.id,true);
   if(!t||!canViewTransfer(user,t))throw problem('Transferencia fuera de tu alcance',403);
-  const requester=Number(t.solicitante_id)===Number(user.id);
-  const areaManager=user.roles.includes('Encargado de área')&&user.areaId===t.areaCode;
-  const allowed=(t.estado==='PENDIENTE_VB'&&((requester&&kind==='ACUSE_SOLICITUD')
-   ||(areaManager&&kind==='SOLICITUD_AMPLIACION')))
-   ||(t.estado==='ACEPTADA'&&((areaManager&&['NOTA_TRASLADO','ACUSE_TRASLADO','ENTREGA'].includes(kind))
+  const areaOperator=canManageAreaTransfer(user,t);
+  const allowed=(t.estado==='PENDIENTE_VB'&&areaOperator&&['ACUSE_SOLICITUD','SOLICITUD_AMPLIACION'].includes(kind))
+   ||(t.estado==='ACEPTADA'&&((areaOperator&&['NOTA_TRASLADO','ACUSE_TRASLADO','ENTREGA'].includes(kind))
    ||(canReceiveTransfer(user,t)&&kind==='FORMATO_FIRMADO')));
   if(!allowed)throw problem('El documento no corresponde a tu etapa o función',403);
   if(t.estado==='ACEPTADA'){
@@ -437,7 +439,7 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
   }
   await audit(conn,user,t.id,remove?'ELIMINAR_EVIDENCIA':documentId?'EDITAR_EVIDENCIA':'GUARDAR_EVIDENCIA',{tipo:kind,documentId});
   await conn.commit();
-  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,t.id))});
+  res.json({transfer:await readTransfer(pool,await rawTransfer(pool,t.id),user)});
  }catch(e){if(conn)await conn.rollback();next(e);}finally{conn?.release();}
 });
 // Cajas originales: el número capturado en Trámite prevalece en Recepción.
@@ -484,7 +486,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   if(state==='Recibida'){
    const managed=await hasDocument(conn,id,'DICTAMEN_FAVORABLE');
    if(managed&&!await hasDocument(conn,id,'ENTREGA'))
-    throw problem('Falta el registro de entrega con representante del área. Lo registra el encargado del área.',409);
+    throw problem('Falta el registro de entrega con representante del área. Lo registra el responsable del traslado.',409);
    if(managed&&!await hasDocument(conn,id,'FORMATO_FIRMADO'))
     throw problem('Falta adjuntar el PDF del formato con firmas autógrafas en Documentos de la transferencia.',409);
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
@@ -551,7 +553,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
     : 'Fecha de cotejo: '+date+'\n'+note.slice(0,1900));
   await addHistory(conn,id,user,state==='Recibida'?'RECEPCION':'DIFERENCIA',note||(state==='Recibida'?'Recepción física cotejada y ubicaciones asignadas por el administrador':'Diferencias pendientes'));
   await audit(conn,user,id,'RECEPCION',{estado:state,expedientesUbicados:receivedCount,ubicacionesCapturadas:state==='Recibida'?1:0});
-  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
+  await conn.commit();res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id),user)});
  }catch(e){
   if(conn)await conn.rollback();
   if(e.code==='ER_SIGNAL_EXCEPTION'||e.sqlState==='45000')

@@ -270,10 +270,7 @@ function TransferTray({
             <tbody>
               {visible.map((transfer) => {
                 const task = transferTask(transfer, currentUser, role, permissions);
-                const canContinue =
-                  (role === "Administrador / Coordinador" || permissions.includes("prepare-transfers")) &&
-                  transfer.requestedBy === currentUser.id &&
-                  ["En preparación", "Con observaciones"].includes(transfer.status);
+                const canContinue = task.mine && task.step === 0 && !("kind" in task);
                 return (
                   <tr key={transfer.id}>
                     <td>
@@ -930,7 +927,7 @@ function RequestDetail({
   const [expandedStep, setExpandedStep] = useState<number | null>(() => received ? trackingSteps.length - 1 : null);
   const included = records.filter((record) => transfer.recordIds.includes(record.id));
   const showStorage = received && canSeeStorage && included.some(hasStorageLocation);
-  const documents = transfer.documents ?? [];
+  const documents = visibleTransferDocuments(transfer, role);
   const lastNote = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
   const receipt = documents.slice(lastNote + 1).reverse()
     .find(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile);
@@ -938,17 +935,15 @@ function RequestDetail({
   const canReview =
     role === "Administrador / Coordinador" &&
     transfer.status === "Pendiente de revisión administrativa" &&
-    transfer.requestedBy !== currentUser.id &&
     permissions.includes("review-transfers");
   const canAccept =
     role === "Administrador / Coordinador" &&
     transfer.status === "Pendiente de revisión administrativa" &&
-    transfer.requestedBy !== currentUser.id &&
     permissions.includes("accept-transfers");
   const canAreaReview =
     (role === "Administrador / Coordinador" || (role === "Encargado de área" &&
       transfer.areaId === currentUser.areaId && permissions.includes("approve-area-transfers"))) &&
-    transfer.status === "Pendiente de visto bueno del área" && transfer.requestedBy !== currentUser.id;
+    transfer.status === "Pendiente de visto bueno del área";
   return (
     <div className="transfer-detail-page">
       <button className="text-button" onClick={onBack}>
@@ -969,7 +964,7 @@ function RequestDetail({
           </button>
         </div>
       </header>
-      {transfer.status === "Con observaciones" && (
+      {transfer.status === "Con observaciones" && transfer.observation && role !== "Personal de área" && (
         <div className="transfer-observation-banner">
           <MessageSquareText size={18} />
           <span>
@@ -1016,7 +1011,7 @@ function RequestDetail({
                 )}
                 <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}>
                   <Download size={15} />
-                  {transfer.areaApprovedAt ? "Descargar inventario (Excel)" : "Descargar relación de expedientes (Excel)"}
+                  {role !== "Personal de área" && transfer.areaApprovedAt ? "Descargar inventario (Excel)" : "Descargar relación de expedientes (Excel)"}
                 </a>
               </div>
             </div>
@@ -1039,14 +1034,6 @@ function RequestDetail({
             {canAccept && (
               <p className="text-sm">El dictamen favorable autoriza el traslado. La etapa cambia al confirmar la recepción física.</p>
             )}
-            {role === "Administrador / Coordinador" &&
-              transfer.status === "Pendiente de revisión administrativa" &&
-              transfer.requestedBy === currentUser.id && (
-                <div className="blocked-review">
-                  <ShieldCheck size={17} />
-                  No puedes aprobar una transferencia solicitada por tu propia cuenta.
-                </div>
-              )}
             <div className="flex flex-wrap items-center justify-end gap-2 empty:hidden">
               {onCancelRequest && <Button className="button--danger-outline" onClick={onCancelRequest}>Cancelar solicitud</Button>}
               {(canAreaReview || canReview) && (
@@ -1110,7 +1097,7 @@ function RequestDetail({
                         {doc.detail && <details className="basis-full text-xs"><summary className="cursor-pointer text-[#1e5b4f]">Ver datos</summary><p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{doc.detail}</p></details>}
                       </li>)}
                     </ul> : <p className="text-sm">Sin documentos registrados para esta etapa.</p>}
-                    {index === 2 && transfer.areaApprovedAt && transfer.status !== "Cancelada" &&
+                    {index === 2 && role !== "Personal de área" && transfer.areaApprovedAt && transfer.status !== "Cancelada" &&
                       <a className="text-button mt-2" href={transferApi.documentUrl(transfer.id)}><Download size={14} /> Formato de transferencia primaria (Excel)</a>}
                   </div>}
                 </li>;
@@ -1208,6 +1195,13 @@ const documentNames: Record<string,string> = {
   FORMATO_FIRMADO:"Formato de transferencia con firmas autógrafas",
 };
 
+function visibleTransferDocuments(transfer: DocumentaryTransfer, role: Role) {
+  const documents = transfer.documents ?? [];
+  return role === "Personal de área"
+    ? documents.filter(doc => doc.kind === "SOLICITUD" || doc.kind === "ACUSE_SOLICITUD")
+    : documents;
+}
+
 function TransferDocuments({transfer,user,role,initialKind,actionLabel,onChange}: {
   transfer:DocumentaryTransfer;
   user:UserRecord;
@@ -1223,17 +1217,16 @@ function TransferDocuments({transfer,user,role,initialKind,actionLabel,onChange}
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const {confirm,dialog}=useConfirmAction();
-  const requester = transfer.requestedBy === user.id;
-  const areaManager = role === "Encargado de área" && transfer.areaId === user.areaId;
-  const documents = transfer.documents ?? [];
+  const areaOperator = (role === "Encargado de área" && transfer.areaId === user.areaId) ||
+    (role === "Administrador / Coordinador" && transfer.requestedBy === user.id);
+  const documents = visibleTransferDocuments(transfer, role);
   const hasDocument = (kind: string) => documents.some(doc => doc.kind === kind);
   const options: string[] = [];
   if (transfer.status === "Pendiente de visto bueno del área") {
-    if (requester) options.push("ACUSE_SOLICITUD");
-    if (areaManager) options.push("SOLICITUD_AMPLIACION");
+    if (areaOperator) options.push("ACUSE_SOLICITUD", "SOLICITUD_AMPLIACION");
   }
   if (transfer.status === "Aceptada" && transfer.receptionStatus !== "Recibida") {
-    if (areaManager) {
+    if (areaOperator) {
       options.push("NOTA_TRASLADO");
       if (hasDocument("NOTA_TRASLADO")) options.push("ACUSE_TRASLADO");
       if (hasDocument("ACUSE_TRASLADO")) options.push("ENTREGA");
@@ -1332,7 +1325,7 @@ function TransferDocuments({transfer,user,role,initialKind,actionLabel,onChange}
   return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
     <header className="flex items-center gap-2 text-[#002f2a]"><Files size={19} /><h3 className="text-base font-semibold">Documentos de la transferencia</h3></header>
     {transfer.status!=="Cancelada" && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-3">
-    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{role !== "Personal de área" && transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
     <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
     </div>}
     <section aria-label="Historial de documentos" className="min-w-0 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-4">
@@ -1574,7 +1567,7 @@ function ReceptionForm({
           <div className="transfer-evidence" role="status">
             <strong>Evidencia pendiente</strong>
             <ul>
-              {missingDelivery && <li>Registro de entrega con representante del área. Lo registra el encargado del área.</li>}
+              {missingDelivery && <li>Registro de entrega con representante del área. Lo registra el responsable del traslado.</li>}
               {missingSignedFormat && <li>PDF del formato con firmas autógrafas. Lo adjunta el administrador después del registro de entrega.</li>}
             </ul>
             <Button className="button--secondary" onClick={onBack}>Volver a Documentos de la transferencia</Button>
@@ -1745,7 +1738,7 @@ function TransferHistory({
               </span>
               <div>
                 <span>{event.type}</span>
-                <h4>{event.detail}</h4>
+                {event.detail && <h4>{event.detail}</h4>}
                 <p>
                   {userName(users, event.actor)} · {formatDate(event.date)}
                 </p>

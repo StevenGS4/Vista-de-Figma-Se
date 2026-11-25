@@ -12,12 +12,11 @@ export function canSubmitTransfer(user){
   role===roleNames.PERSONAL||role===roleNames.JEFE_AREA||role===roleNames.ADMIN));
 }
 export function canApproveArea(user,transfer){
- return Boolean(user && !user.mustChangePassword && (user.roles?.includes(roleNames.ADMIN) || (user.roles?.includes(roleNames.JEFE_AREA) && user.areaId===transfer.areaCode)) && Number(transfer.solicitante_id)!==Number(user.id)
+ return Boolean(user && !user.mustChangePassword && (user.roles?.includes(roleNames.ADMIN) || (user.roles?.includes(roleNames.JEFE_AREA) && user.areaId===transfer.areaCode))
   && transfer.estado==='PENDIENTE_VB');
 }
 export function canReviewAdmin(user,transfer){
  return Boolean(user && !user.mustChangePassword && user.roles?.includes(roleNames.ADMIN)
-  && Number(transfer.solicitante_id)!==Number(user.id)
   && transfer.estado==='PENDIENTE_ADMIN' && transfer.visto_bueno_por);
 }
 export function canReceiveTransfer(user,transfer){
@@ -30,6 +29,17 @@ export function canViewTransfer(user,transfer){
  if(user.roles?.includes(roleNames.JEFE_AREA))return user.areaId===transfer.areaCode;
  return canSubmitTransfer(user) && user.areaId===transfer.areaCode
  && Number(user.id)===Number(transfer.solicitante_id);
+}
+export function canManageAreaTransfer(user,transfer){
+ if(!user || user.mustChangePassword)return false;
+ return (user.roles?.includes(roleNames.JEFE_AREA) && user.areaId===transfer.areaCode)
+  || (user.roles?.includes(roleNames.ADMIN) && Number(user.id)===Number(transfer.solicitante_id));
+}
+export function canViewInternalTransferDocuments(user){
+ return Boolean(user.roles?.some(role=>role===roleNames.ADMIN || role===roleNames.JEFE_AREA));
+}
+export function canViewTransferDocument(user,kind){
+ return canViewInternalTransferDocuments(user) || ['SOLICITUD','ACUSE_SOLICITUD'].includes(kind);
 }
 export function uniqueInventoryFolios(input){
  if(!Array.isArray(input)||!input.length||input.length>500) return null;
