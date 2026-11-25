@@ -154,6 +154,7 @@ function ConcentrationList({
 }) {
   const [search, setSearch] = useState(initialSearch);
   const [area, setArea] = useState("");
+  const [section, setSection] = useState("");
   const [cadido, setCadido] = useState("");
   const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
@@ -163,55 +164,35 @@ function ConcentrationList({
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
   const pageSize = 5;
 
-  // Las filas de concentración se agrupan por el ID del inventario original.
-  // No mezclamos expedientes de inventarios diferentes aunque compartan CADIDO.
-  const inventories = useMemo(() => {
-    const grouped = new Map<string, ArchivalRecord[]>();
-    // La llave de un expediente es su ID persistente. Incluso si una respuesta
-    // futura trae filas repetidas por una relación SQL, nunca mostrar copias.
-    const seen = new Set<string>();
-    for (const record of records) {
-      if (seen.has(record.id)) continue;
-      seen.add(record.id);
-      const key = record.inventoryId;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(record);
-    }
-    return [...grouped.entries()].map(([id, items]) => ({
-      id,
-      header: items[0],
-      records: [...items].sort((a, b) => Number(a.consecutive) - Number(b.consecutive)),
-    }));
-  }, [records]);
-
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const matching = inventories.filter((inventory) => {
-      const { id, header, records: items } = inventory;
-      return (
-        (!query ||
-          id.toLowerCase().includes(query) ||
-          areaName(header.areaId).toLowerCase().includes(query) ||
-          items.some((record) =>
-            [record.recordNumber, record.archiveClassificationCode, record.cadidoCode, record.title]
-              .some((field) => (field || "").toLowerCase().includes(query))
-          )) &&
-        (!area || header.areaId === area) &&
-        (!cadido || items.some((record) => record.cadidoCode === cadido)) &&
-        (!cadidoYear || items.some((record) => record.cadidoYear === cadidoYear)) &&
-        (!availability || items.some((record) => record.availability === availability))
-      );
-    });
-    return recentOnly ? matching.slice(0, 5) : matching;
-  }, [area, availability, cadido, cadidoYear, recentOnly, inventories, search]);
+    const groups = new Map<string, ArchivalRecord[]>();
+    const seen = new Set<string>();
+    for (const record of records) {
+      if (seen.has(record.id) || (area && record.areaId !== area) ||
+        (section && record.cadidoSectionId !== section) || (cadido && record.cadidoCode !== cadido) ||
+        (cadidoYear && record.cadidoYear !== cadidoYear) ||
+        (availability && record.availability !== availability) ||
+        (query && ![record.inventoryId, record.recordNumber, record.archiveClassificationCode, record.cadidoCode,
+          record.cadidoSeriesName, record.title, areaName(record.areaId)].some(value => value?.toLowerCase().includes(query)))) continue;
+      seen.add(record.id);
+      const id = record.cadidoSectionId + ":" + record.cadidoCode;
+      const items = groups.get(id) ?? [];
+      items.push(record);
+      groups.set(id, items);
+    }
+    const matching = [...groups].map(([id, items]) => ({ id, header: items[0], records: items }));
+    return recentOnly ? matching.slice(0,5) : matching;
+  }, [records, search, area, section, cadido, cadidoYear, availability, recentOnly]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const hasFilters = Boolean(search || area || cadido || cadidoYear || availability || recentOnly);
+  const hasFilters = Boolean(search || area || section || cadido || cadidoYear || availability || recentOnly);
 
   const clear = () => {
     setSearch("");
     setArea("");
+    setSection("");
     setCadido("");
     setCadidoYear("");
     setAvailability("");
@@ -226,17 +207,17 @@ function ConcentrationList({
       <div className="records-page-heading">
         <div>
           <h2>Archivo de concentración</h2>
-          <p>Consulta inventarios transferidos y despliega sus expedientes sin mezclar documentos de otros archivos.</p>
+          <p>Consulta los expedientes transferidos agrupados por sección y serie documental.</p>
         </div>
         <span className="access-chip">
           <Archive size={15} />
-          Inventarios transferidos
+          Series documentales
         </span>
       </div>
       <section className="surface records-table-card concentration-table-card">
         <div className="records-filter-head">
           <div>
-            <h3>Búsqueda de inventarios de concentración</h3>
+            <h3>Búsqueda por sección y serie</h3>
             <p>Define criterios antes de consultar los registros autorizados.</p>
           </div>
           <div className="availability-key">
@@ -246,6 +227,28 @@ function ConcentrationList({
           </div>
         </div>
         <div className="concentration-filters">
+          <label className="filter-select"><select aria-label="Filtrar por sección" value={section}
+            onChange={event => { setSection(event.target.value); setCadido(""); setSearched(true); setPage(1); }}>
+            <option value="">Todas las secciones</option>
+            {[...new Set(records.map(record => record.cadidoSectionId))].sort().map(id =>
+              <option key={id} value={id}>{id} · {sectionName(id)}</option>)}
+          </select></label>
+          <label className="filter-select">
+            <select
+              aria-label="Filtrar por serie"
+              onChange={(event) => {
+                setCadido(event.target.value);
+                setSearched(true);
+                setPage(1);
+              }}
+              value={cadido}
+            >
+              <option value="">Todas las series</option>
+              {[...new Set(records.filter(r=>(!cadidoYear||r.cadidoYear===cadidoYear)&&(!section||r.cadidoSectionId===section)).map(r=>r.cadidoCode))].sort().map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
           <label className="search-box">
             <Search size={17} />
             <input
@@ -271,21 +274,6 @@ function ConcentrationList({
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
-              ))}
-            </select>
-          </label>
-          <label className="filter-select">
-            <select
-              aria-label="Filtrar por código CADIDO"
-              onChange={(event) => {
-                setCadido(event.target.value);
-                setPage(1);
-              }}
-              value={cadido}
-            >
-              <option value="">Todos los códigos CADIDO</option>
-              {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(c => (
-                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </label>
@@ -340,10 +328,10 @@ function ConcentrationList({
               <table className="data-table concentration-table concentration-inventory-table">
                 <thead>
                   <tr>
-                    <th>Inventario de concentración</th>
-                    <th>Área generadora</th>
+                    <th>Serie documental</th>
+                    <th>Sección</th>
                     <th>Código CADIDO</th>
-                    <th>Fecha de transferencia</th>
+                    <th>Última transferencia</th>
                     <th>Expedientes</th>
                     <th>Disponibilidad</th>
                     <th className="align-right">Ver expedientes</th>
@@ -370,13 +358,13 @@ function ConcentrationList({
                                                           }}
                             >
                               <FolderTree size={17} />
-                              <span><strong>{seriesName(header.cadidoSeriesId) === "Sin asignar" ? header.cadidoCode || "Inventario en concentración" : seriesName(header.cadidoSeriesId)}</strong><span className="block break-words text-xs font-normal text-[#52605a]">{id}</span></span>
+                              <span><strong>{header.cadidoSeriesName || header.cadidoCode}</strong><span className="block break-words text-xs font-normal text-[#52605a]">{header.cadidoCode}</span></span>
                               <ChevronDown size={16} className={expanded ? "is-expanded" : ""} />
                             </button>
                           </td>
-                          <td>{areaName(header.areaId)}</td>
+                          <td>{sectionName(header.cadidoSectionId)}</td>
                           <td><span className="cadido-code">{header.cadidoCode}</span></td>
-                          <td>{formatDate(header.transferDate)}</td>
+                          <td>{formatDate(items.map(record => record.transferDate).sort().at(-1) || "")}</td>
                           <td>{items.length}</td>
                           <td>{availabilityLabel}</td>
                           <td className="align-right">

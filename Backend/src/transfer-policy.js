@@ -9,11 +9,10 @@ export const transferStates = Object.freeze({
 });
 export function canSubmitTransfer(user){
  return Boolean(user && !user.mustChangePassword && user.roles?.some(role=>
-  role===roleNames.PERSONAL||role===roleNames.JEFE_AREA));
+  role===roleNames.PERSONAL||role===roleNames.JEFE_AREA||role===roleNames.ADMIN));
 }
 export function canApproveArea(user,transfer){
- return Boolean(user && !user.mustChangePassword && user.roles?.includes(roleNames.JEFE_AREA)
-  && user.areaId===transfer.areaCode && Number(transfer.solicitante_id)!==Number(user.id)
+ return Boolean(user && !user.mustChangePassword && (user.roles?.includes(roleNames.ADMIN) || (user.roles?.includes(roleNames.JEFE_AREA) && user.areaId===transfer.areaCode)) && Number(transfer.solicitante_id)!==Number(user.id)
   && transfer.estado==='PENDIENTE_VB');
 }
 export function canReviewAdmin(user,transfer){

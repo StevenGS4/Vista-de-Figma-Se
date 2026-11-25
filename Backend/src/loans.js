@@ -159,14 +159,14 @@ loansRouter.post('/',async(req,res,next)=>{
   if(found.length!==ids.length)throw fail('Uno o más expedientes no existen',404);
   const inventoryId=found[0].inventario_id;
   if(found.some(e=>e.inventario_id!==inventoryId||e.etapa!=='CONCENTRACION'||
-    e.inventoryState!=='CONCENTRACION'||e.disponibilidad!=='EN_ARCHIVO'))
+    e.disponibilidad!=='EN_ARCHIVO'))
     throw fail('Los expedientes deben pertenecer al mismo inventario aceptado y estar disponibles',409);
   // Un expediente administrativamente aceptado NO es prestable hasta que
   // el administrador coteje y ubique físicamente todos los documentos.
   const [placed]=await pool.query(`SELECT e.id,e.archivo_zona,e.lugar_resguardo,e.estante,e.nivel,e.seccion_fisica,
    (SELECT r.estado FROM recepciones r
-     JOIN transferencia_inventarios ti ON ti.transferencia_id=r.transferencia_id
-     WHERE ti.inventario_id=e.inventario_id
+     JOIN transferencia_expedientes_v ti ON ti.transferencia_id=r.transferencia_id
+     WHERE ti.expediente_id=e.id
      ORDER BY r.id DESC LIMIT 1) AS recepcion_estado
    FROM expedientes e WHERE e.id IN (${placeholders})`,ids);
   if(placed.length!==ids.length||placed.some(e=>e.recepcion_estado!=='RECIBIDA'||

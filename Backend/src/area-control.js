@@ -45,10 +45,11 @@ async function userSummary(conn,ctx,area='') {
   const [concentracion]=await conn.execute(`SELECT t.solicitante_id AS userId,
     COUNT(DISTINCT ti.inventario_id) AS total
     FROM transferencias t
-    JOIN transferencia_inventarios ti ON ti.transferencia_id=t.id
+    JOIN transferencia_expedientes_v ti ON ti.transferencia_id=t.id
     JOIN inventarios i ON i.id=ti.inventario_id
     JOIN areas a ON a.id=t.area_id
-    WHERE t.estado='ACEPTADA' AND i.estado='CONCENTRACION' AND i.deleted_at IS NULL ${c.sql}
+    JOIN expedientes e ON e.id=ti.expediente_id AND e.etapa='CONCENTRACION' AND e.deleted_at IS NULL
+    WHERE t.estado='ACEPTADA' AND i.deleted_at IS NULL ${c.sql}
     GROUP BY t.solicitante_id`,c.args);
   const tram=new Map(tramite.map(r=>[Number(r.userId),Number(r.total)]));
   const conc=new Map(concentracion.map(r=>[Number(r.userId),Number(r.total)]));
@@ -94,7 +95,7 @@ areaControlRouter.get('/usuarios/:id',async(req,res,next)=>{
     DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS acceptedAt,
     t.estado
     FROM transferencias t
-    JOIN transferencia_inventarios ti ON ti.transferencia_id=t.id
+    JOIN transferencia_expedientes_v ti ON ti.transferencia_id=t.id
     JOIN inventarios i ON i.id=ti.inventario_id
     JOIN areas a ON a.id=t.area_id
     WHERE t.solicitante_id=? ${c.sql}

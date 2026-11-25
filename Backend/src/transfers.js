@@ -8,7 +8,7 @@ import { requireAuth } from './auth.js';
 import { validateSharedReceptionLocation } from './reception-locations.js';
 import {
  transferStates,canSubmitTransfer,canApproveArea,canReviewAdmin,
- canReceiveTransfer,canViewTransfer,uniqueInventoryFolios
+ canReceiveTransfer,canViewTransfer
 } from './transfer-policy.js';
 
 export const transfersRouter = express.Router();
@@ -70,8 +70,8 @@ async function readTransfer(conn,t){
   LEFT JOIN usuarios um ON um.id=ar.encargado_usuario_id
   WHERE tr.id=?`,[t.id]);
  const actorNames=actors[0]||{};
- const [records]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
- JOIN expedientes e ON e.inventario_id=ti.inventario_id
+ const [records]=await conn.execute(`SELECT e.id FROM transferencia_expedientes_v ti
+ JOIN expedientes e ON e.id=ti.expediente_id
  WHERE ti.transferencia_id=? AND e.deleted_at IS NULL ORDER BY ti.inventario_id,e.consecutivo`,[t.id]);
  const [receptions]=await conn.execute(`SELECT r.estado,DATE_FORMAT(r.fecha,'%Y-%m-%d') AS date,
  r.responsable_id,r.observaciones,
@@ -134,48 +134,30 @@ async function audit(conn,user,id,action,detail){
 function ensureAuth(user){
  if(user.mustChangePassword)throw problem('Debes cambiar tu contraseña',403);
 }
-async function chooseInventories(conn,ids,user,testMode){
- const placeholders=ids.map(()=>'?').join(',');
- const [items]=await conn.query(`SELECT i.id,i.folio,i.estado,i.area_id,i.creado_por,a.codigo AS areaCode,
- COUNT(e.id) AS total,
- SUM(CASE WHEN e.etapa='TRAMITE' THEN 1 ELSE 0 END) AS inTramite,
- SUM(CASE WHEN e.disponibilidad='PRESTADO' THEN 1 ELSE 0 END) AS borrowed
- FROM inventarios i JOIN areas a ON a.id=i.area_id
- JOIN expedientes e ON e.inventario_id=i.id
- WHERE e.id IN (${placeholders}) AND i.deleted_at IS NULL AND e.deleted_at IS NULL
- GROUP BY i.id,i.folio,i.estado,i.area_id,i.creado_por,a.codigo`,ids);
- if(!items.length)throw problem('No se encontraron inventarios seleccionados');
- // Bloquea cada inventario en orden estable para serializar solicitudes concurrentes.
- const selected=items.sort((a,b)=>a.id-b.id);
+async function reserveEligibleRecords(conn,ids,user,testMode){
+ const marks=ids.map(()=>'?').join(',');
+ const [inventories]=await conn.query(`SELECT DISTINCT inventario_id FROM expedientes WHERE id IN (${marks}) ORDER BY inventario_id`,ids);
+ for(const inventory of inventories)
+  await conn.execute('SELECT id FROM inventarios WHERE id=? FOR UPDATE',[inventory.inventario_id]);
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Mazatlan'});
- for(const i of selected){
-  const [locked]=await conn.execute('SELECT id,estado FROM inventarios WHERE id=? AND deleted_at IS NULL FOR UPDATE',[i.id]);
-  if(locked[0]?.estado!=='TRAMITE')throw problem('Inventario ya transferido o reservado',409);
-  if(i.areaCode!==user.areaId)throw problem('No puedes transferir inventarios de otra área',403);
-  if(!user.roles.includes('Encargado de área')&&Number(i.creado_por)!==Number(user.id))
-   throw problem('Solo puedes solicitar la transferencia de tus inventarios',403);
-  const [all]=await conn.execute(`SELECT COUNT(*) AS countRows,
-  SUM(etapa='TRAMITE') AS available, SUM(disponibilidad='PRESTADO') AS borrowed,
-  SUM(cierre IS NULL) AS openRecords,
-  SUM(DATE_ADD(cierre, INTERVAL anios_tramite YEAR) IS NULL OR DATE_ADD(cierre, INTERVAL anios_tramite YEAR) > ?) AS pendingRetention
-  FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL`,[today,i.id]);
-  if(Number(all[0].countRows)!==Number(i.total) ||
-   Number(all[0].available)!==Number(all[0].countRows) ||Number(all[0].borrowed))
-    throw problem('Inventario con expediente en concentración o préstamo activo',409);
-  if(!testMode&&Number(all[0].openRecords))
-   throw problem('Cierra los expedientes del inventario antes de solicitar su transferencia',409);
-  if(!testMode&&Number(all[0].pendingRetention))
-   throw problem('Todos los expedientes del inventario deben cumplir su plazo de conservación en Archivo de trámite antes de transferirse',409);
-  const [links]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[i.id]);
-  if(links.length)throw problem('Inventario vinculado a otra transferencia',409);
- }
- // Todas las filas seleccionadas deben coincidir con la totalidad de cada inventario.
- const [allRows]=await conn.query(`SELECT e.id FROM expedientes e
- WHERE e.inventario_id IN (${selected.map(()=>'?').join(',')}) AND e.deleted_at IS NULL`,selected.map(i=>i.id));
- const desired=new Set(ids);
- if(allRows.length!==desired.size||allRows.some(r=>!desired.has(Number(r.id))))
-  throw problem('La solicitud debe incluir todos los expedientes de cada inventario',400);
- return selected;
+ const [rows]=await conn.query(`SELECT e.id,e.etapa,e.disponibilidad,i.estado,
+  i.creado_por,a.codigo AS areaCode,e.cierre IS NOT NULL AS closed,
+  DATE_ADD(e.cierre, INTERVAL e.anios_tramite YEAR) <= ? AS due
+  FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id JOIN areas a ON a.id=i.area_id
+  WHERE e.id IN (${marks}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL ORDER BY e.id FOR UPDATE`,[today,...ids]);
+ if(rows.length!==ids.length)throw problem('No se encontraron todos los expedientes seleccionados',409);
+ if(rows.some(row=>Number(row.creado_por)!==Number(user.id)||row.areaCode!==user.areaId))
+  throw problem('Solo puedes transferir expedientes de tus propios archivos del área',403);
+ if(rows.some(row=>row.estado!=='TRAMITE'||row.etapa!=='TRAMITE'||row.disponibilidad==='PRESTADO'))
+  throw problem('La selección contiene expedientes que ya no están disponibles en Trámite',409);
+ if(!testMode && rows.some(row=>!row.closed||!row.due))
+  throw problem('Los expedientes deben estar cerrados y haber cumplido su plazo de Trámite contado desde el cierre',409);
+ const [reserved]=await conn.query(`SELECT te.expediente_id
+  FROM transferencia_expedientes te
+  WHERE te.expediente_id IN (${marks}) AND NOT EXISTS (
+   SELECT 1 FROM transferencia_documentos d WHERE d.transferencia_id=te.transferencia_id AND d.tipo='CANCELACION'
+  ) LIMIT 1 FOR UPDATE`,ids);
+ if(reserved.length)throw problem('Un expediente ya está incluido en otra transferencia',409);
 }
 async function transferTestMode(conn,lock=false){
  const [[setting]]=await conn.execute('SELECT modo_pruebas FROM configuracion_transferencias WHERE id=1'+(lock?' FOR SHARE':''));
@@ -214,28 +196,25 @@ transfersRouter.post('/',async(req,res,next)=>{
   const ids=onlyIds(req.body?.recordIds);
   conn=await pool.getConnection();await conn.beginTransaction();
   const testMode=await transferTestMode(conn,true);
-  const inventoryList=await chooseInventories(conn,ids,user,testMode);
+  await reserveEligibleRecords(conn,ids,user,testMode);
   const [area]=await conn.execute('SELECT id FROM areas WHERE codigo=?',[user.areaId]);
   if(!area.length)throw problem('Área no encontrada');
   const folio='TP-'+new Date().getFullYear()+'-'+randomUUID().slice(0,14).toUpperCase();
   const [created]=await conn.execute(`INSERT INTO transferencias
   (folio,area_id,solicitante_id,estado,enviada_en) VALUES (?,?,?,'PENDIENTE_VB',NOW())`,
   [folio,area[0].id,user.id]);
-  for(const i of inventoryList){
-   await conn.execute('INSERT INTO transferencia_inventarios(transferencia_id,inventario_id) VALUES (?,?)',
-   [created.insertId,i.id]);
-   await conn.execute("UPDATE inventarios SET estado='EN_TRANSFERENCIA' WHERE id=?",[i.id]);
-  }
+  await conn.query('INSERT INTO transferencia_expedientes(transferencia_id,expediente_id) VALUES ?',
+   [ids.map(id=>[created.insertId,id])]);
   await saveDocument(conn,created.insertId,user,'SOLICITUD','Al titular del área generadora: se solicita autorización para trasladar los expedientes de la relación anexa.');
-  await addHistory(conn,created.insertId,user,'PREPARAR','Inventarios completos seleccionados: '+inventoryList.length);
+  await addHistory(conn,created.insertId,user,'PREPARAR','Expedientes seleccionados: '+ids.length);
   await addHistory(conn,created.insertId,user,'ENVIAR','Solicitud enviada a visto bueno del encargado de área');
   if(testMode)await addHistory(conn,created.insertId,user,'PREPARAR','Solicitud creada en modo de pruebas: se omitió la validación de cierre y plazo AT.');
-  await audit(conn,user,created.insertId,'SOLICITAR',{inventarios:inventoryList.map(i=>i.folio),testMode});
+  await audit(conn,user,created.insertId,'SOLICITAR',{expedientes:ids,testMode});
   await conn.commit();
   const t=await rawTransfer(pool,created.insertId);
   res.status(201).json({transfer:await readTransfer(pool,t)});
  }catch(e){if(conn)await conn.rollback();
-  if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'Inventario ya vinculado a una transferencia'});
+  if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'Expediente ya vinculado a una transferencia'});
   next(e);
  }finally{conn?.release();}
 });
@@ -252,10 +231,10 @@ transfersRouter.post('/:id/resend',async(req,res,next)=>{
   if(t.estado!=='OBSERVACIONES'||t.areaCode!==user.areaId||Number(t.solicitante_id)!==Number(user.id))
    throw problem('Solo el solicitante puede reenviar una transferencia observada',403);
   const requested=new Set(onlyIds(req.body?.recordIds,50000));
-  const [joined]=await conn.execute(`SELECT e.id FROM transferencia_inventarios ti
-   JOIN expedientes e ON e.inventario_id=ti.inventario_id WHERE ti.transferencia_id=?`,[id]);
+  const [joined]=await conn.execute(`SELECT e.id FROM transferencia_expedientes_v ti
+   JOIN expedientes e ON e.id=ti.expediente_id WHERE ti.transferencia_id=?`,[id]);
   if(joined.length!==requested.size||joined.some(row=>!requested.has(Number(row.id))))
-   throw problem('No puedes cambiar los inventarios vinculados; conserva la selección completa',409);
+   throw problem('Conserva los expedientes de la solicitud original al reenviar',409);
   const correction=text(req.body?.correction,1900);
   if(correction.length<5)throw problem('Describe la corrección antes de reenviar');
   const approved=Boolean(t.visto_bueno_por);
@@ -333,8 +312,8 @@ transfersRouter.get('/:id/relacion.xlsx',async(req,res,next)=>{
  try{
   const t=await getVisible(req.auth.user,req.params.id);
   if(t.estado==='CANCELADA')throw problem('La solicitud fue cancelada y sus inventarios quedaron liberados',409);
-  const records=await readRecords(pool,`WHERE EXISTS (SELECT 1 FROM transferencia_inventarios ti
-    WHERE ti.inventario_id=i.id AND ti.transferencia_id=?)`,[t.id]);
+  const records=await readRecords(pool,`WHERE EXISTS (SELECT 1 FROM transferencia_expedientes_v ti
+    WHERE ti.expediente_id=e.id AND ti.transferencia_id=?)`,[t.id]);
   if(!records.length)throw problem('La solicitud no contiene expedientes activos',404);
   const approved=Boolean(t.visto_bueno_por);
   const copy=req.query.copia==='1';
@@ -354,7 +333,7 @@ transfersRouter.get('/:id/documentos/:documentId',async(req,res,next)=>{
   if(!/^[1-9][0-9]*$/.test(req.params.documentId))throw problem('Documento inválido');
   const [[doc]]=await pool.execute(`SELECT d.tipo,d.detalle,d.pdf,DATE_FORMAT(d.creado_en,'%Y-%m-%d') AS date,
    CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS actor,
-   (SELECT COUNT(*) FROM transferencia_inventarios ti JOIN expedientes e ON e.inventario_id=ti.inventario_id
+   (SELECT COUNT(*) FROM transferencia_expedientes_v ti JOIN expedientes e ON e.id=ti.expediente_id
     WHERE ti.transferencia_id=d.transferencia_id AND e.deleted_at IS NULL) AS recordCount
    FROM transferencia_documentos d LEFT JOIN usuarios u ON u.id=d.actor_id
    WHERE d.transferencia_id=? AND d.id=?`,[t.id,req.params.documentId]);
@@ -381,14 +360,15 @@ transfersRouter.post('/:id/cancelar',async(req,res,next)=>{
   if(!t)throw problem('Solicitud no encontrada',404);
   if(t.estado==='CANCELADA')throw problem('La solicitud ya está cancelada',409);
   const [[received]]=await conn.execute("SELECT id FROM recepciones WHERE transferencia_id=? AND estado='RECIBIDA' LIMIT 1",[id]);
-  const [[moved]]=await conn.execute(`SELECT e.id FROM expedientes e JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+  const [[moved]]=await conn.execute(`SELECT e.id FROM expedientes e JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
    WHERE ti.transferencia_id=? AND e.etapa<>'TRAMITE' AND e.deleted_at IS NULL LIMIT 1`,[id]);
   if(received||moved)throw problem('La solicitud ya incorporó expedientes a Concentración',409);
   await conn.execute(`UPDATE inventarios i JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
    SET i.estado='TRAMITE' WHERE ti.transferencia_id=? AND i.estado='EN_TRANSFERENCIA'`,[id]);
-  const [released]=await conn.execute('DELETE FROM transferencia_inventarios WHERE transferencia_id=?',[id]);
+  const [[selection]]=await conn.execute('SELECT COUNT(*) AS total FROM transferencia_expedientes_v WHERE transferencia_id=?',[id]);
+  await conn.execute('DELETE FROM transferencia_inventarios WHERE transferencia_id=?',[id]);
   await saveDocument(conn,id,user,'CANCELACION',
-   (detail+'\nInventarios liberados: '+released.affectedRows).slice(0,2000));
+   (detail+'\nExpedientes liberados: '+selection.total).slice(0,2000));
   await audit(conn,user,id,'CANCELAR',{motivo:detail});
   await conn.commit();
   res.json({transfer:await readTransfer(pool,await rawTransfer(pool,id))});
@@ -463,7 +443,7 @@ transfersRouter.get('/:id/reception-boxes',async(req,res,next)=>{
   const [rows]=await pool.execute(`SELECT DISTINCT e.id,
     CAST(e.numero_caja AS CHAR) AS boxNumber
     FROM expedientes e
-    JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+    JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
     WHERE ti.transferencia_id=? AND e.etapa IN ('TRAMITE','CONCENTRACION') AND e.deleted_at IS NULL
     ORDER BY e.id`,[id]);
   if(!rows.length)throw problem('La transferencia no contiene expedientes disponibles',409);
@@ -499,7 +479,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    if(managed&&!await hasDocument(conn,id,'FORMATO_FIRMADO'))
     throw problem('Falta adjuntar el PDF del formato con firmas autógrafas en Documentos de la transferencia.',409);
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
-     JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+     JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
      WHERE ti.transferencia_id=? AND e.etapa IN ('TRAMITE','CONCENTRACION') AND e.deleted_at IS NULL
      ORDER BY e.id FOR UPDATE`,[id]);
    if(!linked.length)throw problem('No hay expedientes para recibir',409);
@@ -512,15 +492,14 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    try{
     if(managed)await conn.query('SET @aceptacion_autorizada=1');
     [updated]=await conn.execute(`UPDATE expedientes e
-      JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
       SET ${managed ? "e.etapa='CONCENTRACION'," : ''}e.archivo_zona=?,e.lugar_resguardo=?,e.estante=?,e.nivel=?,
         e.seccion_fisica=?,e.posicion=?,
         e.caja_ubicacion=COALESCE(NULLIF(TRIM(e.numero_caja),''),?),
         e.notas_ubicacion=?
-      WHERE ti.transferencia_id=? AND e.deleted_at IS NULL
+      WHERE e.id IN (${linked.map(()=>'?').join(',')}) AND e.deleted_at IS NULL
         AND ${managed ? "e.etapa='TRAMITE' AND e.disponibilidad<>'PRESTADO'" : "e.etapa='CONCENTRACION'"}`,
       [location.archiveZone,location.room,location.shelf,location.level,
-       location.physicalSection,location.position,location.locationBox,location.locationNotes,id]);
+       location.physicalSection,location.position,location.locationBox,location.locationNotes,...linked.map(row=>row.id)]);
    }finally{
     if(managed){
      try{await conn.query('SET @aceptacion_autorizada=NULL');}
@@ -535,13 +514,14 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
    if(managed&&updated.affectedRows!==linked.length)
     throw problem('Los expedientes ya no están disponibles para la entrega',409);
    if(managed){
-    await conn.execute(`UPDATE inventarios i JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
-     SET i.estado='CONCENTRACION' WHERE ti.transferencia_id=? AND i.estado='EN_TRANSFERENCIA'`,[id]);
+    await conn.execute(`UPDATE inventarios i SET i.estado='CONCENTRACION'
+     WHERE i.id IN (SELECT inventario_id FROM transferencia_expedientes_v WHERE transferencia_id=?)
+       AND NOT EXISTS (SELECT 1 FROM expedientes e WHERE e.inventario_id=i.id AND e.deleted_at IS NULL AND e.etapa='TRAMITE')`,[id]);
    }
    receivedCount=linked.length;
    // affectedRows puede ser menor que el conteo cuando una ubicación idéntica ya estaba guardada.
    const [verified]=await conn.execute(`SELECT e.id FROM expedientes e
-     JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+     JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
      WHERE ti.transferencia_id=? AND e.etapa='CONCENTRACION'
        AND e.archivo_zona=? AND e.lugar_resguardo=? AND e.estante=? AND e.nivel=? AND e.seccion_fisica=?
        AND (e.posicion <=> ?)

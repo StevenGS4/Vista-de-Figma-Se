@@ -6,13 +6,15 @@ const own={id:'10',areaId:'AR-002',roles:[roleNames.PERSONAL],mustChangePassword
 const boss={id:'12',areaId:'AR-002',roles:[roleNames.JEFE_AREA],mustChangePassword:false};
 const admin={id:'13',areaId:'AR-001',roles:[roleNames.ADMIN],mustChangePassword:false};
 const transfer={solicitante_id:10,areaCode:'AR-002',estado:'PENDIENTE_VB',visto_bueno_por:null};
-test('el emisor y el jefe pueden preparar, pero no el administrador',()=>{
+test('el personal, el encargado y el administrador pueden preparar',()=>{
  assert.equal(canSubmitTransfer(own),true);assert.equal(canSubmitTransfer(boss),true);
- assert.equal(canSubmitTransfer(admin),false);
+ assert.equal(canSubmitTransfer(admin),true);
  assert.equal(canSubmitTransfer({...own,mustChangePassword:true}),false);
 });
-test('visto bueno requiere encargado distinto del emisor y misma área',()=>{
+test('visto bueno por encargado del área o administrador distinto del emisor',()=>{
  assert.equal(canApproveArea(boss,transfer),true);
+ assert.equal(canApproveArea(admin,transfer),true);
+ assert.equal(canApproveArea({...admin,id:10},transfer),false);
  assert.equal(canApproveArea({...boss,id:10},transfer),false);
  assert.equal(canApproveArea({...boss,areaId:'AR-005'},transfer),false);
  assert.equal(canApproveArea(boss,{...transfer,estado:'ACEPTADA'}),false);

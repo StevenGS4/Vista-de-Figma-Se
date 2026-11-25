@@ -1481,7 +1481,7 @@ export default function RecordsPanel({
   const own = (record: ArchivalRecord) => (record.inventoryCreatedBy ?? record.createdBy) === user.id;
   const canSupervise = isAdmin || isAreaManager;
   const supervising = canSupervise && supervision;
-  const visibleRecords = authorized.filter(record => supervising
+  const visibleRecords = authorized.filter(record => record.stage === "Archivo de trámite").filter(record => supervising
     ? !own(record) && record.stage === "Archivo de trámite"
     : own(record));
   const selected = visibleRecords.filter(record => record.inventoryId === selectedId);

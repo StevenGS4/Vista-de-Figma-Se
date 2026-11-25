@@ -26,7 +26,7 @@ export async function enrichConcentrationRecords(records){
    r.observaciones AS recepcion_observaciones,
    r.estado AS recepcion_estado
    FROM expedientes e
-   JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+   JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
    JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'
    LEFT JOIN recepciones r ON r.id=(SELECT MAX(r2.id) FROM recepciones r2 WHERE r2.transferencia_id=t.id)
    LEFT JOIN usuarios u ON u.id=r.responsable_id
@@ -73,16 +73,16 @@ concentrationRouter.put('/expedientes/:id/ubicacion',async(req,res,next)=>{
   const [found]=await conn.execute(`SELECT e.id,e.etapa,i.estado AS inventory_state,t.estado AS transfer_state
     FROM expedientes e
     JOIN inventarios i ON i.id=e.inventario_id
-    JOIN transferencia_inventarios ti ON ti.inventario_id=i.id
+    JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
     JOIN transferencias t ON t.id=ti.transferencia_id
     WHERE e.id=? FOR UPDATE`,[id]);
   if(!found.length)throw fail('Expediente transferido no encontrado',404);
-  if(found[0].etapa!=='CONCENTRACION'||found[0].inventory_state!=='CONCENTRACION'||
+  if(found[0].etapa!=='CONCENTRACION'||
     found[0].transfer_state!=='ACEPTADA')
     throw fail('No se puede asignar ubicación antes de aceptar la transferencia',409);
   const [[physical]]=await conn.execute(`SELECT r.estado FROM recepciones r
-    JOIN transferencia_inventarios ti ON ti.transferencia_id=r.transferencia_id
-    JOIN expedientes e ON e.inventario_id=ti.inventario_id
+    JOIN transferencia_expedientes_v ti ON ti.transferencia_id=r.transferencia_id
+    JOIN expedientes e ON e.id=ti.expediente_id
     WHERE e.id=? ORDER BY r.id DESC LIMIT 1`,[id]);
   if(physical?.estado!=='RECIBIDA')
     throw fail('Primero confirma la recepción física y asigna la ubicación desde Transferencias',409);
@@ -127,11 +127,11 @@ concentrationRouter.put('/expedientes/:id/datos-inventario',requireAdmin,async(r
   await conn.beginTransaction();
   const [[record]]=await conn.execute(`SELECT e.id FROM expedientes e
    JOIN inventarios i ON i.id=e.inventario_id
-   WHERE e.id=? AND e.etapa='CONCENTRACION' AND i.estado='CONCENTRACION'
+   WHERE e.id=? AND e.etapa='CONCENTRACION'
      AND e.deleted_at IS NULL AND i.deleted_at IS NULL FOR UPDATE`,[id]);
   if(!record)throw fail('Expediente activo de Concentración no encontrado',404);
   const [[receipt]]=await conn.execute(`SELECT r.estado FROM expedientes e
-   JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
+   JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
    JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'
    JOIN recepciones r ON r.transferencia_id=t.id
    WHERE e.id=? ORDER BY r.id DESC LIMIT 1`,[id]);

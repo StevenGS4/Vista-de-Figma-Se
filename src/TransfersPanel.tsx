@@ -49,7 +49,7 @@ type TransferDetailView = "tracking" | "documents" | "inventory";
 type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
 
 const transferSteps = [
-  { label: "Seleccionar inventarios de trámite", icon: ListChecks },
+  { label: "Seleccionar expedientes de Trámite", icon: ListChecks },
   { label: "Vista previa y envío", icon: Files },
 ];
 
@@ -244,10 +244,8 @@ function TransferTray({
           <label className="grid gap-1 text-xs font-semibold">Hasta
             <input type="date" className="filter-date rounded-lg border px-2 py-2" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} />
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={mineOnly} onChange={event => { setMineOnly(event.target.checked); setPage(1); }} />
-            Me toca a mí
-          </label>
+          <button type="button" aria-pressed={mineOnly} className="button button--secondary !border-amber-400 !bg-amber-50"
+            onClick={() => { setMineOnly(value => !value); setPage(1); }}>Me toca a mí</button>
           <Button className="button--secondary" onClick={() => {
             setSearch(""); setArea(""); setFrom(""); setTo(""); setMineOnly(false); setPage(1);
           }}>Limpiar filtros</Button>
@@ -270,8 +268,7 @@ function TransferTray({
               {visible.map((transfer) => {
                 const task = transferTask(transfer, currentUser, role, permissions);
                 const canContinue =
-                  permissions.includes("prepare-transfers") &&
-                  (role === "Personal de área" || role === "Encargado de área") &&
+                  (role === "Administrador / Coordinador" || permissions.includes("prepare-transfers")) &&
                   transfer.requestedBy === currentUser.id &&
                   ["En preparación", "Con observaciones"].includes(transfer.status);
                 return (
@@ -483,7 +480,7 @@ function ConfirmationModal({
         </div>
         <h2>{resend ? "¿Reenviar solicitud?" : "¿Enviar transferencia a revisión?"}</h2>
         <p>
-          Se incluirán todos los expedientes de {count} inventario{count === 1 ? "" : "s"}. El envío
+          Se incluirán {count} expediente{count === 1 ? "" : "s"} de la selección. El envío
           remitirá la solicitud al responsable de revisión. Los expedientes permanecerán en Archivo de trámite.
         </p>
         <div className="transfer-rule">
@@ -540,13 +537,7 @@ function TransferWizard({
   }, []);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
-  const [selectedInventoryIds, setSelectedInventoryIds] = useState<string[]>(() => [
-    ...new Set(
-      allRecords
-        .filter((record) => activeTransfer?.recordIds.includes(record.id))
-        .map((record) => record.inventoryId),
-    ),
-  ]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => activeTransfer?.recordIds ?? []);
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const blockedIds = new Set(
@@ -566,22 +557,13 @@ function TransferWizard({
       )
       .flatMap((transfer) => transfer.recordIds),
   );
-  const areaRecords = allRecords.filter(
-    (record) =>
-      record.stage === "Archivo de trámite" &&
-      record.areaId === currentUser.areaId &&
-      (currentUser.roles.includes("Encargado de área") || record.createdBy === currentUser.id),
-  );
-  const blockedInventoryIds = new Set(
-    areaRecords.filter((record) => blockedIds.has(record.id)).map((record) => record.inventoryId),
-  );
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mazatlan" });
-  for (const record of areaRecords) {
-    if (!activeTransfer?.recordIds.includes(record.id) &&
-      (record.availability === "Prestado" || (!testMode && (!record.tramiteDueDate || record.tramiteDueDate > today))))
-      blockedInventoryIds.add(record.inventoryId);
-  }
-  const eligible = areaRecords.filter(record => !blockedInventoryIds.has(record.inventoryId));
+  const eligible = allRecords.filter(record => activeTransfer
+    ? activeTransfer.recordIds.includes(record.id)
+    : record.stage === "Archivo de trámite" && record.areaId === currentUser.areaId
+      && (record.inventoryCreatedBy ?? record.createdBy) === currentUser.id
+      && !blockedIds.has(record.id) && !record.transferReference && record.availability !== "Prestado"
+      && (testMode === true || Boolean(record.closeDate && record.tramiteDueDate && record.tramiteDueDate <= today)));
   const shown = eligible.filter((record) => {
     const query = search.toLowerCase();
     return (
@@ -592,7 +574,7 @@ function TransferWizard({
     );
   });
   const selectedRecords = allRecords.filter((record) =>
-    selectedInventoryIds.includes(record.inventoryId),
+    selectedIds.includes(record.id),
   );
   const eligibleInventories = Array.from(
     eligible.reduce((groups, record) => {
@@ -603,8 +585,8 @@ function TransferWizard({
   );
 
   const next = () => {
-    if (!selectedInventoryIds.length) {
-      setError("Selecciona al menos un inventario completo elegible para continuar.");
+    if (!selectedIds.length) {
+      setError("Selecciona al menos un expediente elegible para continuar.");
       return;
     }
     if (!activeTransfer && selectedRecords.length > 1000) { setError("El máximo es de 1000 expedientes por solicitud."); return; }
@@ -649,9 +631,9 @@ function TransferWizard({
                 <ListChecks size={21} />
               </span>
               <div>
-                <h3>Seleccionar inventarios de trámite</h3>
+                <h3>Seleccionar expedientes de Trámite</h3>
                 <p>
-                  Solo se muestran expedientes de trámite elegibles del área{" "}
+                  Selecciona los expedientes que vas a transferir de tus archivos en el área{" "}
                   {areaName(currentUser.areaId)}.
                 </p>
               </div>
@@ -665,14 +647,14 @@ function TransferWizard({
                   value={search}
                 />
               </label>
-              <span>{selectedInventoryIds.length} inventarios seleccionados</span>
+              <span>{selectedIds.length} expedientes seleccionados</span>
             </div>
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
             <div className="eligible-list inventory-eligible-list">
               {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
                 if (!visibleRows.length) return null;
-                const selected = selectedInventoryIds.includes(inventoryId);
+                const selected = inventoryRecords.some(record => selectedIds.includes(record.id));
                 return (
                   <section
                     className={`eligible-inventory-group ${selected ? "is-selected" : ""}`}
@@ -680,33 +662,26 @@ function TransferWizard({
                   >
                     <div className="eligible-inventory-group__header border-l-4 border-l-[#547e6b]">
                       <span>
-                        <strong>{inventoryId}</strong>
+                        <strong>{inventoryRecords[0].cadidoSeriesName || inventoryRecords[0].cadidoCode} · {inventoryId}</strong>
                         <small>
-                          {areaName(inventoryRecords[0].areaId)} · {inventoryRecords.length} expedientes
+                          {areaName(inventoryRecords[0].areaId)} · {inventoryRecords.length} expedientes elegibles
                         </small>
                       </span>
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          setSelectedInventoryIds((current) =>
-                            current.includes(inventoryId)
-                              ? current.filter((id) => id !== inventoryId)
-                              : [...current, inventoryId],
-                          );
-                        }}
-                        disabled={!selected && !activeTransfer && selectedRecords.length + inventoryRecords.length > 1000}
-                        type="button"
-                      >
-                        <Check size={15} /> {selected ? "Quitar inventario" : "Seleccionar inventario completo"}
-                      </button>
                     </div>
                     <div>
                       {visibleRows.map((record) => (
                           <div className="eligible-row-readonly" key={record.id}>
-                            <span>
-                              <strong style={{ fontSize: "0.875rem" }}>{record.recordNumber}</strong>
-                              <small style={{ fontSize: "0.75rem", color: "#435951" }}>{record.title}</small>
-                            </span>
+                            <label className="flex items-center gap-2">
+                              <input type="checkbox" aria-label={`Transferir expediente ${record.recordNumber}`}
+                                checked={selectedIds.includes(record.id)}
+                                disabled={Boolean(activeTransfer) || (!selectedIds.includes(record.id) && selectedIds.length >= 1000)}
+                                onChange={event => {
+                                  const checked = event.target.checked;
+                                  setSelectedIds(current => checked ? [...current, record.id] : current.filter(id => id !== record.id));
+                                }} />
+                              <span><strong style={{ fontSize: "0.875rem" }}>{record.recordNumber}</strong>
+                              <small style={{ fontSize: "0.75rem", color: "#435951" }}>{record.title}</small></span>
+                            </label>
                             <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
                             <span className="eligible-meta">
                               {record.filesCount} legajos · {record.foliosCount} folios
@@ -753,7 +728,7 @@ function TransferWizard({
             <dl className="mb-4 grid gap-3 rounded-lg border border-[#b4c4ba] bg-[#e5eae2] px-4 py-3 text-sm sm:grid-cols-3">
               <div><dt className="text-xs text-[#435951]">Solicitante</dt><dd className="font-semibold">{fullName(currentUser)}</dd></div>
               <div><dt className="text-xs text-[#435951]">Área solicitante</dt><dd className="font-semibold">{areaName(currentUser.areaId)}</dd></div>
-              <div><dt className="text-xs text-[#435951]">Selección</dt><dd className="font-semibold">{selectedInventoryIds.length} inventarios · {selectedRecords.length} expedientes</dd></div>
+              <div><dt className="text-xs text-[#435951]">Selección</dt><dd className="font-semibold">{new Set(selectedRecords.map(record => record.inventoryId)).size} archivos · {selectedRecords.length} expedientes</dd></div>
             </dl>
             <div className="origin-inventory-summary transfer-preview-origins">
               {[...new Set(selectedRecords.map((record) => record.inventoryId))].map((id) => {
@@ -793,7 +768,7 @@ function TransferWizard({
               </Button>
             )}
             {step === 0 ? (
-              <Button className="button--primary" disabled={!selectedInventoryIds.length} onClick={next}>
+              <Button className="button--primary" disabled={!selectedIds.length} onClick={next}>
                 Continuar <ArrowRight size={17} />
               </Button>
             ) : (
@@ -806,7 +781,7 @@ function TransferWizard({
       </section>
       {confirmOpen && (
         <ConfirmationModal
-          count={selectedInventoryIds.length}
+          count={selectedRecords.length}
           onCancel={() => setConfirmOpen(false)}
           onConfirm={correction => onSubmit(selectedRecords.map((record) => record.id), activeTransfer, correction)}
           resend={Boolean(activeTransfer)}
@@ -922,11 +897,9 @@ function RequestDetail({
     transfer.requestedBy !== currentUser.id &&
     permissions.includes("accept-transfers");
   const canAreaReview =
-    role === "Encargado de área" &&
-    transfer.areaId === currentUser.areaId &&
-    transfer.status === "Pendiente de visto bueno del área" &&
-    transfer.requestedBy !== currentUser.id &&
-    permissions.includes("approve-area-transfers");
+    (role === "Administrador / Coordinador" || (role === "Encargado de área" &&
+      transfer.areaId === currentUser.areaId && permissions.includes("approve-area-transfers"))) &&
+    transfer.status === "Pendiente de visto bueno del área" && transfer.requestedBy !== currentUser.id;
   return (
     <div className="transfer-detail-page">
       <button className="text-button" onClick={onBack}>
@@ -1740,8 +1713,7 @@ export default function TransfersPanel({
     role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
   const canCreate =
-    (role === "Personal de área" || role === "Encargado de área") &&
-    permissions.includes("prepare-transfers");
+    role === "Administrador / Coordinador" || permissions.includes("prepare-transfers");
 
   const saveTransferState=(updated:DocumentaryTransfer)=>{
     onTransfersChange(transfers.some(t=>t.id===updated.id)

@@ -89,9 +89,11 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  -- transferencia_inventarios multiplica los expedientes si hay historial.
  LEFT JOIN transferencias t ON t.id=(
    SELECT ti_hist.transferencia_id
-   FROM transferencia_inventarios ti_hist
+   FROM transferencia_expedientes_v ti_hist
    JOIN transferencias t_hist ON t_hist.id=ti_hist.transferencia_id
-   WHERE ti_hist.inventario_id=i.id
+   WHERE ti_hist.expediente_id=e.id AND NOT EXISTS (
+     SELECT 1 FROM transferencia_documentos td WHERE td.transferencia_id=t_hist.id AND td.tipo='CANCELACION'
+   )
    ORDER BY
      CASE WHEN e.etapa='CONCENTRACION' AND t_hist.estado='ACEPTADA' THEN 0 ELSE 1 END,
      ti_hist.transferencia_id DESC
@@ -155,6 +157,9 @@ async function safeInventory(conn,folio,user,mode,includeDeleted=false){
  if(inv.estado!=='TRAMITE')throw fail('No se puede eliminar un inventario transferido a concentración',409);
  const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
  if(linked.length)throw fail('El inventario tiene historial de transferencia',409);
+ const [[partial]]=await conn.execute(`SELECT te.expediente_id FROM transferencia_expedientes te
+  JOIN expedientes e ON e.id=te.expediente_id WHERE e.inventario_id=? LIMIT 1`,[inv.id]);
+ if(partial)throw fail('El archivo tiene expedientes vinculados al historial de transferencias',409);
  return inv;
 }
 const allowTrash=(user)=>access(user);
@@ -318,6 +323,11 @@ async function save(req,res,next,editing=false){
    checkOwner(user,mode,inv,true);
    const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
    if(linked.length)throw fail('Inventario vinculado a transferencia: edición bloqueada',409);
+   const [[reserved]]=await conn.execute(`SELECT te.expediente_id FROM transferencia_expedientes te
+    JOIN expedientes e ON e.id=te.expediente_id WHERE e.inventario_id=? AND e.etapa='TRAMITE'
+    AND NOT EXISTS (SELECT 1 FROM transferencia_documentos d WHERE d.transferencia_id=te.transferencia_id AND d.tipo='CANCELACION')
+    LIMIT 1 FOR UPDATE`,[inv.id]);
+   if(reserved)throw fail('Espera a que concluya la transferencia pendiente antes de editar el archivo',409);
    if(header.inventoryId!==inv.folio)throw fail('No puedes cambiar el identificador de inventario');
    const cat=await resolveCatalog(conn,header,user,mode,true);
    if(inv.serie_id!==cat.serieId||inv.seccion_id!==cat.seccionId||inv.area_id!==cat.areaId)
@@ -332,7 +342,7 @@ async function save(req,res,next,editing=false){
     fondo=?,fecha_elaboracion=?,hoja_inicial=? WHERE id=?`,
     [text(header.administrativeUnit,220),text(header.responsible,200),text(header.responsiblePosition,200),
      text(header.fund,160),date(header.inventoryDate,true),num(header.initialSheetNumber||1,'hoja',1,65535),inventoryId]);
-   const [oldRows]=await conn.execute('SELECT id,consecutivo FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL FOR UPDATE',[inventoryId]);
+   const [oldRows]=await conn.execute("SELECT id,consecutivo FROM expedientes WHERE inventario_id=? AND deleted_at IS NULL AND etapa='TRAMITE' FOR UPDATE",[inventoryId]);
    const oldIds=new Set(oldRows.map(r=>r.id));
    const supplied=new Set();
    for(const r of rows){

@@ -17,6 +17,7 @@ export const REQUIRED_COLUMNS = Object.freeze({
  expediente_valores: ['expediente_id','valor'],
  transferencias: ['id','folio','area_id','solicitante_id','estado','visto_bueno_por','aceptada_por'],
  transferencia_inventarios: ['transferencia_id','inventario_id'],
+ transferencia_expedientes: ['transferencia_id','expediente_id'],
  transferencia_historial: ['id','transferencia_id','usuario_id','accion','fecha'],
  recepciones: ['id','transferencia_id','estado','fecha','responsable_id'],
  prestamos: ['id','folio','modalidad','inventario_id','area_solicitante_id','fecha_prevista','estado'],
@@ -27,7 +28,7 @@ export const REQUIRED_COLUMNS = Object.freeze({
 export const REQUIRED_PROCEDURES = Object.freeze([
  'sp_aceptar_transferencia','sp_registrar_prestamo','sp_devolver_expediente'
 ]);
-export const REQUIRED_VIEWS = Object.freeze(['vw_inventarios_resumen','vw_prestamos_vencimiento']);
+export const REQUIRED_VIEWS = Object.freeze(['vw_inventarios_resumen','vw_prestamos_vencimiento','transferencia_expedientes_v']);
 export const REQUIRED_ROLE_CODES = Object.freeze(['PERSONAL','JEFE_AREA','PRESTAMOS','ADMIN']);
 export function compareSchema({columns,procedures,views,roles}){
  const errors=[];

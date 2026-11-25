@@ -16,7 +16,7 @@ export function transferTask(transfer: DocumentaryTransfer, user: UserRecord, ro
     const note = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
     if (note >= 0 && !documents.slice(note + 1).some(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile))
       return document(0, "ACUSE_SOLICITUD", "Adjuntar acuse de solicitud", sender, "Solicitante o encargado del área");
-    return { step: 1, label: "Dar visto bueno", owner: transfer.assignedAreaManagerName || "Encargado del área", mine: manager && !own && permissions.includes("approve-area-transfers") };
+    return { step: 1, label: "Dar visto bueno", owner: transfer.assignedAreaManagerName || "Encargado del área", mine: !own && (admin || (manager && permissions.includes("approve-area-transfers"))) };
   }
   if (transfer.status === "Pendiente de revisión administrativa")
     return { step: 2, label: "Revisar y emitir dictamen", owner: "Administrador", mine: admin && !own && permissions.some(permission => ["review-transfers", "accept-transfers"].includes(permission)) };
@@ -30,5 +30,5 @@ export function transferTask(transfer: DocumentaryTransfer, user: UserRecord, ro
     }
     return { step: 4, label: "Registrar recepción física", owner: "Administrador", mine: admin && permissions.includes("update-location") };
   }
-  return { step: 0, label: transfer.status === "Con observaciones" ? "Corregir y reenviar" : "Preparar envío", owner: "Solicitante", mine: own && (manager || role === "Personal de área") && permissions.includes("prepare-transfers") };
+  return { step: 0, label: transfer.status === "Con observaciones" ? "Corregir y reenviar" : "Preparar envío", owner: "Solicitante", mine: own && (admin || ((manager || role === "Personal de área") && permissions.includes("prepare-transfers"))) };
 }
