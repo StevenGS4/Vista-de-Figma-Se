@@ -147,6 +147,7 @@ function TransferTray({
   const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
   const [mineOnly, setMineOnly] = useState(false);
   const [area, setArea] = useState("");
+  const [requester, setRequester] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState(initialSearch);
@@ -173,13 +174,23 @@ function TransferTray({
   const pending = visibleByRole.filter(isMyTask).length;
   const areas = [...new Set(visibleByRole.map(transfer => transfer.areaId))]
     .sort((left, right) => areaName(left).localeCompare(areaName(right), "es"));
+  const isAdmin = role === "Administrador / Coordinador";
+  const requesters = new Map<string, string>();
+  if (isAdmin) {
+    for (const transfer of visibleByRole) {
+      if (!area || transfer.areaId === area) {
+        requesters.set(transfer.requestedBy, requesterName(transfer, users));
+      }
+    }
+  }
+  const requesterOptions = [...requesters].sort(([, left], [, right]) => left.localeCompare(right, "es"));
   const query = search.trim().toLowerCase();
   const invalidDates = Boolean(from && to && from > to);
   const filtered = visibleByRole.filter(transfer => {
     const date = (transfer.submittedAt || transfer.createdAt || "").slice(0, 10);
     return matchesView(transfer, view) &&
       (!mineOnly || isMyTask(transfer)) &&
-      (!area || transfer.areaId === area) &&
+      (!isAdmin || ((!area || transfer.areaId === area) && (!requester || transfer.requestedBy === requester))) &&
       (!from || date >= from) &&
       (!to || Boolean(date && date <= to)) &&
       (!query || [transfer.folio, areaName(transfer.areaId), requesterName(transfer, users)]
@@ -233,11 +244,18 @@ function TransferTray({
               value={search}
             />
           </label>
-          {areas.length > 1 && <label className="grid gap-1 text-xs font-semibold">
+          {isAdmin && <label className="grid gap-1 text-xs font-semibold">
             Área
-            <select className="filter-select rounded-lg border px-2 py-2" value={area} onChange={event => { setArea(event.target.value); setPage(1); }}>
+            <select className="filter-select rounded-lg border px-2 py-2" value={area} onChange={event => { setArea(event.target.value); setRequester(""); setPage(1); }}>
               <option value="">Todas las áreas</option>
               {areas.map(id => <option key={id} value={id}>{areaName(id)}</option>)}
+            </select>
+          </label>}
+          {isAdmin && <label className="grid gap-1 text-xs font-semibold">
+            Solicitante
+            <select className="filter-select rounded-lg border px-2 py-2" value={requester} onChange={event => { setRequester(event.target.value); setPage(1); }}>
+              <option value="">Todos los solicitantes</option>
+              {requesterOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
           </label>}
           <label className="grid gap-1 text-xs font-semibold">Envío o creación desde
@@ -250,7 +268,7 @@ function TransferTray({
             className={`button button--secondary${pending > 0 ? " !border-amber-400 !bg-amber-50" : ""}`}
             onClick={() => { setMineOnly(value => !value); setPage(1); }}>Me toca a mí</button>
           <Button className="button--secondary" onClick={() => {
-            setSearch(""); setArea(""); setFrom(""); setTo(""); setMineOnly(false); setPage(1);
+            setSearch(""); setArea(""); setRequester(""); setFrom(""); setTo(""); setMineOnly(false); setPage(1);
           }}>Limpiar filtros</Button>
           {invalidDates && <p role="alert" className="w-full text-sm text-[#75163c]">La fecha inicial debe ser anterior o igual a la fecha final.</p>}
         </div>
