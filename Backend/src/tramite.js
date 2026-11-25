@@ -42,6 +42,7 @@ const rowId=id=>'REG-'+id;
 const seriesId=id=>'SER-'+id;
 function checkOwner(user,mode,inventory,editable=false){
  if(!hasInventoryAccess(user,mode,inventory))throw fail('Inventario fuera de tu alcance',403);
+ if(editable && Number(inventory.creado_por)!==Number(user.id))throw fail('Solo puedes editar tus propios archivos de Trámite',403);
  if(editable && inventory.estado!=='TRAMITE')throw fail('El inventario está protegido por transferencia',409);
 }
 async function getInventory(conn,folio,locked=false){
@@ -70,6 +71,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  d.acceso,d.tradicion,d.topografia_m,d.topografia_n,d.topografia_p,
  e.posicion AS position,e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes,
  e.etapa AS stage,e.disponibilidad AS availability,CAST(e.creado_por AS CHAR) AS createdBy,CAST(i.creado_por AS CHAR) AS inventoryCreatedBy,
+ CONCAT_WS(' ',creator.nombres,creator.apellido_paterno,creator.apellido_materno) AS inventoryCreatorName,
  t.folio AS transferReference,DATE_FORMAT(t.enviada_en,'%Y-%m-%d') AS transferDate,
  DATE_FORMAT(t.aceptada_en,'%Y-%m-%d') AS transferAcceptedDate,
  DATE_FORMAT(i.deleted_at,'%Y-%m-%d %H:%i:%s') AS inventoryDeletedAt,
@@ -77,6 +79,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  i.deleted_by AS inventoryDeletedBy,e.deleted_by AS recordDeletedBy
  FROM inventarios i
  JOIN areas a ON a.id=i.area_id
+ LEFT JOIN usuarios creator ON creator.id=i.creado_por
  JOIN expedientes e ON e.inventario_id=i.id
  LEFT JOIN expedientes_datos_concentracion d ON d.expediente_id=e.id
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
@@ -123,7 +126,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  concentrationData:{access:r.acceso||'',tradition:r.tradicion||'',m:r.topografia_m||'',n:r.topografia_n||'',p:r.topografia_p||''},
  position:r.position||'',locationBox:r.locationBox||'',locationNotes:r.locationNotes||'',
  stage:r.stage==='CONCENTRACION'?'Archivo de concentración':'Archivo de trámite',
- availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,inventoryCreatedBy:r.inventoryCreatedBy,
+ availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,inventoryCreatedBy:r.inventoryCreatedBy,inventoryCreatorName:r.inventoryCreatorName,
  transferReference:r.transferReference||'',transferDate:r.transferDate||'',
  transferAcceptedDate:r.transferAcceptedDate||'',receptionDate:'',receptionResponsible:'',receptionNotes:'',
  inventoryDeletedAt:r.inventoryDeletedAt||'',recordDeletedAt:r.recordDeletedAt||'',
@@ -148,6 +151,7 @@ async function safeInventory(conn,folio,user,mode,includeDeleted=false){
   WHERE i.folio=? ${includeDeleted?'':'AND i.deleted_at IS NULL'} FOR UPDATE`,[folio]);
  const inv=rows[0];if(!inv)throw fail('Inventario no encontrado',404);
  if(!hasInventoryAccess(user,mode,inv))throw fail('Inventario fuera de tu alcance',403);
+ if(Number(inv.creado_por)!==Number(user.id))throw fail('Solo puedes gestionar tus propios archivos de Trámite',403);
  if(inv.estado!=='TRAMITE')throw fail('No se puede eliminar un inventario transferido a concentración',409);
  const [linked]=await conn.execute('SELECT 1 FROM transferencia_inventarios WHERE inventario_id=? LIMIT 1',[inv.id]);
  if(linked.length)throw fail('El inventario tiene historial de transferencia',409);
@@ -349,14 +353,13 @@ async function save(req,res,next,editing=false){
    if(!isAdmin && cat.editionYear!==await latestCadidoYear(conn))
     throw fail('Solo puedes registrar con la edición CADIDO vigente. Solicita al administrador habilitar códigos actuales.',409);
    await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[cat.serieId]);
-   const [[active]]=await conn.execute(`SELECT folio,creado_por,estado FROM inventarios
-     WHERE area_id=? AND serie_id=? AND deleted_at IS NULL AND estado IN ('TRAMITE','EN_TRANSFERENCIA')
-     ORDER BY id LIMIT 1 FOR UPDATE`,[cat.areaId,cat.serieId]);
+   const [[active]]=await conn.execute(`SELECT folio,estado FROM inventarios
+     WHERE area_id=? AND serie_id=? AND creado_por=? AND deleted_at IS NULL AND estado IN ('TRAMITE','EN_TRANSFERENCIA')
+     ORDER BY id LIMIT 1 FOR UPDATE`,[cat.areaId,cat.serieId,user.id]);
    if(active){
      if(active.estado==='EN_TRANSFERENCIA')
-       throw fail('Ya hay un archivo de esta serie en transferencia dentro del área. Revisa su estado antes de crear otro.',409);
-     const reference=mode!=='PROPIO'||Number(active.creado_por)===Number(user.id)?' ('+active.folio+')':'';
-     throw fail('Ya existe un archivo activo de esta serie en el área'+reference+'. Agrega los expedientes al archivo existente o solicita apoyo al encargado del área.',409);
+       throw fail('Ya tienes un archivo de esta serie en transferencia en esta área. Revisa su estado antes de crear otro.',409);
+     throw fail('Ya tienes un archivo activo de esta serie en el área ('+active.folio+'). Usa Editar / agregar en Mis archivos de Trámite.',409);
    }
    const folioGenerated='INV-TR-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+randomUUID().slice(0,10).toUpperCase();
    const entry={folio:folioGenerated,unidad_administrativa:text(header.administrativeUnit,220),
@@ -467,8 +470,8 @@ tramiteRouter.put('/inventarios/:folio',(req,res,next)=>save(req,res,next,true))
 tramiteRouter.get('/papelera',async(req,res,next)=>{
  try{
   const user=req.auth.user,mode=allowTrash(user);
-  const clause=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
-  const params=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
+  const clause=mode==='GLOBAL'?'AND i.creado_por=?':'AND a.codigo=? AND i.creado_por=?';
+  const params=mode==='GLOBAL'?[user.id]:[user.areaId,user.id];
   const where="WHERE i.estado='TRAMITE' AND (i.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL) "+clause;
   const records=await readRecords(pool,where,params,true);
   res.set('Cache-Control','private, no-store');
@@ -597,8 +600,8 @@ tramiteRouter.delete('/papelera',async(req,res,next)=>{
  try{
   const user=req.auth.user,mode=allowTrash(user);
   conn=await pool.getConnection();await conn.beginTransaction();
-  const area=mode==='GLOBAL'?'':mode==='AREA'?'AND a.codigo=?':'AND a.codigo=? AND i.creado_por=?';
-  const args=mode==='GLOBAL'?[]:mode==='AREA'?[user.areaId]:[user.areaId,user.id];
+  const area=mode==='GLOBAL'?'AND i.creado_por=?':'AND a.codigo=? AND i.creado_por=?';
+  const args=mode==='GLOBAL'?[user.id]:[user.areaId,user.id];
   const [inventories]=await conn.execute(`SELECT i.folio FROM inventarios i JOIN areas a ON a.id=i.area_id WHERE i.estado='TRAMITE' AND i.deleted_at IS NOT NULL ${area} FOR UPDATE`,args);
   const [records]=await conn.execute(`SELECT e.id FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
     JOIN areas a ON a.id=i.area_id WHERE i.estado='TRAMITE' AND e.deleted_at IS NOT NULL AND i.deleted_at IS NULL ${area} FOR UPDATE`,args);

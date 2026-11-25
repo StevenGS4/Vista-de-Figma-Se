@@ -1009,7 +1009,7 @@ function Application({
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
               <RecordsPanel
-                key={"tramite-"+globalQuery}
+                key={"tramite-"+role+"-"+globalQuery}
                 initialSearch={globalQuery}
                 loadError={recordsLoadError}
                 onRecordsChange={onRecordsChange}

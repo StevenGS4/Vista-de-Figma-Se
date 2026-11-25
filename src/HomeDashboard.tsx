@@ -81,7 +81,7 @@ export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpe
   const pending = allowedModules.includes("transferencias") ? assignedTransferTasks(user,role,transfers,permissions) : [];
   const today = homeToday();
   const reminders = personalLoans.filter(loan => personalLoanTiming(loan,today).reminder);
-  const lastInventory = lastActiveInventory(user,role,records);
+  const lastInventory = lastActiveInventory(user,records);
   return <div className="dashboard">
     <div className="home-greeting" role="status">
       <h3>{greetingForHour(hour)}, {user.firstName}.</h3>

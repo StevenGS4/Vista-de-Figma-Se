@@ -24,10 +24,9 @@ export function assignedTransferTasks(user: UserRecord, role: Role, transfers: D
     .filter(({ task }) => task.mine);
 }
 
-export function lastActiveInventory(user: UserRecord, role: Role, records: ArchivalRecord[]) {
+export function lastActiveInventory(user: UserRecord, records: ArchivalRecord[]) {
   return records.filter(record => record.stage === "Archivo de trámite" && !record.transferReference
     && !record.recordDeletedAt && !record.inventoryDeletedAt
-    && (role === "Administrador / Coordinador" || (record.areaId === user.areaId
-      && (role === "Encargado de área" || (record.inventoryCreatedBy ?? record.createdBy) === user.id))))
+    && (record.inventoryCreatedBy ?? record.createdBy) === user.id)
     .sort((a, b) => b.inventoryDate.localeCompare(a.inventoryDate))[0];
 }

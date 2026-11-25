@@ -48,7 +48,7 @@ export default function ProfileActivityDialog({view,user,role,permissions,allowe
   },[user.id,view]);
   const canTransfer = allowed.includes("transferencias");
   const tasks = canTransfer ? assignedTransferTasks(user,role,transfers,permissions) : [];
-  const last = allowed.includes("tramite") ? lastActiveInventory(user,role,records) : undefined;
+  const last = allowed.includes("tramite") ? lastActiveInventory(user,records) : undefined;
   const activeLoans = personalLoans.filter(loan => loan.status !== "DEVUELTO");
   const notices = [...personalNotices,...buildHomeNotices(user,role,transfers,loans)
     .filter(notice => allowed.includes(notice.module))]

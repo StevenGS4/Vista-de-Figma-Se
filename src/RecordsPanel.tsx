@@ -179,6 +179,9 @@ function groupInventories(records: ArchivalRecord[]) {
 
 function InventoryList({
   initialSearch = "",
+  supervisionTitle,
+  onToggleSupervision,
+  supervisorLabel,
   canCreate,
   canDelete,
   canEdit,
@@ -191,6 +194,9 @@ function InventoryList({
   records,
 }: {
   initialSearch?: string;
+  supervisionTitle?: string;
+  supervisorLabel?: string;
+  onToggleSupervision: () => void;
   canCreate: boolean;
   canDelete: boolean;
   canEdit: boolean;
@@ -202,12 +208,18 @@ function InventoryList({
   protectedRecordIds: Set<string>;
   records: ArchivalRecord[];
 }) {
+  const [areaFilter, setAreaFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const ownerOf = (record: ArchivalRecord) => record.inventoryCreatedBy ?? record.createdBy;
+  const owners = new Map(records.map(record => [
+    ownerOf(record), record.inventoryCreatorName || ownerOf(record),
+  ]));
   const [search, setSearch] = useState(initialSearch);
   const [cadidoYear, setCadidoYear] = useState("");
   const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
     "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos los autorizados"
-  >(initialSearch ? "Todos los autorizados" : "Recientes activos");
+  >(supervisionTitle ? "Todos los activos" : initialSearch ? "Todos los autorizados" : "Recientes activos");
   const inventories = useMemo(
     () =>
       groupInventories(records).filter(({ header, id, records: rows }) => {
@@ -220,6 +232,8 @@ function InventoryList({
           (quickView === "Recientes activos" && !transferred);
         return (
           matchesView &&
+          (!areaFilter || header.areaId === areaFilter) &&
+          (!ownerFilter || ownerOf(header) === ownerFilter) &&
           (!cadidoYear || header.cadidoYear === cadidoYear) &&
           (!cadidoCodeFilter || header.cadidoCode === cadidoCodeFilter) &&
           (!query ||
@@ -235,7 +249,7 @@ function InventoryList({
             ))
         );
       }),
-    [quickView, records, search, cadidoYear, cadidoCodeFilter],
+    [quickView, records, search, cadidoYear, cadidoCodeFilter, areaFilter, ownerFilter],
   );
   const listed = quickView === "Recientes activos" && !search.trim()
     ? [...inventories].sort((a, b) => b.header.inventoryDate.localeCompare(a.header.inventoryDate)).slice(0, 5)
@@ -244,15 +258,18 @@ function InventoryList({
     <>
       <div className="records-page-heading">
         <div>
-          <h2>Archivo de trámite</h2>
-          <p>Inventarios documentales y expedientes relacionados por un encabezado común.</p>
+          <h2>{supervisionTitle || "Mis archivos de Trámite"}</h2>
+          <p>{supervisionTitle ? "Consulta los archivos activos registrados por otros usuarios." : "Consulta y registra tus inventarios documentales."}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        {supervisorLabel && <Button className="button--secondary" onClick={onToggleSupervision}><Eye size={16} /> {supervisionTitle ? "Volver a mis archivos" : supervisorLabel}</Button>}
         {canCreate && (
           <Button className="button--primary" onClick={onCreate}>
             <Plus size={17} />
             Registrar inventario
           </Button>
         )}
+        </div>
       </div>
       <section className="surface records-table-card">
         <div className="records-filter-head">
@@ -278,6 +295,18 @@ function InventoryList({
               value={search}
             />
           </label>
+          {supervisionTitle && <>
+            <label className="filter-select"><select aria-label="Filtrar por área" value={areaFilter} onChange={event => { setAreaFilter(event.target.value); setOwnerFilter(""); }}>
+              <option value="">Todas las áreas</option>
+              {[...new Set(records.map(record => record.areaId))].map(id => <option key={id} value={id}>{areaName(id)}</option>)}
+            </select></label>
+            <label className="filter-select"><select aria-label="Filtrar por usuario" value={ownerFilter} onChange={event => setOwnerFilter(event.target.value)}>
+              <option value="">Todos los usuarios</option>
+              {[...owners].filter(([id]) => !areaFilter || records.some(record => record.areaId === areaFilter && ownerOf(record) === id))
+                .sort((a, b) => a[1].localeCompare(b[1], "es")).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select></label>
+          </>}
+          {!supervisionTitle && (
           <label className="filter-select">
             <select
               aria-label="Vista rápida"
@@ -292,6 +321,7 @@ function InventoryList({
               <option>Todos los autorizados</option>
             </select>
           </label>
+          )}
           <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);}}>
             <option value="">Todas las ediciones CADIDO</option>
             {[...new Set(records.map(r=>r.cadidoYear||"Sin versión"))].sort().map(v=><option key={v} value={v==="Sin versión"?"":v}>{v}</option>)}
@@ -311,6 +341,7 @@ function InventoryList({
                 <th>Inventario de trámite</th>
                 <th>Unidad administrativa</th>
                 <th>Área generadora</th>
+                {supervisionTitle && <th>Registrado por</th>}
                 <th>Fondo</th>
                 <th>Sección</th>
                 <th>Serie</th>
@@ -335,6 +366,7 @@ function InventoryList({
                     </td>
                     <td>{header.administrativeUnit}</td>
                     <td>{areaName(header.areaId)}</td>
+                    {supervisionTitle && <td>{header.inventoryCreatorName || ownerOf(header)}</td>}
                     <td>{header.fund}</td>
                     <td>{sectionName(header.cadidoSectionId)}</td>
                     <td>{header.cadidoSeriesName || seriesName(header.cadidoSeriesId)}</td>
@@ -1427,6 +1459,7 @@ export default function RecordsPanel({
   role: Role;
   user: UserRecord;
 }) {
+  const [supervision, setSupervision] = useState(false);
   const [view, setView] = useState<View>("list");
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
@@ -1445,7 +1478,13 @@ export default function RecordsPanel({
         (record) =>
           record.areaId === user.areaId && (isAreaManager || (record.inventoryCreatedBy ?? record.createdBy) === user.id),
       );
-  const selected = authorized.filter((record) => record.inventoryId === selectedId);
+  const own = (record: ArchivalRecord) => (record.inventoryCreatedBy ?? record.createdBy) === user.id;
+  const canSupervise = isAdmin || isAreaManager;
+  const supervising = canSupervise && supervision;
+  const visibleRecords = authorized.filter(record => supervising
+    ? !own(record) && record.stage === "Archivo de trámite"
+    : own(record));
+  const selected = visibleRecords.filter(record => record.inventoryId === selectedId);
   const deleteInventory = async (id: string) => {
     await tramiteApi.remove(id);
     onRecordsChange(records.filter(record => record.inventoryId !== id));
@@ -1513,7 +1552,7 @@ export default function RecordsPanel({
     return (
       <InventoryDetail
         canEdit={
-          !loadError && selected.every(
+          !supervising && !loadError && selected.every(
             (record) =>
               record.stage === "Archivo de trámite" &&
               !Boolean(record.transferReference) &&
@@ -1541,10 +1580,14 @@ export default function RecordsPanel({
         </div>
       )}
       <InventoryList
-        initialSearch={initialSearch}
-        canCreate={!loadError && permissions.includes("register-records")}
-        canDelete={!loadError && (role === "Personal de área" || role === "Encargado de área" || isAdmin)}
-        canEdit={!loadError}
+        key={supervising ? "supervision" : "own"}
+        initialSearch={supervising ? "" : initialSearch}
+        supervisorLabel={canSupervise ? (isAdmin ? "Ver archivos de todos los usuarios" : "Ver archivos de mi área") : undefined}
+        supervisionTitle={supervising ? (isAdmin ? "Archivos de Trámite de los usuarios" : "Archivos de Trámite de mi área") : undefined}
+        onToggleSupervision={() => { setActionError(""); setSupervision(value => !value); }}
+        canCreate={!supervising && !loadError && permissions.includes("register-records")}
+        canDelete={!supervising && !loadError && (role === "Personal de área" || role === "Encargado de área" || isAdmin)}
+        canEdit={!supervising && !loadError}
         onCreate={() => {
           setSelectedId("");
           setView("form");
@@ -1571,7 +1614,7 @@ export default function RecordsPanel({
           setView("detail");
         }}
         protectedRecordIds={protectedRecordIds}
-        records={authorized}
+        records={visibleRecords}
       />
       {dialog}
     </>

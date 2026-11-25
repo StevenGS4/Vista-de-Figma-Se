@@ -62,6 +62,7 @@ export type ArchivalRecord = {
   availability: RecordAvailability;
   createdBy: string;
   inventoryCreatedBy?: string;
+  inventoryCreatorName?: string;
   transferReference: string;
   transferDate: string;
   transferAcceptedDate: string;
