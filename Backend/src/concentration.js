@@ -11,7 +11,7 @@ const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 function condition(user,scope){
  if(scope==='GLOBAL')return {sql:"WHERE e.etapa='CONCENTRACION'",args:[]};
  if(scope==='AREA')return {sql:"WHERE e.etapa='CONCENTRACION' AND a.codigo=?",args:[user.areaId]};
- return {sql:"WHERE e.etapa='CONCENTRACION' AND a.codigo=? AND i.creado_por=?",args:[user.areaId,user.id]};
+ return {sql:"WHERE e.etapa='CONCENTRACION' AND a.codigo=? AND e.creado_por=?",args:[user.areaId,user.id]};
 }
 export async function enrichConcentrationRecords(records){
  if(!records.length)return [];
