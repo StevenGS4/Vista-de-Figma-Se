@@ -11,14 +11,12 @@
 }
 .tramite-sheet {
   --sheet-columns: 65px 60px 60px 105px 140px 200px 105px 105px 60px 60px 105px 126px 70px 88px 105px;
-  --sheet-address: ;
   width: max-content;
   min-width: 100%;
 }
-.tramite-sheet--admin { --sheet-address: 140px; }
 .tramite-sheet__header, .tramite-sheet__row {
   display: grid;
-  grid-template-columns: var(--sheet-columns) var(--sheet-address) 145px 145px 145px 140px 98px;
+  grid-template-columns: var(--sheet-columns) 145px 145px 145px 140px 98px;
   gap: 6px;
   padding: 7px 8px;
   border-bottom: 1px solid var(--gray-200);

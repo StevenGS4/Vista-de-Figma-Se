@@ -400,20 +400,17 @@ function InventoryList({
 function HeaderStep({
   errors,
   form,
-  isAdmin,
   locked,
   update,
 }: {
   errors: Errors;
   form: ArchivalRecord;
-  isAdmin: boolean;
   locked: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
 }) {
   const areaSeries = cadidoSeries.filter(series => series.enabledAreaIds.includes(form.areaId));
   const years = [...new Set(areaSeries.map(series=>series.year).filter((year):year is string=>Boolean(year)))].sort((a,b)=>Number(b)-Number(a));
-  const selectedYear = isAdmin ? (form.cadidoYear || years[0] || "") : (years[0] || "");
-  const compact = !isAdmin;
+  const selectedYear = years[0] || "";
   const enabledSeries = areaSeries.filter(series=>!selectedYear||series.year===selectedYear);
   const sectionIds = new Set(enabledSeries.map((series) => series.sectionId));
   return (
@@ -432,7 +429,6 @@ function HeaderStep({
           </span>
         </div>
       )}
-      {compact && (
         <div className="surface" style={{padding:16,marginBottom:18}}>
           <div className="section-heading"><div>
             <span className="section-kicker">Datos automáticos del área</span>
@@ -450,71 +446,7 @@ function HeaderStep({
           {!years.length && <p role="alert" className="field-error">El administrador debe asignar códigos de una edición CADIDO a esta área.</p>}
           {(!form.responsible || form.responsible==="Sin asignar") && <p role="alert" className="field-error">El administrador debe asignar un encargado de área antes de continuar.</p>}
         </div>
-      )}
       <fieldset className="record-form-grid" disabled={locked}>
-        {isAdmin && <Field
-          error={errors.administrativeUnit}
-          label="Nombre de la unidad administrativa"
-          required
-        >
-          <input
-            onChange={(event) => update("administrativeUnit", event.target.value)}
-            value={form.administrativeUnit}
-          />
-        </Field>}
-        {isAdmin && <Field error={errors.areaId} label="Nombre del área generadora" required>
-          <select
-            disabled={!isAdmin || locked}
-            onChange={(event) => {
-              const area = areas.find((item) => item.id === event.target.value);
-              update("areaId", event.target.value);
-              if (area) update("responsible", area.manager);
-            }}
-            value={form.areaId}
-          >
-            <option value="">Selecciona el área autorizada</option>
-            {areas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </select>
-        </Field>}
-        {isAdmin && <Field error={errors.inventoryDate} label="Fecha de elaboración" required>
-          <input
-            onChange={(event) => update("inventoryDate", event.target.value)}
-            type="date"
-            value={form.inventoryDate}
-          />
-        </Field>}
-        {isAdmin && <Field error={errors.responsible} label="Responsable del área generadora" required>
-          <input
-            onChange={(event) => update("responsible", event.target.value)}
-            value={form.responsible}
-          />
-        </Field>}
-        {isAdmin && <Field
-          error={errors.responsiblePosition}
-          label="Cargo del responsable del área generadora"
-          required
-        >
-          <input
-            onChange={(event) => update("responsiblePosition", event.target.value)}
-            value={form.responsiblePosition}
-          />
-        </Field>}
-        {isAdmin && <Field error={errors.fund} label="Fondo documental" required>
-          <input onChange={(event) => update("fund", event.target.value)} value={form.fund} />
-        </Field>}
-        {isAdmin && <Field label="Edición CADIDO" required>
-          <select value={selectedYear} disabled={locked} onChange={event=>{
-            update("cadidoYear",event.target.value);
-            update("cadidoSectionId","");update("cadidoSeriesId","");update("cadidoCode","");
-          }}>
-            <option value="">Selecciona una edición</option>
-            {years.map(y=><option key={y} value={y}>CADIDO {y}</option>)}
-          </select>
-        </Field>}
         <Field error={errors.cadidoSectionId} label="Sección documental" required>
           <select
             onChange={(event) => {
@@ -555,22 +487,6 @@ function HeaderStep({
               ))}
           </select>
         </Field>
-        {isAdmin && <Field
-          hint="El total se calculará en la exportación según la cantidad de filas."
-          label="Número inicial de hoja"
-          required
-        >
-          <div className="sheet-number-control">
-            <span>Hoja</span>
-            <input
-              min="1"
-              onChange={(event) => update("initialSheetNumber", event.target.value)}
-              type="number"
-              value={form.initialSheetNumber}
-            />
-            <strong>de N</strong>
-          </div>
-        </Field>}
       </fieldset>
     </>
   );
@@ -587,13 +503,13 @@ function orderByArchiveYear(records: ArchivalRecord[]) {
   });
 }
 
-function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
+function SpreadsheetHeader() {
   const columns = [
     "Consecutivo", "Caja", "Año de la clave *", "Número de expediente *",
     "Clave archivística", "Asunto o descripción *", "Apertura *",
     "Cierre", "Legajos *", "Folios *", "Soporte documental *",
     "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
-    "Vigencia total", ...(isAdmin ? ["Domicilio de resguardo"] : []),
+    "Vigencia total",
     "Condiciones de acceso", "Tradición documental", "Ubicación topográfica", "Observaciones", "Acción",
   ];
   return (
@@ -628,12 +544,10 @@ function documentSubject(record: ArchivalRecord) {
   return record.title + (record.title.length === 350 ? "" : "\n") + record.description;
 }
 
-function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
+function SpreadsheetRow({ active, errors, update, remove }: {
   active: ArchivalRecord;
   errors: Errors;
-  isAdmin: boolean;
   update: <K extends keyof ArchivalRecord>(field: K, value: ArchivalRecord[K]) => void;
-  automaticOrder: boolean;
   remove?: () => void;
 }) {
   const concentrationData = active.concentrationData ?? { access: "", tradition: "", m: "", n: "", p: "" };
@@ -650,16 +564,9 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
   return (
     <div className="tramite-sheet__row" id={active.id} role="group" aria-label={`Expediente ${active.consecutive}`}>
       <fieldset disabled={protectedRow}>
-        {isAdmin && !automaticOrder && <Field className="tramite-cell--short" error={errors.consecutive} label="Consecutivo del renglón" required>
-          <input
-            inputMode="numeric"
-            onChange={(event) => update("consecutive", event.target.value)}
-            value={active.consecutive}
-          />
-        </Field>}
-        {(!isAdmin || automaticOrder) && <div className="form-field tramite-cell--short"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>}
+        <div className="form-field tramite-cell--short"><span>Consecutivo del renglón</span><strong>{active.consecutive}</strong></div>
         <Field className="tramite-cell--short" label="Número de caja">
-          <input inputMode="numeric" maxLength={isAdmin ? undefined : 6} pattern={isAdmin ? undefined : "[0-9]{1,6}"} placeholder="Ej. 12"
+          <input inputMode="numeric" maxLength={6} placeholder="Ej. 12"
             onChange={(event) => {
               update("boxNumber", event.target.value);
               if (!active.locationBox) update("locationBox", event.target.value);
@@ -818,19 +725,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             />
           )}
         </Field>
-        {isAdmin ? <Field label="Vigencia documental total">
-          <input disabled value={total || active.totalValidity} />
-        </Field> : <div className="form-field"><span>Vigencia documental total (calculada)</span><strong className="tramite-sheet__validity">{total || active.totalValidity || "Pendiente"} años</strong></div>}
-        {isAdmin && <Field
-          className="record-field--wide"
-          label="Domicilio y referencia general de resguardo"
-        >
-          <input
-            onChange={(event) => update("archiveAddress", event.target.value)}
-            placeholder="Avenida Allende No. 110 Oriente, Colonia Centro, C.P. 63000, Tepic, Nayarit"
-            value={active.archiveAddress ?? ""}
-          />
-        </Field>}
+        <div className="form-field"><span>Vigencia documental total (calculada)</span><strong className="tramite-sheet__validity">{total || active.totalValidity || "Pendiente"} años</strong></div>
         <Field label="Condiciones de acceso">
           <select value={concentrationData.access}
             onChange={(event) => update("concentrationData", { ...concentrationData, access: event.target.value })}>
@@ -917,9 +812,9 @@ function InventoryForm({
         ...base,
         id: `DRAFT-${Date.now().toString(36) + Math.random().toString(36).slice(2)}`,
         inventoryId,
-        areaId: isAdmin ? "" : user.areaId,
-        responsible: isAdmin ? "" : ((area?.manager && area.manager!=="Sin asignar") ? area.manager : ""),
-        responsiblePosition: isAdmin ? "" : `Encargado del área de ${area?.name || areaName(user.areaId)}`,
+        areaId: user.areaId,
+        responsible: area?.manager && area.manager !== "Sin asignar" ? area.manager : "",
+        responsiblePosition: `Encargado del área de ${area?.name || areaName(user.areaId)}`,
         inventoryDate: localDate(),
         initialSheetNumber:"1",
         fund:"Secretaría de Medio Ambiente y Recursos Naturales",
@@ -929,7 +824,7 @@ function InventoryForm({
         recordNumber: "",
         archiveAddress:TRAMITE_ADDRESS,
         room:"",
-        archiveZone: isAdmin ? "" : `Archivo de trámite — ${areaName(user.areaId)}`,
+        archiveZone: `Archivo de trámite — ${areaName(user.areaId)}`,
         supportType: "Físico",
         createdBy: user.id,
         consecutive: "1",
@@ -1011,11 +906,9 @@ function InventoryForm({
     const next: Errors = {};
     if (record.stage === "Archivo de concentración" || record.transferReference) return next;
     if (step === 1) {
-      if (!isAdmin && record.boxNumber && !/^\d{1,6}$/.test(record.boxNumber))
+      if (record.boxNumber && !/^\d{1,6}$/.test(record.boxNumber) &&
+          existing.find(item => item.id === record.id)?.boxNumber !== record.boxNumber)
         next.boxNumber = "Captura un número de caja de máximo seis dígitos.";
-      if (isAdmin && !record.consecutive.trim()) next.consecutive = "Captura el consecutivo.";
-      if (isAdmin && drafts.some((item) => item.id !== record.id && item.consecutive === record.consecutive))
-        next.consecutive = "El consecutivo está duplicado.";
       if (!/^REG-\d+$/.test(record.id) && (!/^\d{4}$/.test(record.recordYear ?? "") || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
         next.recordYear="Selecciona un año válido (1900–2100).";
       if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
@@ -1154,8 +1047,8 @@ function InventoryForm({
         recordNumber: fullReference(record),
         archiveClassificationCode: /^REG-\d+$/.test(record.id) ? (record.archiveClassificationCode||"") : "",
         room: "", shelf: "",level: "",physicalSection: "",position: "",locationBox: "",locationNotes: "",
-        archiveAddress: isAdmin ? record.archiveAddress : TRAMITE_ADDRESS,
-        initialSheetNumber: isAdmin ? record.initialSheetNumber : "1",
+        archiveAddress: editing ? (record.archiveAddress || TRAMITE_ADDRESS) : TRAMITE_ADDRESS,
+        initialSheetNumber: editing ? record.initialSheetNumber : "1",
         totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
       }); }),
     );
@@ -1188,7 +1081,6 @@ function InventoryForm({
             <HeaderStep
               errors={errors}
               form={header}
-              isAdmin={isAdmin}
               locked={headerLocked}
               update={updateAll}
             />
@@ -1198,10 +1090,10 @@ function InventoryForm({
               <StepHeading title="Expedientes y revisión" icon={<FolderTree size={21} />}
                 description="Completa un expediente por fila. Desplázate hacia la derecha para ver los campos de control documental." />
               <div className="tramite-sheet-scroll" role="region" aria-label="Captura de expedientes" tabIndex={0}>
-                <div className={isAdmin ? "tramite-sheet tramite-sheet--admin" : "tramite-sheet"}>
-                  <SpreadsheetHeader isAdmin={isAdmin} />
+                <div className="tramite-sheet">
+                  <SpreadsheetHeader />
                   {drafts.map(record => (
-                    <SpreadsheetRow key={record.id} active={record} isAdmin={isAdmin} automaticOrder={!editing}
+                    <SpreadsheetRow key={record.id} active={record}
                       errors={record.id === activeId ? errors : {}}
                       update={(field, value) => updateAll(field, value, record.id)}
                       remove={!editing || canDeleteExisting ? () => removeRow(record.id) : undefined} />
@@ -1227,8 +1119,7 @@ function InventoryForm({
                     : previewNumber(record.cadidoCode,record.consecutive,record.recordYear || String(new Date().getFullYear())),
                   totalValidity: String(Number(record.currentValidity) + Number(record.concentrationValidity)),
                 }))}
-                isAdmin={isAdmin}
-                canEdit={false}
+                  canEdit={false}
                 onBack={()=>setPreviewOpen(false)}
                 onEdit={()=>setPreviewOpen(false)}
                 allowDelete={!editing || canDeleteExisting}
@@ -1299,7 +1190,6 @@ function InventoryForm({
 
 function InventoryDetail({
   canEdit,
-  isAdmin,
   inventory,
   onBack,
   onEdit,
@@ -1309,7 +1199,6 @@ function InventoryDetail({
   preview = false,
 }: {
   canEdit: boolean;
-  isAdmin: boolean;
   inventory: ArchivalRecord[];
   onBack: () => void;
   onEdit: () => void;
@@ -1396,7 +1285,7 @@ function InventoryDetail({
           </div>
           <div>
             <span>Hoja</span>
-            <strong>{isAdmin ? `Hoja ${header.initialSheetNumber} de N` : "Hojas numeradas automáticamente al exportar"}</strong>
+            <strong>Hojas numeradas automáticamente al exportar</strong>
           </div>
         </div>
       </div>
@@ -1489,7 +1378,7 @@ function InventoryDetail({
                   <td>{record.currentValidity}{!preview && record.tramiteDueDate && <div>Cumple AT: {formatDate(record.tramiteDueDate)}</div>}</td>
                   <td>{record.concentrationValidity}</td>
                   <td>{record.totalValidity}</td>
-                  <td>{(preview || !isAdmin) && record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
+                  <td>{record.stage === "Archivo de trámite" ? (record.archiveAddress || TRAMITE_ADDRESS) : locationSummary(record)}</td>
                   <td>{record.observations || "Sin observaciones"}</td>
                   <td>
                     <Badge wine={record.stage === "Archivo de concentración"}>{record.stage}</Badge>
@@ -1623,7 +1512,6 @@ export default function RecordsPanel({
   if (view === "detail" && selected.length)
     return (
       <InventoryDetail
-        isAdmin={isAdmin}
         canEdit={
           !loadError && selected.every(
             (record) =>
