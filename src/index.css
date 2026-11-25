@@ -7987,31 +7987,30 @@
 .concentration-archive-summary th:last-child,
 .concentration-archive-summary td:last-child { border-right: 0; }
 
-/* Concentración > Ver detalle: contraste fuerte exclusivo de los seis paneles.
-   No altera ubicaciones, permisos, contenido ni encabezados de otros módulos. */
-.concentration-detail-grid .record-detail-group {
+/* Paneles de detalle de Concentración y Préstamos. */
+:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group {
   border: 1px solid #b4c4bb;
   background: #f4f5f0;
   box-shadow: 0 4px 14px rgb(7 45 36 / 8%);
 }
-.concentration-detail-grid .record-detail-group > h3 {
+:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > h3 {
   background: linear-gradient(105deg, #123f36 0%, #205b4d 100%);
   color: #fffdf6;
   border-bottom: 2px solid #b49a57;
   font-weight: 700;
   letter-spacing: .01em;
 }
-.concentration-detail-grid .record-detail-group > h3 svg {
+:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > h3 svg {
   color: #e2c881;
   flex-shrink: 0;
 }
-.concentration-detail-grid .record-detail-group > div {
+:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > div {
   background: #f4f5f0;
 }
-.concentration-detail-grid .detail-field span {
+:is(.concentration-detail-grid, .loan-detail-page) .detail-field span {
   color: #61726b;
 }
-.concentration-detail-grid .detail-field strong {
+:is(.concentration-detail-grid, .loan-detail-page) .detail-field strong {
   color: #173c34;
 }
 
@@ -8157,6 +8156,70 @@
 .primary-builder__hint{margin:0;padding:13px 18px;color:#576e5f;font-size:11px;line-height:1.6}
 @media(max-width:1020px){.primary-builder__filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.primary-builder__filters{grid-template-columns:1fr}.primary-builder__wide{grid-column:span 1}.primary-builder__stats{grid-template-columns:1fr}.primary-builder__controls .search-box{width:100%}.primary-builder__inventory-head{flex-wrap:wrap}.primary-builder__inventory-head .button{width:100%}}
+
+/* Préstamos: selector y formularios. */
+.app-main .loan-select-page .loan-selection-filters {
+  background: linear-gradient(110deg, #d0d9d1 0%, #dde2da 100%);
+  border-bottom-color: #b1c0b6;
+}
+
+.loan-select-page .loan-selection-filters > select,
+.loan-select-page .loan-date-filter > input {
+  border-color: #a3b8aa;
+  background-color: #fbfaf6;
+}
+
+.loan-select-page .select-record-card details > summary {
+  background: #e3ebe4;
+  border-inline-start: 3px solid #849e90;
+}
+
+.loan-select-page .select-record-card details[open] > summary {
+  background: #d8e6dc;
+  border-inline-start-color: #205b4d;
+}
+
+.loan-select-page .select-record-card label:has(input[type="checkbox"]:checked) {
+  border-color: #689284;
+  background: #e4eee7;
+}
+
+.loan-select-page #loan-selection-summary,
+:is(.loan-form, .return-form) .form-section__title {
+  background: linear-gradient(105deg, #123f36 0%, #205b4d 100%);
+  border-bottom: 2px solid #b49a57;
+  color: #fffdf6;
+}
+
+:is(.loan-form, .return-form) .form-section__title {
+  align-items: center;
+  padding: 11px 14px;
+  border-radius: 7px 7px 0 0;
+}
+
+:is(.loan-form, .return-form) .form-section__title > span {
+  background: rgb(255 253 246 / 12%);
+  color: #e2c881;
+}
+
+:is(.loan-form, .return-form) .form-section__title h3 {
+  color: inherit;
+}
+
+:is(.loan-form, .return-form) .form-section__title p {
+  color: #e2ebe4;
+  font-size: 11px;
+}
+
+.loan-detail-page .loan-detail-hero {
+  background: linear-gradient(110deg, #d7e5dc, #f4f5f0);
+  border-top: 3px solid #205b4d;
+}
+
+.loan-detail-page .record-detail-group > details {
+  background: #e7ede5;
+  color: #173c34;
+}
 
 /* Prestamos: seguimiento y acciones del formulario. */
 .loan-detail-grid + .record-detail-group {
