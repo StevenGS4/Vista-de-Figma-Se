@@ -247,7 +247,8 @@ function TransferTray({
           <label className="grid gap-1 text-xs font-semibold">Hasta
             <input type="date" className="filter-date rounded-lg border px-2 py-2" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} />
           </label>
-          <button type="button" aria-pressed={mineOnly} className="button button--secondary !border-amber-400 !bg-amber-50"
+          <button type="button" aria-pressed={mineOnly}
+            className={`button button--secondary${pending > 0 ? " !border-amber-400 !bg-amber-50" : ""}`}
             onClick={() => { setMineOnly(value => !value); setPage(1); }}>Me toca a mí</button>
           <Button className="button--secondary" onClick={() => {
             setSearch(""); setArea(""); setFrom(""); setTo(""); setMineOnly(false); setPage(1);
