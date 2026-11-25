@@ -103,7 +103,6 @@ import type { ArchivalLoan, LoanReturnCondition } from './loans';
 export type LoanEligibleUser={id:string;name:string;areaId:string;canDeliver:boolean};
 export type NewLoanPayload={
  mode:'INDIVIDUAL';
- deliveryConditions:Record<string,LoanReturnCondition>;
  recordIds:string[];
  requestingAreaId:string;
  requesterUserId:string;

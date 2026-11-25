@@ -500,7 +500,6 @@ type LoanFormData = {
   delivererUserId: string;
   receivedBy: string;
   observations: string;
-  deliveryConditions: Record<string, LoanReturnCondition>;
 };
 
 function LoanField({
@@ -591,7 +590,6 @@ function LoanForm({
     delivererUserId: "",
     receivedBy: "",
     observations: "",
-    deliveryConditions: {},
   });
   const [staff, setStaff] = useState<LoanEligibleUser[]>([]);
   const [staffError, setStaffError] = useState("");
@@ -615,7 +613,7 @@ function LoanForm({
   const [errors, setErrors] = useState<Partial<Record<keyof LoanFormData, string>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const update = (field: Exclude<keyof LoanFormData, "deliveryConditions">, value: string) => {
+  const update = (field: keyof LoanFormData, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
@@ -632,7 +630,6 @@ function LoanForm({
     if (!delivererOptions.some(user => user.id === form.delivererUserId))
       next.delivererUserId = "Selecciona quién entrega, del personal autorizado.";
     if (!form.receivedBy.trim()) next.receivedBy = "Ingresa la persona que recibe.";
-    if (records.some(record => !form.deliveryConditions[record.id])) next.deliveryConditions = "Indica el estado de entrega de cada expediente.";
     setErrors(next);
     return !Object.keys(next).length;
   };
@@ -668,7 +665,6 @@ function LoanForm({
             </span>
             <div>
               <h3>Expedientes seleccionados</h3>
-              <p>Confirma el estado físico de cada expediente al entregarlo.</p>
             </div>
           </div>
           {records.length === 1 && <div className="loan-record-readonly">
@@ -714,21 +710,9 @@ function LoanForm({
             {records.map(item => (
               <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8d4cc] p-3">
                 <span><strong className="block">{item.title}</strong><small className="text-[#687570]">{item.recordNumber}</small></span>
-                <LoanField label="Estado al entregar" required>
-                  <select aria-label={`Estado al entregar ${item.recordNumber}`} value={form.deliveryConditions[item.id] ?? ""}
-                    onChange={event => {
-                      const condition = event.target.value as LoanReturnCondition;
-                      setForm(current => ({ ...current, deliveryConditions: { ...current.deliveryConditions, [item.id]: condition } }));
-                    }}>
-                    <option value="">Selecciona el estado</option>
-                    <option value="GOOD">Buen estado</option>
-                    <option value="ISSUE">Con incidencias</option>
-                  </select>
-                </LoanField>
               </li>
             ))}
           </ul>
-          {errors.deliveryConditions && <p role="alert" className="field-error">{errors.deliveryConditions}</p>}
         </section>
         <section className="loan-form-section">
           <div className="step-heading">
@@ -1302,7 +1286,7 @@ export default function LoansPanel({
         requestingAreaId:data.requestingAreaId,requesterUserId:data.requesterUserId,
         delivererUserId:data.delivererUserId,
         loanDate:data.loanDate,expectedReturnDate:data.expectedReturnDate,
-        receivedBy:data.receivedBy,observations:data.observations,deliveryConditions:data.deliveryConditions,
+        receivedBy:data.receivedBy,observations:data.observations,
       });
       onLoansChange([created,...loans]);
       const updatedList=await concentrationApi.list().catch(error=>{

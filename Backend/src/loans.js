@@ -156,9 +156,6 @@ loansRouter.post('/',async(req,res,next)=>{
   const deliverer=await findActiveUser(delivererId);
   if(!deliverer || !await isLoanStaff(delivererId))
    throw fail('La persona que entrega debe ser personal autorizado del archivo de concentración',400);
-  const conditions=data.deliveryConditions;
-  if(ids.some(id=>!returnConditions.has(conditions?.['REG-'+id])))
-   throw fail('Indica el estado de entrega de cada expediente');
   const placeholders=ids.map(()=>'?').join(',');
   conn=await pool.getConnection();
   await conn.beginTransaction();
@@ -189,10 +186,10 @@ loansRouter.post('/',async(req,res,next)=>{
    [ids.map(expId=>[id,expId])]);
   await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO' WHERE id IN (${placeholders})`,ids);
   await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
-   [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel[conditions['REG-'+expId]]+'.'])]);
+   [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
     [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),
-     delivererUserId:String(delivererId),conditions:Object.fromEntries(ids.map(expId=>['REG-'+expId,conditions['REG-'+expId]]))})]);
+     delivererUserId:String(delivererId),conditions:Object.fromEntries(ids.map(expId=>['REG-'+expId,'GOOD']))})]);
   await conn.commit();
   res.status(201).json({loan:await oneLoan(id,conn)});
  }catch(e){
