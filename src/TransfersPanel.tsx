@@ -242,7 +242,7 @@ function TransferTray({
             </button>
           ))}
         </nav>
-        <div className="transfer-searchbar flex flex-wrap items-center justify-between gap-3">
+        <div className="transfer-searchbar flex flex-wrap items-end justify-between gap-3 [&_:is(.search-box,.filter-select,.filter-date)]:h-10!">
           <label className="search-box">
             <Search size={17} />
             <input
