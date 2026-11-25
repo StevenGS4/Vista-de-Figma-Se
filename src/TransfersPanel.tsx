@@ -228,7 +228,11 @@ function TransferTray({
           </button>}
         </div>
         <nav className="transfer-tabs flex-wrap" aria-label="Vistas de transferencias">
-          {views.filter(item => item !== "Transferencias de mi equipo" || role === "Encargado de área").map(item => (
+          {views.filter(item => {
+            if (item === "Mis transferencias") return isAdmin || role === "Encargado de área";
+            if (item === "Transferencias de mi equipo") return role === "Encargado de área";
+            return true;
+          }).map(item => (
             <button type="button" key={item} className={view === item ? "is-active" : ""}
               aria-current={view === item ? "true" : undefined}
               onClick={() => {
