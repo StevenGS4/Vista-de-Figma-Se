@@ -75,11 +75,6 @@ const accessLabels: Record<string, string> = { P: "Pública", C: "Confidencial",
 const traditionLabels: Record<string, string> = { ORIGINAL: "Original", COPIA: "Copia", AMBAS: "Original y copia" };
 const topographicKeys = ["m", "n", "p"] as const;
 
-function hasPendingInventoryData(record: ArchivalRecord) {
-  const data = record.concentrationData;
-  return record.receptionConfirmed && (!data?.access || !data.tradition || !topographicKeys.some(key => data[key]));
-}
-
 function EditInventoryData({record, onCancel, onSave}: {
   record: ArchivalRecord;
   onCancel: () => void;
@@ -144,7 +139,6 @@ function ConcentrationList({
   initialSearch = "",
   canEditLocation,
   canViewDetail,
-  pendingOnly,
   onEditInventoryData,
   onEditLocation,
   onView,
@@ -153,7 +147,6 @@ function ConcentrationList({
   initialSearch?: string;
   canEditLocation: boolean;
   canViewDetail: boolean;
-  pendingOnly: boolean;
   onEditInventoryData: (record: ArchivalRecord) => void;
   onEditLocation: (record: ArchivalRecord) => void;
   onView: (record: ArchivalRecord) => void;
@@ -164,7 +157,7 @@ function ConcentrationList({
   const [cadido, setCadido] = useState("");
   const [cadidoYear, setCadidoYear] = useState("");
   const [availability, setAvailability] = useState("");
-  const [searched, setSearched] = useState(Boolean(initialSearch) || pendingOnly);
+  const [searched, setSearched] = useState(Boolean(initialSearch));
   const [recentOnly, setRecentOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
@@ -335,7 +328,7 @@ function ConcentrationList({
             Inventarios recientes autorizados
           </button>
         </div>
-        {!searched && !pendingOnly ? (
+        {!searched ? (
           <div className="empty-state concentration-search-empty">
             <Search size={30} />
             <strong>Utiliza la búsqueda para consultar inventarios</strong>
@@ -869,7 +862,6 @@ export default function ConcentrationPanel({
   role: Role;
 }) {
   const [view, setView] = useState<PanelView>("list");
-  const [pendingOnly, setPendingOnly] = useState(false);
   const [selected, setSelected] = useState<ArchivalRecord | null>(null);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -906,7 +898,6 @@ export default function ConcentrationPanel({
     }
   };
 
-  const pending = concentrationRecords.filter(hasPendingInventoryData);
   const openInventoryData = (record: ArchivalRecord) => {
     setSelected(record);
     setView("inventory-data");
@@ -953,15 +944,8 @@ export default function ConcentrationPanel({
     );
 
   return (
-    <>
-    {canEditLocation && <nav className="transfer-tabs mb-4" aria-label="Vista de Concentración">
-      <button type="button" aria-current={!pendingOnly ? "true" : undefined} className={!pendingOnly ? "is-active" : ""} onClick={() => setPendingOnly(false)}>Inventarios</button>
-      <button type="button" aria-current={pendingOnly ? "true" : undefined} className={pendingOnly ? "is-active" : ""} onClick={() => setPendingOnly(true)}>Pendientes de asignar <span>{pending.length}</span></button>
-    </nav>}
     <ConcentrationList
-      key={pendingOnly ? "pending" : "all"}
-      initialSearch={pendingOnly ? "" : initialSearch}
-      pendingOnly={pendingOnly}
+      initialSearch={initialSearch}
       onEditInventoryData={openInventoryData}
       canEditLocation={canEditLocation}
       canViewDetail={canViewDetail}
@@ -974,8 +958,7 @@ export default function ConcentrationPanel({
         setSelected(record);
         setView("detail");
       }}
-      records={pendingOnly ? pending : concentrationRecords}
+      records={concentrationRecords}
     />
-    </>
   );
 }

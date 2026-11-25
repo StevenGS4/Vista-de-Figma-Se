@@ -198,6 +198,10 @@ function normalize(rows){
      const data=r.concentrationData;
      if(!data||!['','P','C','R'].includes(data.access)||!['','ORIGINAL','COPIA','AMBAS'].includes(data.tradition))
        throw fail('Condiciones de acceso o tradición documental inválidas');
+     for(const value of [data.m,data.n,data.p]){
+       if(value!==undefined && (typeof value!=='string'||value.length>100))
+         throw fail('Ubicación topográfica inválida');
+     }
    }
    if(/^(?:generalidades|varios|diversos|documentaci[oó]n)[.!?]*$/i.test(title))
      throw fail('Captura un asunto específico para el expediente');
@@ -414,10 +418,12 @@ async function save(req,res,next,editing=false){
    }
    await replaceValues(conn,expId,r.documentaryValues);
    if(r.concentrationData!==undefined){
-     const {access,tradition}=r.concentrationData;
-     await conn.execute(`INSERT INTO expedientes_datos_concentracion (expediente_id,acceso,tradicion)
-       VALUES (?,?,?) ON DUPLICATE KEY UPDATE acceso=?,tradicion=?`,
-       [expId,access||null,tradition||null,access||null,tradition||null]);
+     const {access,tradition,m,n,p}=r.concentrationData;
+     await conn.execute(`INSERT INTO expedientes_datos_concentracion (expediente_id,acceso,tradicion,topografia_m,topografia_n,topografia_p)
+       VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE acceso=?,tradicion=?,
+       topografia_m=IF(?, ?, topografia_m),topografia_n=IF(?, ?, topografia_n),topografia_p=IF(?, ?, topografia_p)`,
+       [expId,access||null,tradition||null,m||null,n||null,p||null,access||null,tradition||null,
+        m!==undefined,m||null,n!==undefined,n||null,p!==undefined,p||null]);
    }
   }
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',

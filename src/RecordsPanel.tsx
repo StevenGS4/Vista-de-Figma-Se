@@ -600,7 +600,7 @@ function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
     "Cierre", "Legajos *", "Folios *", "Soporte documental *",
     "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
     "Vigencia total", ...(isAdmin ? ["Domicilio de resguardo"] : []),
-    "Observaciones", "Condiciones de acceso", "Tradición documental", "Acción",
+    "Condiciones de acceso", "Tradición documental", "Ubicación topográfica", "Observaciones", "Acción",
   ];
   return (
     <div className="tramite-sheet__header">
@@ -829,13 +829,6 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             value={active.archiveAddress ?? ""}
           />
         </Field>}
-        <Field className="record-field--wide" label="Observaciones del expediente">
-          <textarea
-            onChange={(event) => update("observations", event.target.value)}
-            rows={1}
-            value={active.observations}
-          />
-        </Field>
         <Field label="Condiciones de acceso">
           <select value={concentrationData.access}
             onChange={(event) => update("concentrationData", { ...concentrationData, access: event.target.value })}>
@@ -853,6 +846,30 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             <option value="COPIA">Copia</option>
             <option value="AMBAS">Original y copia</option>
           </select>
+        </Field>
+        <div className="form-field">
+          <span>Ubicación topográfica</span>
+          <div className="document-values" role="group" aria-label="Ubicación topográfica">
+            {(["m", "n", "p"] as const).map((key) => {
+              const selected = Boolean(concentrationData[key]);
+              return (
+                <button key={key} type="button" className={selected ? "is-selected" : ""}
+                  aria-label={`Ubicación topográfica ${key.toUpperCase()}`}
+                  aria-pressed={selected}
+                  onClick={() => update("concentrationData", { ...concentrationData, [key]: selected ? "" : "S" })}>
+                  {selected && <Check size={13} />}
+                  {key.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <Field className="record-field--wide" label="Observaciones del expediente">
+          <textarea
+            onChange={(event) => update("observations", event.target.value)}
+            rows={1}
+            value={active.observations}
+          />
         </Field>
       </fieldset>
       {remove && !locked && <Button className="button--secondary" onClick={remove}>Eliminar fila</Button>}
