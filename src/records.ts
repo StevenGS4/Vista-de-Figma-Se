@@ -36,6 +36,7 @@ export type ArchivalRecord = {
   observations: string;
   cadidoSectionId: string;
   cadidoSeriesId: string;
+  cadidoSeriesName?: string;
   cadidoCode: string;
   cadidoYear?: string;
   openDate: string;

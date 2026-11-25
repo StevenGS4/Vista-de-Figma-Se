@@ -348,7 +348,16 @@ async function save(req,res,next,editing=false){
    const cat=await resolveCatalog(conn,header,user,mode);
    if(!isAdmin && cat.editionYear!==await latestCadidoYear(conn))
     throw fail('Solo puedes registrar con la edición CADIDO vigente. Solicita al administrador habilitar códigos actuales.',409);
-   if(!isAdmin)await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[cat.serieId]);
+   await conn.execute('SELECT id FROM series_cadido WHERE id=? FOR UPDATE',[cat.serieId]);
+   const [[active]]=await conn.execute(`SELECT folio,creado_por,estado FROM inventarios
+     WHERE area_id=? AND serie_id=? AND deleted_at IS NULL AND estado IN ('TRAMITE','EN_TRANSFERENCIA')
+     ORDER BY id LIMIT 1 FOR UPDATE`,[cat.areaId,cat.serieId]);
+   if(active){
+     if(active.estado==='EN_TRANSFERENCIA')
+       throw fail('Ya hay un archivo de esta serie en transferencia dentro del área. Revisa su estado antes de crear otro.',409);
+     const reference=mode!=='PROPIO'||Number(active.creado_por)===Number(user.id)?' ('+active.folio+')':'';
+     throw fail('Ya existe un archivo activo de esta serie en el área'+reference+'. Agrega los expedientes al archivo existente o solicita apoyo al encargado del área.',409);
+   }
    const folioGenerated='INV-TR-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+randomUUID().slice(0,10).toUpperCase();
    const entry={folio:folioGenerated,unidad_administrativa:text(header.administrativeUnit,220),
      area_id:cat.areaId,responsable_nombre:text(header.responsible,200),responsable_cargo:text(header.responsiblePosition,200),

@@ -225,7 +225,7 @@ function InventoryList({
           (!query ||
             id.toLowerCase().includes(query) ||
             areaName(header.areaId).toLowerCase().includes(query) ||
-            seriesName(header.cadidoSeriesId).toLowerCase().includes(query) ||
+            (header.cadidoSeriesName || seriesName(header.cadidoSeriesId)).toLowerCase().includes(query) ||
             header.cadidoCode.toLowerCase().includes(query) ||
             rows.some(
               (record) =>
@@ -237,14 +237,9 @@ function InventoryList({
       }),
     [quickView, records, search, cadidoYear, cadidoCodeFilter],
   );
-  const recent = quickView === "Recientes activos" && !search.trim();
-  const listed = recent
-    ? inventories.flatMap(inventory => inventory.records
-        .filter(record => record.stage === "Archivo de trámite")
-        .map(record => ({ ...inventory, recentRecord: record })))
-        .sort((a, b) => Number(b.recentRecord.id.slice(4)) - Number(a.recentRecord.id.slice(4)))
-        .slice(0, 5)
-    : inventories.map(inventory => ({ ...inventory, recentRecord: undefined }));
+  const listed = quickView === "Recientes activos" && !search.trim()
+    ? [...inventories].sort((a, b) => b.header.inventoryDate.localeCompare(a.header.inventoryDate)).slice(0, 5)
+    : inventories;
   return (
     <>
       <div className="records-page-heading">
@@ -313,7 +308,7 @@ function InventoryList({
           <table className="data-table records-table">
             <thead>
               <tr>
-                <th>{recent ? "Expediente reciente" : "Inventario de trámite"}</th>
+                <th>Inventario de trámite</th>
                 <th>Unidad administrativa</th>
                 <th>Área generadora</th>
                 <th>Fondo</th>
@@ -326,23 +321,23 @@ function InventoryList({
               </tr>
             </thead>
             <tbody>
-              {listed.map(({ header, id, records: rows, recentRecord }) => {
+              {listed.map(({ header, id, records: rows }) => {
                 const transferred = rows.filter(
                   (record) => record.stage === "Archivo de concentración",
                 ).length;
                 return (
-                  <tr key={recentRecord?.id ?? id}>
+                  <tr key={id}>
                     <td>
                       <button className="record-number-link" onClick={() => onOpen(id)}>
-                        {recentRecord?.title || (seriesName(header.cadidoSeriesId) === "Sin asignar" ? "Inventario de trámite" : seriesName(header.cadidoSeriesId))}
+                        {header.cadidoSeriesName || (seriesName(header.cadidoSeriesId) === "Sin asignar" ? header.cadidoCode || "Inventario de trámite" : seriesName(header.cadidoSeriesId))}
                       </button>
-                      <span className="block break-words text-xs font-normal text-[#52605a]">{recentRecord ? `${recentRecord.recordNumber} · ${id}` : id}</span>
+                      <span className="block break-words text-xs font-normal text-[#52605a]">{id}</span>
                     </td>
                     <td>{header.administrativeUnit}</td>
                     <td>{areaName(header.areaId)}</td>
                     <td>{header.fund}</td>
                     <td>{sectionName(header.cadidoSectionId)}</td>
-                    <td>{seriesName(header.cadidoSeriesId)}</td>
+                    <td>{header.cadidoSeriesName || seriesName(header.cadidoSeriesId)}</td>
                     <td>{formatDate(header.inventoryDate)}</td>
                     <td>{rows.length}</td>
                     <td>
@@ -1589,6 +1584,7 @@ export default function RecordsPanel({
     ]);
   };
   const save = async (rows: ArchivalRecord[]) => {
+    setActionError("");
     try {
       const editing = selected.length > 0;
       const saved = await tramiteApi.save(rows,editing);
@@ -1606,10 +1602,13 @@ export default function RecordsPanel({
   }
   if (view === "form")
     return (
+      <>
+      {actionError && <div className="validation-summary" role="alert">{actionError}</div>}
       <InventoryForm
         existing={selected}
         onCancel={() => {
           setSelectedId("");
+          setActionError("");
           setView("list");
         }}
         onDeleteInventory={deleteInventory}
@@ -1619,6 +1618,7 @@ export default function RecordsPanel({
         role={role}
         user={user}
       />
+      </>
     );
   if (view === "detail" && selected.length)
     return (
