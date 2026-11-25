@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Clock3,
   Download,
-  Eye,
   FileClock,
   FilePenLine,
   Files,
@@ -45,7 +44,7 @@ import {
   todayIso,
 } from "./transfers";
 
-type TransferDetailView = "tracking" | "documents" | "inventory";
+type TransferDetailView = "overview" | "tracking" | "documents";
 
 type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
 
@@ -310,7 +309,7 @@ function TransferTray({
                         label={`Acciones para ${transfer.folio}`}
                         width={210}
                         actions={[
-                          { label: "Ver solicitud", icon: <Eye size={16}/>,
+                          { label: "Ver solicitud", icon: <Files size={16}/>,
                             onSelect: () => onOpen(transfer) },
                           ...(canContinue ? [{
                             label: transfer.status === "Con observaciones" ? "Corregir y reenviar" : "Continuar",
@@ -923,7 +922,7 @@ function RequestDetail({
   transfer: DocumentaryTransfer;
   users: UserRecord[];
 }) {
-  const [detailView, setDetailView] = useState<TransferDetailView>("tracking");
+  const [detailView, setDetailView] = useState<TransferDetailView>("overview");
   const [documentKind, setDocumentKind] = useState("");
   const task = transferTask(transfer, currentUser, role, permissions);
   const received = transfer.receptionStatus === "Recibida";
@@ -934,7 +933,9 @@ function RequestDetail({
   const showStorage = received && canSeeStorage && included.some(hasStorageLocation);
   const documents = transfer.documents ?? [];
   const lastNote = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
-  const needsReceipt = lastNote >= 0 && !documents.slice(lastNote + 1).some(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile);
+  const receipt = documents.slice(lastNote + 1).reverse()
+    .find(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile);
+  const needsReceipt = lastNote >= 0 && !receipt;
   const canReview =
     role === "Administrador / Coordinador" &&
     transfer.status === "Pendiente de revisión administrativa" &&
@@ -992,24 +993,51 @@ function RequestDetail({
           </dl>
         </section>
       <nav className="mb-4 flex flex-wrap gap-2 rounded-xl border border-[#c8d4cc] bg-[#e9eee8] p-2" aria-label="Detalle de la transferencia">
-        {([["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"], ["inventory", "Inventario"]] as const).map(([value, label]) => (
+        {([["overview", "Vista"], ["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"]] as const).map(([value, label]) => (
           <button type="button" key={value} aria-current={detailView === value ? "true" : undefined}
             className={`inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e5b4f] ${detailView === value ? "border-[#789b8a] bg-[#fbfaf6] text-[#002f2a] shadow-sm" : "border-transparent text-[#35584b] hover:bg-[#dce7df]"}`} onClick={() => { setDocumentKind(""); setDetailView(value); }}>
+            {value === "overview" && <Files size={16} aria-hidden="true" />}
             {label}{value === "documents" && <span className="rounded-full bg-[#dce7df] px-1.5 text-xs text-[#244f41]">{documents.length}</span>}
           </button>
         ))}
       </nav>
-      {detailView === "inventory" && (
-      <section className="surface request-inventory">
-        <div className="section-heading">
-          <div>
-            <h2>Inventario de transferencia</h2>
-            <p>Expedientes incluidos sin duplicar sus registros originales.</p>
-          </div>
-          <span className="demo-label">{included.length} expedientes</span>
-        </div>
-        <InventoryTable records={included} />
-      </section>
+      {detailView === "overview" && (
+        <>
+          <section className="surface request-inventory">
+            <div className="section-heading flex-wrap gap-3">
+              <div>
+                <h2>Expedientes de la solicitud</h2>
+                <p>{included.length} expedientes en el inventario de transferencia</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {receipt && (
+                  <a className="button button--secondary" href={transferApi.documentUrl(transfer.id, receipt.id)}>
+                    <Download size={15} /> Descargar acuse (PDF)
+                  </a>
+                )}
+                <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}>
+                  <Download size={15} />
+                  {transfer.areaApprovedAt ? "Descargar inventario (Excel)" : "Descargar relación de expedientes (Excel)"}
+                </a>
+              </div>
+            </div>
+            {!receipt && <p className="px-5 py-3 text-sm text-[#435951]">Sin acuse de solicitud adjunto.</p>}
+            <InventoryTable records={included} />
+          </section>
+          {canAreaReview && (
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              {needsReceipt && <p className="w-full text-sm">El área debe adjuntar el acuse antes de otorgar el visto bueno.</p>}
+              <Button className="button--danger-outline" onClick={onReturn}>
+                <RotateCcw size={16} />
+                Devolver con observaciones
+              </Button>
+              <Button className="button--primary" onClick={onAreaApprove} disabled={needsReceipt}>
+                <Check size={17} />
+                Dar visto bueno
+              </Button>
+            </div>
+          )}
+        </>
       )}
       {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} initialKind={documentKind} onChange={onDocumentsChange} />}
       {detailView === "tracking" && <>
@@ -1079,19 +1107,6 @@ function RequestDetail({
                     Emitir dictamen favorable
                   </Button>
                 )}
-              </div>
-            )}
-            {canAreaReview && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {needsReceipt && <p className="w-full text-sm">El área debe adjuntar el acuse antes de otorgar el visto bueno.</p>}
-                <Button className="button--danger-outline" onClick={onReturn}>
-                  <RotateCcw size={16} />
-                  Devolver con observaciones
-                </Button>
-                <Button className="button--primary" onClick={onAreaApprove} disabled={needsReceipt}>
-                  <Check size={17} />
-                  Dar visto bueno
-                </Button>
               </div>
             )}
             {role === "Administrador / Coordinador" &&
