@@ -595,12 +595,12 @@ function orderByArchiveYear(records: ArchivalRecord[]) {
 
 function SpreadsheetHeader({ isAdmin }: { isAdmin: boolean }) {
   const columns = [
-    "Consecutivo", "Caja", "Año de la clave *", "Referencia interna *",
+    "Consecutivo", "Caja", "Año de la clave *", "Número de expediente *",
     "Clave archivística", "Título o asunto *", "Descripción", "Apertura *",
     "Cierre", "Legajos *", "Folios *", "Soporte documental *",
     "Valor documental *", "Vigencia en Trámite *", "Vigencia en Concentración *",
     "Vigencia total", ...(isAdmin ? ["Domicilio de resguardo"] : []),
-    "Observaciones", "Acción",
+    "Observaciones", "Condiciones de acceso", "Tradición documental", "Acción",
   ];
   return (
     <div className="tramite-sheet__header">
@@ -627,11 +627,7 @@ function withCatalogValidity(record: ArchivalRecord): ArchivalRecord {
   };
 }
 
-const referencePrefix = (year?: string) => "18NA" + (year ?? "");
-const isSavedRecord = (record: ArchivalRecord) => /^REG-\d+$/.test(record.id);
-const fullReference = (record: ArchivalRecord) => isSavedRecord(record)
-  ? record.recordNumber.trim()
-  : referencePrefix(record.recordYear) + record.recordNumber.replace(/\s+/g, "").toUpperCase();
+const fullReference = (record: ArchivalRecord) => record.recordNumber.trim();
 
 function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remove }: {
   active: ArchivalRecord;
@@ -641,6 +637,7 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
   automaticOrder: boolean;
   remove?: () => void;
 }) {
+  const concentrationData = active.concentrationData ?? { access: "", tradition: "", m: "", n: "", p: "" };
   const selectedSeries = valuationFor(active);
   const fixedValues = selectedSeries?.documentaryValues;
   const values = fixedValues
@@ -680,18 +677,9 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
               update("recordYear",year);
             }} />
         </Field>
-        <Field error={errors.recordNumber} label="Referencia interna del expediente" required>
-          <div className="flex min-w-0 items-center gap-0.5">
-            {!isSavedRecord(active) && <strong className="tramite-sheet__validity shrink-0">{referencePrefix(active.recordYear)}</strong>}
-            <input
-              aria-label={isSavedRecord(active) ? "Referencia interna del expediente" : "Sufijo de la referencia interna"}
-              className="min-w-0 flex-1"
-              maxLength={isSavedRecord(active) ? 110 : 102}
-              placeholder={isSavedRecord(active) ? undefined : "MD018"}
-              onChange={(event) => update("recordNumber", event.target.value)}
-              value={active.recordNumber}
-            />
-          </div>
+        <Field error={errors.recordNumber} label="Número de expediente" required>
+          <input maxLength={110} value={active.recordNumber}
+            onChange={(event) => update("recordNumber", event.target.value)} />
         </Field>
         <Field className="record-field--wide" label="Código de clasificación archivística">
           <div className="read-only-code"><ShieldCheck size={12}/><strong title={active.archiveClassificationCode || previewNumber(active.cadidoCode,active.consecutive,active.recordYear || String(new Date().getFullYear()))}>
@@ -848,6 +836,24 @@ function SpreadsheetRow({ active, errors, isAdmin, automaticOrder, update, remov
             value={active.observations}
           />
         </Field>
+        <Field label="Condiciones de acceso">
+          <select value={concentrationData.access}
+            onChange={(event) => update("concentrationData", { ...concentrationData, access: event.target.value })}>
+            <option value="">Pendiente</option>
+            <option value="P">P · Pública</option>
+            <option value="C">C · Confidencial</option>
+            <option value="R">R · Reservada</option>
+          </select>
+        </Field>
+        <Field label="Tradición documental">
+          <select value={concentrationData.tradition}
+            onChange={(event) => update("concentrationData", { ...concentrationData, tradition: event.target.value })}>
+            <option value="">Pendiente</option>
+            <option value="ORIGINAL">Original</option>
+            <option value="COPIA">Copia</option>
+            <option value="AMBAS">Original y copia</option>
+          </select>
+        </Field>
       </fieldset>
       {remove && !locked && <Button className="button--secondary" onClick={remove}>Eliminar fila</Button>}
     </div>
@@ -993,7 +999,7 @@ function InventoryForm({
         next.consecutive = "El consecutivo está duplicado.";
       if (!/^REG-\d+$/.test(record.id) && (!/^\d{4}$/.test(record.recordYear ?? "") || Number(record.recordYear)<1900 || Number(record.recordYear)>2100))
         next.recordYear="Selecciona un año válido (1900–2100).";
-      if (!record.recordNumber.trim()) next.recordNumber = isSavedRecord(record) ? "Captura la referencia interna." : "Captura el sufijo, por ejemplo MD018.";
+      if (!record.recordNumber.trim()) next.recordNumber = "Captura el número de expediente.";
       if (
         [...records, ...drafts].some(
           (item) =>
@@ -1449,7 +1455,7 @@ function InventoryDetail({
                   <td>{record.boxNumber}</td>
                   <td><strong>{record.title}</strong>
                     {record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">{record.archiveClassificationCode}</span>}
-                    {record.recordNumber && record.recordNumber !== record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">Ref. interna {record.recordNumber}</span>}
+                    {record.recordNumber && record.recordNumber !== record.archiveClassificationCode && <span className="block break-words text-xs font-normal text-[#52605a]">Núm. de expediente {record.recordNumber}</span>}
                     {record.description && <div>{record.description}</div>}
                   </td>
                   <td>{formatDate(record.openDate)} / {record.closeDate ? formatDate(record.closeDate) : "Abierto"}</td>

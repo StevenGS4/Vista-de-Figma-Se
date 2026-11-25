@@ -67,6 +67,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  CAST(e.anios_concentracion AS CHAR) AS concentrationValidity,
  CAST(e.anios_total AS CHAR) AS totalValidity,e.lugar_resguardo AS room,
  e.estante AS shelf,e.nivel AS level,e.seccion_fisica AS physicalSection,
+ d.acceso,d.tradicion,d.topografia_m,d.topografia_n,d.topografia_p,
  e.posicion AS position,e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes,
  e.etapa AS stage,e.disponibilidad AS availability,CAST(e.creado_por AS CHAR) AS createdBy,
  t.folio AS transferReference,DATE_FORMAT(t.enviada_en,'%Y-%m-%d') AS transferDate,
@@ -77,6 +78,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  FROM inventarios i
  JOIN areas a ON a.id=i.area_id
  JOIN expedientes e ON e.inventario_id=i.id
+ LEFT JOIN expedientes_datos_concentracion d ON d.expediente_id=e.id
  JOIN secciones_cadido sc ON sc.id=i.seccion_id
  JOIN series_cadido sr ON sr.id=e.serie_id
  LEFT JOIN catalogos_cadido_versiones cv ON cv.id=sr.catalogo_version_id
@@ -118,6 +120,7 @@ export async function readRecords(conn,where='',params=[],includeDeleted=false){
  concentrationValidity:r.concentrationValidity,totalValidity:r.totalValidity,
  archiveZone:'Archivo de trámite — '+r.areaId,room:r.room||'',shelf:r.shelf==null?'':String(r.shelf),
  level:r.level==null?'':String(r.level),physicalSection:r.physicalSection==null?'':String(r.physicalSection),
+ concentrationData:{access:r.acceso||'',tradition:r.tradicion||'',m:r.topografia_m||'',n:r.topografia_n||'',p:r.topografia_p||''},
  position:r.position||'',locationBox:r.locationBox||'',locationNotes:r.locationNotes||'',
  stage:r.stage==='CONCENTRACION'?'Archivo de concentración':'Archivo de trámite',
  availability:r.availability==='PRESTADO'?'Prestado':'En archivo',createdBy:r.createdBy,
@@ -185,15 +188,17 @@ function normalize(rows){
      const year=String(r.recordYear??'');
      if(!/^\d{4}$/.test(year)||Number(year)<1900||Number(year)>2100)
        throw fail('Selecciona un año válido para el código archivístico (1900–2100)');
-     const prefix='18NA'+year;
-     const reference=String(r.recordNumber??'').replace(/\s+/g,'').toUpperCase();
-     if(!reference.startsWith(prefix)||reference.length<=prefix.length||reference.length>110)
-       throw fail('La referencia interna debe comenzar con '+prefix+' y llevar un sufijo');
-     r.recordNumber=reference;
    }
-   const number=text(r.recordNumber,110).toUpperCase();
+   if(typeof r.recordNumber!=='string'||r.recordNumber.trim().length>110)
+     throw fail('El número de expediente debe tener hasta 110 caracteres');
+   const number=r.recordNumber.trim().toUpperCase();
    const title=text(r.title);
-   if(!number||!title||!text(r.description))throw fail('La referencia interna, el asunto y su descripción son obligatorios');
+   if(!number||!title||!text(r.description))throw fail('El número de expediente, el asunto y su descripción son obligatorios');
+   if(r.concentrationData!==undefined){
+     const data=r.concentrationData;
+     if(!data||!['','P','C','R'].includes(data.access)||!['','ORIGINAL','COPIA','AMBAS'].includes(data.tradition))
+       throw fail('Condiciones de acceso o tradición documental inválidas');
+   }
    if(/^(?:generalidades|varios|diversos|documentaci[oó]n)[.!?]*$/i.test(title))
      throw fail('Captura un asunto específico para el expediente');
    if(unique.has(consecutivo)||numbers.has(number))throw fail('Número de expediente o consecutivo duplicado');
@@ -408,6 +413,12 @@ async function save(req,res,next,editing=false){
      expId=result.insertId;
    }
    await replaceValues(conn,expId,r.documentaryValues);
+   if(r.concentrationData!==undefined){
+     const {access,tradition}=r.concentrationData;
+     await conn.execute(`INSERT INTO expedientes_datos_concentracion (expediente_id,acceso,tradicion)
+       VALUES (?,?,?) ON DUPLICATE KEY UPDATE acceso=?,tradicion=?`,
+       [expId,access||null,tradition||null,access||null,tradition||null]);
+   }
   }
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
     [user.id,'inventarios',inventoryId,editing?'ACTUALIZAR':'CREAR',JSON.stringify({folio,expedientes:rows.length})]);

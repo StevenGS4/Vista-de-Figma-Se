@@ -24,14 +24,12 @@ export async function enrichConcentrationRecords(records){
    DATE_FORMAT(r.fecha,'%Y-%m-%d') AS recepcion_fecha,
    CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS recepcion_responsable,
    r.observaciones AS recepcion_observaciones,
-   r.estado AS recepcion_estado,
-   d.acceso,d.tradicion,d.topografia_m,d.topografia_n,d.topografia_p
+   r.estado AS recepcion_estado
    FROM expedientes e
    JOIN transferencia_inventarios ti ON ti.inventario_id=e.inventario_id
    JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'
    LEFT JOIN recepciones r ON r.id=(SELECT MAX(r2.id) FROM recepciones r2 WHERE r2.transferencia_id=t.id)
    LEFT JOIN usuarios u ON u.id=r.responsable_id
-   LEFT JOIN expedientes_datos_concentracion d ON d.expediente_id=e.id
    WHERE e.id IN (${ids.map(()=>'?').join(',')})`,ids);
   for(const row of rows)extra.set(Number(row.id),row);
  }
@@ -40,10 +38,6 @@ export async function enrichConcentrationRecords(records){
   return {...record,
     archiveZone:row?.archivo_zona||'Ubicación pendiente de asignación',
     receptionConfirmed:row?.recepcion_estado==='RECIBIDA',
-    concentrationData:{
-      access:row?.acceso||'', tradition:row?.tradicion||'',
-      m:row?.topografia_m||'', n:row?.topografia_n||'', p:row?.topografia_p||'',
-    },
     receptionDate:row?.recepcion_fecha||'',
     receptionResponsible:row?.recepcion_responsable||'',
     receptionNotes:row?.recepcion_observaciones||'',
