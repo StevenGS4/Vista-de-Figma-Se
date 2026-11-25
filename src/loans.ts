@@ -17,6 +17,7 @@ export type LoanItem = {
   classification: string;
   returnedDate: string;
   condition: LoanReturnCondition | "";
+  deliveryCondition?: LoanReturnCondition | "";
 };
 
 export type ArchivalLoan = {

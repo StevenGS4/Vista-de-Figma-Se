@@ -3,13 +3,12 @@ export const canManageLoans = u => Boolean(u && !u.mustChangePassword && u.roles
  r=>r===roleNames.ADMIN||r===roleNames.PRESTAMOS));
 export function parseLoanSelection(payload){
  if (!payload || typeof payload!=='object') throw new Error('Datos requeridos');
- if (!['INDIVIDUAL','INVENTARIO_COMPLETO'].includes(payload.mode)) throw new Error('Modalidad inválida');
+ if (payload.mode !== 'INDIVIDUAL') throw new Error('Selecciona expedientes individuales');
  if (!Array.isArray(payload.recordIds)||!payload.recordIds.length||payload.recordIds.length>20000)
   throw new Error('Selecciona uno o más expedientes');
  const ids=payload.recordIds.map(s=>typeof s==='string'&&/^REG-[1-9]\d*$/.test(s)?Number(s.slice(4)):NaN);
  if(ids.some(n=>!Number.isSafeInteger(n))||new Set(ids).size!==ids.length)
   throw new Error('Expedientes duplicados o inválidos');
- if(payload.mode==='INDIVIDUAL'&&ids.length!==1) throw new Error('Préstamo individual requiere un expediente');
  return {mode:payload.mode,ids};
 }
 export function validDate(s){

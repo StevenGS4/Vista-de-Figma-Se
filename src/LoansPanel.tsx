@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Download,
   Eye,
   FileCheck2,
   Files,
@@ -29,7 +30,7 @@ import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { loanApi, concentrationApi, type LoanEligibleUser } from "./api";
 import { ArchivalLoan, effectiveLoanStatus, todayIso, type LoanReturnCondition } from "./loans";
-import { ArchivalRecord, locationSummary } from "./records";
+import { ArchivalRecord, cadidoSections, locationSummary } from "./records";
 
 type PanelView = "list" | "select" | "form" | "detail" | "return" | "history";
 type LoanFilter = "Activos" | "Próximos a vencer" | "Vencidos" | "Devueltos";
@@ -42,6 +43,50 @@ const offsetDate = (days: number) => {
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 };
+
+const physicalCondition = (value?: LoanReturnCondition | "") =>
+  value === "GOOD" ? "Buen estado" : value === "ISSUE" ? "Con incidencias" : "Sin registro";
+
+async function downloadLoanReceipt(loan: ArchivalLoan, record?: ArchivalRecord) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF();
+  const margin = 18;
+  const width = pdf.internal.pageSize.getWidth() - 2 * margin;
+  let y = 22;
+  const write = (value: string, bold = false) => {
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    const lines: string[] = pdf.splitTextToSize(value, width);
+    for (const line of lines) {
+      if (y > 277) { pdf.addPage(); y = 22; }
+      pdf.text(line, margin, y);
+      y += 6;
+    }
+  };
+  pdf.setProperties({ title: `Recibo de préstamo ${loan.folio}` });
+  pdf.setTextColor(23, 60, 52).setFontSize(17);
+  write("SEMARNAT Nayarit · Recibo de préstamo", true);
+  pdf.setTextColor(30, 40, 36).setFontSize(11);
+  write(loan.folio, true);
+  y += 3;
+  write(`Préstamo: ${formatDate(loan.loanDate)} · Devolución prevista: ${formatDate(loan.expectedReturnDate)}`);
+  write(`Área solicitante: ${areaName(loan.requestingAreaId)}`);
+  write(`Solicitó: ${loan.requesterName}`);
+  write(`Autorizó: ${loan.authorizedBy} · Entregó: ${loan.deliveredBy}`);
+  write(`Recibió: ${loan.receivedBy}`);
+  if (loan.observations) write(`Observaciones: ${loan.observations}`);
+  y += 3;
+  write("Expedientes entregados", true);
+  if (loan.items?.length) {
+    for (const item of loan.items) {
+      write(item.title, true);
+      write(`${item.number || item.id} · Estado al entregar: ${physicalCondition(item.deliveryCondition)}`);
+    }
+  } else {
+    write(record?.title || "Expediente");
+    write(record?.recordNumber || loan.recordId);
+  }
+  pdf.save(`Recibo-${loan.folio}.pdf`);
+}
 
 function Button({
   children,
@@ -139,7 +184,9 @@ function LoanTray({
             loan.folio.toLowerCase().includes(query) ||
             loan.requesterName.toLowerCase().includes(query) ||
             record?.recordNumber.toLowerCase().includes(query) ||
-            record?.title.toLowerCase().includes(query))
+            record?.title.toLowerCase().includes(query) ||
+            loan.items?.some(item => [item.number, item.title, item.classification]
+              .some(value => value.toLowerCase().includes(query))))
         );
       }),
     [filter, loans, records, search],
@@ -241,7 +288,7 @@ function LoanTray({
             <tbody>
               {visible.map((loan) => {
                 const record = recordFor(records, loan.recordId);
-                const count = loanRecordIds(loan).length;
+                const count = loan.items?.length ?? loan.deliveredRecordIds?.length ?? 1;
                 const active = loan.status === "Activo";
                 return (
                   <tr key={loan.id}>
@@ -251,11 +298,11 @@ function LoanTray({
                       </button>
                     </td>
                     <td>
-                      {record?.inventoryId ?? "Sin referencia"}
+                      {count > 1 && loan.mode !== "Inventario completo" ? "Selección de expedientes" : loan.inventoryFolio || record?.inventoryId || "Sin referencia"}
                       {count > 1 && <small className="record-count"> · {count} expedientes</small>}
                     </td>
                     <td>
-                      <span className="record-id">{record?.recordNumber}</span>
+                      <span className="record-id">{count > 1 ? `${count} expedientes` : loan.items?.[0]?.number || record?.recordNumber}</span>
                     </td>
                     <td>
                       <span className="record-subject" title={record?.title}>
@@ -322,203 +369,123 @@ function LoanTray({
 }
 
 function RecordSelector({
-  loans,
-  onBack,
-  onSelect,
-  records,
+  loans, onBack, onSelect, records, selection,
 }: {
   loans: ArchivalLoan[];
   onBack: () => void;
-  onSelect: (records: ArchivalRecord[], mode: "INDIVIDUAL" | "INVENTARIO_COMPLETO") => void;
+  onSelect: (records: ArchivalRecord[]) => void;
   records: ArchivalRecord[];
+  selection: ArchivalRecord[];
 }) {
-  const [mode, setMode] = useState<"inventory" | "individual">("inventory");
   const [search, setSearch] = useState("");
-  const [areaFilter, setAreaFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [area, setArea] = useState("");
+  const [section, setSection] = useState("");
+  const [series, setSeries] = useState("");
+  const [from, setFrom] = useState("");
+  const [until, setUntil] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const activeRecordIds = useMemo(() => new Set(
-    loans.filter((loan) => loan.status === "Activo").flatMap(loanRecordIds),
-  ), [loans]);
-  const concentration = useMemo(
-    () => records.filter((record) => record.stage === "Archivo de concentración"),
-    [records],
-  );
-  const inventories = useMemo(() => {
-    const grouped = new Map<string, ArchivalRecord[]>();
-    for (const record of concentration) {
-      const key = record.inventoryId;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(record);
-    }
-    return [...grouped.entries()].map(([id, items]) => ({
-      id,
-      records: items,
-      header: items[0],
-      available: items.every(item => item.availability === "En archivo" && !activeRecordIds.has(item.id)),
-      borrowedCount: items.filter(item => item.availability !== "En archivo" || activeRecordIds.has(item.id)).length,
-    }));
-  }, [concentration, activeRecordIds]);
-  const normalized = search.trim().toLowerCase();
-  const matchesRecord = (record: ArchivalRecord) =>
-    (!normalized || [record.id, record.recordNumber, record.inventoryId, record.title,
-      record.description, record.cadidoCode, record.archiveClassificationCode || "",
-      record.cadidoYear || "", record.boxNumber]
-      .some(value => String(value || "").toLowerCase().includes(normalized))) &&
-    (!areaFilter || record.areaId === areaFilter) &&
-    (!dateFilter || record.openDate === dateFilter || record.closeDate === dateFilter || record.inventoryDate === dateFilter);
-  const matchedInventories = inventories.filter(item =>
-    (!areaFilter || item.header.areaId === areaFilter) &&
-    (!normalized || item.id.toLowerCase().includes(normalized) || item.records.some(matchesRecord)) &&
-    (!dateFilter || item.records.some(r => r.openDate === dateFilter || r.closeDate === dateFilter || r.inventoryDate === dateFilter)),
-  );
-  const matchedRecords = concentration.filter(matchesRecord);
-  const rowsCount = mode === "inventory" ? matchedInventories.length : matchedRecords.length;
-  const pageCount = Math.max(1, Math.ceil(rowsCount / pageSize));
+  const [selected, setSelected] = useState(() => new Set(selection.map(record => record.id)));
+  const activeIds = useMemo(() => new Set(loans.filter(loan => loan.status === "Activo").flatMap(loanRecordIds)), [loans]);
+  const concentration = records.filter(record => record.stage === "Archivo de concentración");
+  const isAvailable = (record: ArchivalRecord) => record.availability === "En archivo" &&
+    record.receptionConfirmed && Boolean(record.archiveZone && record.room && record.shelf && record.level && record.physicalSection) && !activeIds.has(record.id);
+  const terms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const sectionName = (id: string) => cadidoSections.find(item => item.id === id)?.name || id || "Sin sección";
+  const seriesOptions = new Map(concentration.filter(record => !section || record.cadidoSectionId === section)
+    .map(record => [record.cadidoCode, record.cadidoSeriesName || record.cadidoCode]));
+  const groups = new Map<string, ArchivalRecord[]>();
+  for (const record of concentration) {
+    const date = record.receptionDate || record.transferDate || record.inventoryDate || "";
+    if ((area && record.areaId !== area) || (section && record.cadidoSectionId !== section) ||
+      (series && record.cadidoCode !== series) || (from && date < from) || (until && (!date || date > until)) ||
+      !terms.every(term => [record.title, record.recordNumber, record.archiveClassificationCode, record.cadidoCode,
+        record.cadidoSeriesName, record.description].some(value => value?.toLowerCase().includes(term)))) continue;
+    const key = record.cadidoSectionId + ":" + record.cadidoCode;
+    const group = groups.get(key) ?? [];
+    group.push(record);
+    groups.set(key, group);
+  }
+  const grouped = [...groups].sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true }));
+  const pageSize = 5;
+  const pageCount = Math.max(1, Math.ceil(grouped.length / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const visibleInventories = matchedInventories.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const visibleRecords = matchedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const activeAreas = [...new Set(concentration.map(r => r.areaId))].sort();
-  const changeMode = (next: "inventory" | "individual") => {
-    setMode(next);
-    setPage(1);
-    setSearch("");
-    setAreaFilter("");
-    setDateFilter("");
-  };
+  const selectedRecords = concentration.filter(record => selected.has(record.id) && isAvailable(record));
   return (
     <div className="loan-select-page">
       <div className="record-form-top">
         <div>
-          <button className="text-button" onClick={onBack}>
-            <ArrowLeft size={17} />
-            Volver a la bandeja
-          </button>
-          <h2>Seleccionar documentación para préstamo</h2>
-          <p>Elige un inventario completo o un expediente individual del archivo de concentración.</p>
+          <button className="text-button" onClick={onBack}><ArrowLeft size={17} /> Volver a la bandeja</button>
+          <h2>Seleccionar expedientes para préstamo</h2>
+          <p>Despliega una serie y marca uno o varios expedientes disponibles.</p>
         </div>
         <span className="record-mode"><Archive size={16} /> Concentración</span>
       </div>
       <section className="surface select-record-card">
-        <div className="transfer-tabs" role="tablist" aria-label="Modalidad del préstamo">
-          <button type="button" role="tab" aria-selected={mode === "inventory"}
-            className={mode === "inventory" ? "is-active" : ""}
-            onClick={() => changeMode("inventory")}>
-            A. Inventario completo
-          </button>
-          <button type="button" role="tab" aria-selected={mode === "individual"}
-            className={mode === "individual" ? "is-active" : ""}
-            onClick={() => changeMode("individual")}>
-            B. Expediente individual
-          </button>
-        </div>
-        <div className="records-filter-head">
-          <div>
-            <h3>{mode === "inventory" ? "Inventarios completos en concentración" : "Expedientes en concentración"}</h3>
-            <p>{mode === "inventory"
-              ? "Cada fila representa un inventario con todos sus expedientes. Solo se presta completo si ninguno está prestado."
-              : "Busca por número, ID, asunto, clasificación CADIDO, área o fecha de apertura."}</p>
-          </div>
-        </div>
         <div className="loan-selection-filters">
-          <label className="search-box">
-            <Search size={17} />
-            <input aria-label="Buscar documentación" value={search}
-              placeholder={mode === "inventory" ? "Buscar inventario, expediente o asunto…" : "Buscar ID, número, título, código CADIDO…"}
+          <label className="search-box"><Search size={16} />
+            <input aria-label="Buscar expediente" placeholder="Nombre, número o código CADIDO" value={search}
               onChange={event => { setSearch(event.target.value); setPage(1); }} />
           </label>
-          <select aria-label="Filtrar por área" value={areaFilter}
-            onChange={event => { setAreaFilter(event.target.value); setPage(1); }}>
+          <select aria-label="Área" value={area} onChange={event => { setArea(event.target.value); setPage(1); }}>
             <option value="">Todas las áreas</option>
-            {activeAreas.map(id => <option key={id} value={id}>{areaName(id)}</option>)}
+            {[...new Set(concentration.map(record => record.areaId))].sort().map(id => <option value={id} key={id}>{areaName(id)}</option>)}
           </select>
-          <label className="loan-date-filter">
-            <span>Fecha (apertura, cierre o inventario)</span>
-            <input type="date" value={dateFilter}
-              onChange={event => { setDateFilter(event.target.value); setPage(1); }} />
-          </label>
-          <button type="button" className="button button--secondary"
-            onClick={() => { setSearch(""); setAreaFilter(""); setDateFilter(""); setPage(1); }}>
-            Limpiar
-          </button>
+          <select aria-label="Sección documental" value={section} onChange={event => { setSection(event.target.value); setSeries(""); setPage(1); }}>
+            <option value="">Todas las secciones</option>
+            {[...new Set(concentration.map(record => record.cadidoSectionId).filter(Boolean))].sort().map(id => <option value={id} key={id}>{sectionName(id)}</option>)}
+          </select>
+          <select aria-label="Serie documental" value={series} onChange={event => { setSeries(event.target.value); setPage(1); }}>
+            <option value="">Todas las series</option>
+            {[...seriesOptions].sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true })).map(([code, title]) => <option value={code} key={code}>{code} · {title}</option>)}
+          </select>
+          <label className="loan-date-filter"><span>Ingreso desde</span><input type="date" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label>
+          <label className="loan-date-filter"><span>Hasta</span><input type="date" value={until} onChange={event => { setUntil(event.target.value); setPage(1); }} /></label>
+          <Button className="button--secondary" onClick={() => { setArea(""); setSection(""); setSeries(""); setFrom(""); setUntil(""); setSearch(""); setPage(1); }}>Limpiar filtros</Button>
         </div>
-        <div className="table-scroll">
-          {mode === "inventory" ? (
-            <table className="data-table select-record-table">
-              <thead><tr>
-                <th>Inventario de origen</th><th>Área generadora</th><th>Expedientes</th>
-                <th>Disponibilidad</th><th className="align-right">Selección</th>
-              </tr></thead>
-              <tbody>
-                {visibleInventories.map(item => (
-                  <tr key={item.id}>
-                    <td><span className="record-id">{item.id}</span></td>
-                    <td>{areaName(item.header.areaId)}</td>
-                    <td>{item.records.length} expedientes</td>
-                    <td><span className={`record-badge record-badge--${item.available ? "green" : "wine"}`}>
-                      <span />{item.available ? "Inventario disponible" : `${item.borrowedCount} no disponible(s)`}
-                    </span></td>
-                    <td className="align-right">
-                      <Button className={item.available ? "button--secondary" : "button--disabled"}
-                        disabled={!item.available}
-                        onClick={() => onSelect(item.records, "INVENTARIO_COMPLETO")}>
-                        <Check size={15} /> Prestar inventario completo
-                      </Button>
-                    </td>
-                  </tr>
+        {from && until && from > until && <p role="alert" className="px-5 py-2">La fecha inicial debe ser anterior o igual a la final.</p>}
+        <div className="grid gap-3 px-5 py-4">
+          {grouped.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(([key, items]) => (
+            <details key={key} className="rounded-lg border border-[#c8d4cc] bg-[#f8f7f2] p-3" open={terms.length > 0 || Boolean(series) || undefined}>
+              <summary className="cursor-pointer text-sm font-semibold text-[#173c34]">
+                {sectionName(items[0].cadidoSectionId)} · {items[0].cadidoCode} · {items[0].cadidoSeriesName || "Serie documental"} <small>({items.length})</small>
+              </summary>
+              <ul className="mt-2 divide-y divide-[#d9e3dc]">
+                {items.map(record => (
+                  <li key={record.id} className="py-2">
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input type="checkbox" className="size-4 shrink-0 accent-[#205b4d]" checked={selected.has(record.id)}
+                        disabled={!isAvailable(record)} onChange={event => {
+                          const checked = event.target.checked;
+                          setSelected(current => {
+                            const next = new Set(current);
+                            if (checked) next.add(record.id);
+                            else next.delete(record.id);
+                            return next;
+                          });
+                        }} />
+                      <span className="min-w-0 grow break-words">
+                        <strong className="block">{record.title}</strong>
+                        <small className="text-[#687570]">{record.recordNumber} · {record.archiveClassificationCode || record.cadidoCode}</small>
+                      </span>
+                      {!isAvailable(record) && <small className="text-[#687570]">No disponible</small>}
+                    </label>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="data-table select-record-table">
-              <thead><tr>
-                <th>Inventario de origen</th><th>Número de expediente</th><th>Título</th>
-                <th>Área generadora</th><th>Código CADIDO</th><th>Fecha de apertura</th>
-                <th>Ubicación física</th><th>Disponibilidad</th><th className="align-right">Selección</th>
-              </tr></thead>
-              <tbody>
-                {visibleRecords.map(record => {
-                  const available = record.availability === "En archivo" && !activeRecordIds.has(record.id);
-                  return <tr key={record.id}>
-                    <td>{record.inventoryId}</td>
-                    <td><span className="record-id">{record.recordNumber}</span></td>
-                    <td><span className="record-subject">{record.title}</span></td>
-                    <td>{areaName(record.areaId)}</td>
-                    <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
-                    <td>{formatDate(record.openDate)}</td>
-                    <td><span className="location-cell">{locationSummary(record)}</span></td>
-                    <td><span className={`record-badge record-badge--${available ? "green" : "wine"}`}>
-                      <span />{available ? "En archivo" : "Prestado"}
-                    </span></td>
-                    <td className="align-right">
-                      <Button className={available ? "button--secondary" : "button--disabled"}
-                        disabled={!available} onClick={() => onSelect([record], "INDIVIDUAL")}>
-                        <Check size={15} /> Prestar expediente
-                      </Button>
-                    </td>
-                  </tr>;
-                })}
-              </tbody>
-            </table>
-          )}
-          {rowsCount === 0 && <div className="empty-state">
-            <Inbox size={30} /><strong>Sin coincidencias</strong>
-            <p>Modifica los filtros para consultar otros registros de concentración.</p>
-          </div>}
+              </ul>
+            </details>
+          ))}
+          {!grouped.length && <p className="py-4 text-center">No hay expedientes que coincidan con los filtros.</p>}
         </div>
         <div className="pagination">
-          <span>Mostrando {rowsCount ? (currentPage - 1) * pageSize + 1 : 0}–
-            {Math.min(currentPage * pageSize, rowsCount)} de {rowsCount}</span>
+          <span>Página {currentPage} de {pageCount}</span>
           <div>
-            <button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16}/></button>
-            <span>Página {currentPage} de {pageCount}</span>
-            <button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={16}/></button>
+            <button type="button" aria-label="Página anterior" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} /></button>
+            <button type="button" aria-label="Página siguiente" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={16} /></button>
           </div>
         </div>
-        <div className="selection-rule"><ShieldCheck size={17}/>
-          Solo se prestan documentos recibidos físicamente y disponibles. El préstamo completo corresponde
-          a un inventario de origen; no combina inventarios distintos en una misma operación.
+        <div className="flex flex-wrap items-center justify-end gap-3 p-4">
+          <span aria-live="polite">{selectedRecords.length} seleccionados</span>
+          <Button className="button--primary" disabled={!selectedRecords.length} onClick={() => onSelect(selectedRecords)}>Continuar</Button>
         </div>
       </section>
     </div>
@@ -533,6 +500,7 @@ type LoanFormData = {
   delivererUserId: string;
   receivedBy: string;
   observations: string;
+  deliveryConditions: Record<string, LoanReturnCondition>;
 };
 
 function LoanField({
@@ -564,9 +532,10 @@ function LoanConfirmModal({
   records,
 }: {
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   records: ArchivalRecord[];
 }) {
+  const [saving, setSaving] = useState(false);
   return (
     <div className="modal-backdrop">
       <div className="modal loan-confirm-modal">
@@ -586,12 +555,15 @@ function LoanConfirmModal({
           La etapa permanecerá en Archivo de concentración.
         </div>
         <div className="modal__footer">
-          <Button className="button--secondary" onClick={onCancel}>
+          <Button className="button--secondary" disabled={saving} onClick={onCancel}>
             Cancelar
           </Button>
-          <Button className="button--primary" onClick={onConfirm}>
+          <Button className="button--primary" disabled={saving} onClick={async () => {
+            setSaving(true);
+            try { await onConfirm(); } finally { setSaving(false); }
+          }}>
             <Check size={17} />
-            Confirmar entrega
+            {saving ? "Registrando…" : "Confirmar entrega"}
           </Button>
         </div>
       </div>
@@ -607,7 +579,7 @@ function LoanForm({
 }: {
   currentUser: UserRecord;
   onBack: () => void;
-  onConfirm: (data: LoanFormData) => void;
+  onConfirm: (data: LoanFormData) => Promise<void>;
   records: ArchivalRecord[];
 }) {
   const record = records[0];
@@ -619,6 +591,7 @@ function LoanForm({
     delivererUserId: "",
     receivedBy: "",
     observations: "",
+    deliveryConditions: {},
   });
   const [staff, setStaff] = useState<LoanEligibleUser[]>([]);
   const [staffError, setStaffError] = useState("");
@@ -642,7 +615,7 @@ function LoanForm({
   const [errors, setErrors] = useState<Partial<Record<keyof LoanFormData, string>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const update = (field: keyof LoanFormData, value: string) => {
+  const update = (field: Exclude<keyof LoanFormData, "deliveryConditions">, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
@@ -659,6 +632,7 @@ function LoanForm({
     if (!delivererOptions.some(user => user.id === form.delivererUserId))
       next.delivererUserId = "Selecciona quién entrega, del personal autorizado.";
     if (!form.receivedBy.trim()) next.receivedBy = "Ingresa la persona que recibe.";
+    if (records.some(record => !form.deliveryConditions[record.id])) next.deliveryConditions = "Indica el estado de entrega de cada expediente.";
     setErrors(next);
     return !Object.keys(next).length;
   };
@@ -668,7 +642,7 @@ function LoanForm({
         <div>
           <button className="text-button" onClick={onBack}>
             <ArrowLeft size={17} />
-            Cambiar expediente
+            Cambiar selección
           </button>
           <h2>Registrar préstamo</h2>
           <p>
@@ -693,11 +667,11 @@ function LoanForm({
               <Files size={21} />
             </span>
             <div>
-              <h3>Datos del expediente</h3>
-              <p>Información de lectura y ubicación física actual.</p>
+              <h3>Expedientes seleccionados</h3>
+              <p>Confirma el estado físico de cada expediente al entregarlo.</p>
             </div>
           </div>
-          <div className="loan-record-readonly">
+          {records.length === 1 && <div className="loan-record-readonly">
             <div>
               <span>Inventario de origen</span>
               <strong>{record.inventoryId}</strong>
@@ -705,7 +679,7 @@ function LoanForm({
             <div>
               <span>Modalidad</span>
               <strong>
-                {records.length === 1 ? "Expediente individual" : `Inventario completo · ${records.length} expedientes`}
+                Expediente individual
               </strong>
             </div>
             <div>
@@ -735,7 +709,26 @@ function LoanForm({
               <span />
               En archivo
             </span>
-          </div>
+          </div>}
+          <ul className="grid gap-2">
+            {records.map(item => (
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8d4cc] p-3">
+                <span><strong className="block">{item.title}</strong><small className="text-[#687570]">{item.recordNumber}</small></span>
+                <LoanField label="Estado al entregar" required>
+                  <select aria-label={`Estado al entregar ${item.recordNumber}`} value={form.deliveryConditions[item.id] ?? ""}
+                    onChange={event => {
+                      const condition = event.target.value as LoanReturnCondition;
+                      setForm(current => ({ ...current, deliveryConditions: { ...current.deliveryConditions, [item.id]: condition } }));
+                    }}>
+                    <option value="">Selecciona el estado</option>
+                    <option value="GOOD">Buen estado</option>
+                    <option value="ISSUE">Con incidencias</option>
+                  </select>
+                </LoanField>
+              </li>
+            ))}
+          </ul>
+          {errors.deliveryConditions && <p role="alert" className="field-error">{errors.deliveryConditions}</p>}
         </section>
         <section className="loan-form-section">
           <div className="step-heading">
@@ -870,6 +863,8 @@ function LoanDetail({
 }) {
   const status = effectiveLoanStatus(loan);
   const inventoryLoan = loan.mode === "Inventario completo";
+  const multiple = (loan.items?.length ?? 0) > 1;
+  const [receiptError, setReceiptError] = useState("");
   return (
     <div className="loan-detail-page">
       <button className="text-button" onClick={onBack}>
@@ -884,10 +879,16 @@ function LoanDetail({
           <span>Préstamo físico</span>
           <h2>{loan.folio}</h2>
           <p>
-            {inventoryLoan ? loan.inventoryFolio || "Inventario completo" : `${record?.recordNumber} · ${record?.title}`}
+            {inventoryLoan ? loan.inventoryFolio || "Inventario completo" : multiple ? `${loan.items?.length} expedientes` : loan.items?.[0]?.title || record?.title || "Expediente"}
           </p>
         </div>
         <LoanStatusBadge loan={loan} />
+        <Button className="button--secondary" onClick={() => {
+          setReceiptError("");
+          void downloadLoanReceipt(loan, record).catch(() => setReceiptError("No fue posible generar el recibo. Inténtalo nuevamente."));
+        }}>
+          <Download size={16} /> Descargar recibo PDF
+        </Button>
         <Button className="button--secondary" onClick={onHistory}>
           <History size={16} />
           Historial
@@ -899,6 +900,7 @@ function LoanDetail({
           </Button>
         )}
       </div>
+      {receiptError && <p role="alert" className="field-error">{receiptError}</p>}
       {status === "Vencido" && (
         <div className="overdue-banner">
           <AlertCircle size={18} />
@@ -910,7 +912,7 @@ function LoanDetail({
         </div>
       )}
       <div className="loan-detail-grid">
-        {record && !inventoryLoan && <section className="record-detail-group">
+        {record && !inventoryLoan && !multiple && <section className="record-detail-group">
           <h3>
             <Files size={17} />
             Expediente
@@ -962,21 +964,29 @@ function LoanDetail({
           </div>
         </section>
       </div>
-      {inventoryLoan && (
-        <section className="record-detail-group">
-          <h3><Files size={17} /> Expedientes prestados ({loan.items?.length ?? 0})</h3>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead><tr><th>Expediente</th><th>Clave CADIDO</th><th>Asunto</th><th>Devolución</th><th>Estado al recibir</th></tr></thead>
-              <tbody>{loan.items?.map(item => (
-                <tr key={item.id}>
-                  <td>{item.number}</td><td>{item.classification}</td><td>{item.title}</td>
-                  <td>{item.returnedDate ? formatDate(item.returnedDate) : "Pendiente"}</td>
-                  <td>{item.condition === "GOOD" ? "Buen estado" : item.condition === "ISSUE" ? "Con incidencias" : "—"}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
+      {Boolean(loan.items?.length) && (
+        <section className="record-detail-group mt-4">
+          <h3><Files size={17} /> Expedientes prestados ({loan.items?.length})</h3>
+          <ul className="divide-y divide-[#d9e3dc] px-4">
+            {loan.items?.map(item => (
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <span className="min-w-0 break-words">
+                  <strong className="block text-[#173c34]">{item.title}</strong>
+                  <small className="text-[#687570]">{item.number || item.id}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <details className="border-t border-[#d9e3dc] px-4 py-3">
+            <summary className="cursor-pointer font-semibold">Estado físico de los expedientes</summary>
+            <ul className="mt-2 grid gap-2 text-sm">
+              {loan.items?.map(item => (
+                <li key={item.id}>
+                  <strong>{item.number || item.id}</strong> · Entrega: {physicalCondition(item.deliveryCondition)} · Devolución: {item.returnedDate ? physicalCondition(item.condition) : "Pendiente"}
+                </li>
+              ))}
+            </ul>
+          </details>
         </section>
       )}
       <div className="record-rule-note">
@@ -1041,7 +1051,7 @@ function ReturnForm({
   currentUser: UserRecord;
   loan: ArchivalLoan;
   onBack: () => void;
-  onSave: (date: string, receivedBy: string, notes: string, returnedIds: string[], conditions?: Record<string, LoanReturnCondition>) => Promise<void>;
+  onSave: (date: string, receivedBy: string, notes: string, returnedIds: string[], conditions: Record<string, LoanReturnCondition>) => Promise<void>;
   record?: ArchivalRecord;
 }) {
   const [date, setDate] = useState(todayIso());
@@ -1049,11 +1059,13 @@ function ReturnForm({
   const [notes, setNotes] = useState("");
   const inventoryLoan = loan.mode === "Inventario completo";
   const pendingIds = loanRecordIds(loan);
-  const pendingItems = loan.items?.filter(item => pendingIds.includes(item.id)) ?? [];
+  const pendingItems = pendingIds.map(id => loan.items?.find(item => item.id === id) ??
+    { id, number: record?.recordNumber || id, title: record?.title || "Expediente" });
+  const allowsPartialReturn = inventoryLoan || (loan.items?.length ?? pendingIds.length) > 1;
   const [returnedIds, setReturnedIds] = useState<string[]>([]);
   const [conditions, setConditions] = useState<Record<string, LoanReturnCondition>>({});
   const [saving, setSaving] = useState(false);
-  const selectedIds = inventoryLoan ? returnedIds.filter(id => pendingIds.includes(id)) : pendingIds;
+  const selectedIds = allowsPartialReturn ? returnedIds.filter(id => pendingIds.includes(id)) : pendingIds;
   const [errors, setErrors] = useState<{ date?: string; receivedBy?: string; items?: string }>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   return (
@@ -1080,8 +1092,8 @@ function ReturnForm({
           else if (date < loan.loanDate)
             next.date = "La devolución no puede ser anterior a la fecha del préstamo.";
           if (!receivedBy.trim()) next.receivedBy = "Ingresa la persona que recibe.";
-          if (inventoryLoan && !selectedIds.length) next.items = "Marca al menos un expediente recibido.";
-          else if (inventoryLoan && selectedIds.some(id => !conditions[id]))
+          if (!selectedIds.length) next.items = "Marca al menos un expediente recibido.";
+          else if (selectedIds.some(id => !conditions[id]))
             next.items = "Indica el estado de cada expediente marcado.";
           setErrors(next);
           if (!Object.keys(next).length) setConfirmOpen(true);
@@ -1114,20 +1126,20 @@ function ReturnForm({
             <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
           </LoanField>
         </div>
-        {inventoryLoan && (
+        {pendingItems.length > 0 && (
           <section className="form-section">
             <div className="form-section__title"><h3>Recepción por expediente</h3></div>
             <p>{selectedIds.length} de {pendingItems.length} expedientes pendientes marcados como recibidos.</p>
             <div className="table-scroll">
               <table className="data-table">
-                <thead><tr><th>Recibido</th><th>Expediente</th><th>Asunto</th><th>Estado al recibir</th></tr></thead>
+                <thead><tr>{allowsPartialReturn && <th>Recibido</th>}<th>Expediente</th><th>Asunto</th><th>Estado al recibir</th></tr></thead>
                 <tbody>{pendingItems.map(item => {
                   const checked = selectedIds.includes(item.id);
                   return (
                     <tr key={item.id}>
-                      <td><input type="checkbox" aria-label={`Recibido ${item.number}`} checked={checked}
+                      {allowsPartialReturn && <td><input type="checkbox" aria-label={`Recibido ${item.number}`} checked={checked}
                         onChange={() => setReturnedIds(current => checked
-                          ? current.filter(id => id !== item.id) : [...current, item.id])} /></td>
+                          ? current.filter(id => id !== item.id) : [...current, item.id])} /></td>}
                       <td>{item.number}</td><td>{item.title}</td>
                       <td><label className="filter-select">
                         <select aria-label={`Estado de ${item.number}`} disabled={!checked}
@@ -1167,7 +1179,7 @@ function ReturnForm({
             if (saving) return;
             setSaving(true);
             try {
-              await onSave(date, receivedBy.trim(), notes.trim(), selectedIds, inventoryLoan ? conditions : undefined);
+              await onSave(date, receivedBy.trim(), notes.trim(), selectedIds, conditions);
             } finally {
               setSaving(false);
               setConfirmOpen(false);
@@ -1267,7 +1279,6 @@ export default function LoansPanel({
 }) {
   const [view, setView] = useState<PanelView>("list");
   const [selectedRecords, setSelectedRecords] = useState<ArchivalRecord[]>([]);
-  const [selectedMode, setSelectedMode] = useState<"INDIVIDUAL" | "INVENTARIO_COMPLETO">("INDIVIDUAL");
   const [selectedLoan, setSelectedLoan] = useState<ArchivalLoan | null>(null);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -1287,11 +1298,11 @@ export default function LoansPanel({
     if(!selectedRecords.length)return;
     try{
       const created=await loanApi.create({
-        mode:selectedMode,recordIds:selectedRecords.map(r=>r.id),
+        mode:"INDIVIDUAL",recordIds:selectedRecords.map(r=>r.id),
         requestingAreaId:data.requestingAreaId,requesterUserId:data.requesterUserId,
         delivererUserId:data.delivererUserId,
         loanDate:data.loanDate,expectedReturnDate:data.expectedReturnDate,
-        receivedBy:data.receivedBy,observations:data.observations,
+        receivedBy:data.receivedBy,observations:data.observations,deliveryConditions:data.deliveryConditions,
       });
       onLoansChange([created,...loans]);
       const updatedList=await concentrationApi.list().catch(error=>{
@@ -1307,14 +1318,18 @@ export default function LoansPanel({
       }
       setSelectedRecords([]);
       setMessage(created.folio+" registrado correctamente.");
-      setView("list");
+      setSelectedLoan(created);
+      setView("detail");
+      void downloadLoanReceipt(created, selectedRecords[0]).catch(() => {
+        setMessage("Préstamo registrado. Usa Descargar recibo PDF para volver a intentarlo.");
+      });
     }catch(error){
       const message=error instanceof Error?error.message:"No se pudo registrar el préstamo.";
       setMessage(message);
       window.alert(message);
     }
   };
-  const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[],conditions?:Record<string,LoanReturnCondition>)=>{
+  const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[],conditions:Record<string,LoanReturnCondition>)=>{
     if(!selectedLoan)return;
     try{
       const updated=await loanApi.returnItems(selectedLoan.id,returnedIds,date,receivedBy,notes,conditions);
@@ -1338,7 +1353,7 @@ export default function LoansPanel({
     }catch(error){
       const message=error instanceof Error?error.message:"No se pudo registrar la devolución.";
       setMessage(message);
-      // Una devolución por lote puede quedar parcialmente aplicada; sincronizar.
+      // Actualizar tras un conflicto con otra sesión.
       try{
         const [freshLoans,freshRecords]=await Promise.all([loanApi.list(),concentrationApi.list()]);
         onLoansChange(freshLoans);
@@ -1356,9 +1371,9 @@ export default function LoansPanel({
       <RecordSelector
         loans={loans}
         onBack={() => setView("list")}
-        onSelect={(selected,mode) => {
+        selection={selectedRecords}
+        onSelect={(selected) => {
           setSelectedRecords(selected);
-          setSelectedMode(mode);
           setView("form");
         }}
         records={records}
@@ -1377,7 +1392,7 @@ export default function LoansPanel({
 
   if (view === "return" && selectedLoan) {
     const record = recordFor(records, selectedLoan.recordId);
-    if (record || selectedLoan.mode === "Inventario completo")
+    if (record || selectedLoan.items?.length || selectedLoan.mode === "Inventario completo")
       return (
         <ReturnForm
           key={selectedLoan.id}
@@ -1398,7 +1413,7 @@ export default function LoansPanel({
 
   if (view === "detail" && selectedLoan) {
     const record = recordFor(records, selectedLoan.recordId);
-    if (record || selectedLoan.mode === "Inventario completo")
+    if (record || selectedLoan.items?.length || selectedLoan.mode === "Inventario completo")
       return (
         <>
           {message && (

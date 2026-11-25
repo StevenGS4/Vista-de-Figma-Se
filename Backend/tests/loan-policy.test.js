@@ -9,11 +9,11 @@ test('solo control archivístico y administrador gestionan préstamos',()=>{
   assert.equal(canManageLoans({roles:[role],mustChangePassword:false}),false);
  assert.equal(canManageLoans({roles:[roleNames.ADMIN],mustChangePassword:true}),false);
 });
-test('préstamo individual o inventario completo requieren selección coherente',()=>{
+test('un préstamo admite uno o varios expedientes seleccionados individualmente',()=>{
  assert.deepEqual(parseLoanSelection({mode:'INDIVIDUAL',recordIds:['REG-8']}),{mode:'INDIVIDUAL',ids:[8]});
- assert.deepEqual(parseLoanSelection({mode:'INVENTARIO_COMPLETO',recordIds:['REG-8','REG-9']}),{mode:'INVENTARIO_COMPLETO',ids:[8,9]});
- assert.throws(()=>parseLoanSelection({mode:'INDIVIDUAL',recordIds:['REG-8','REG-9']}),/individual/);
- assert.throws(()=>parseLoanSelection({mode:'INVENTARIO_COMPLETO',recordIds:['REG-8','REG-8']}),/duplicados/);
+ assert.deepEqual(parseLoanSelection({mode:'INDIVIDUAL',recordIds:['REG-8','REG-9']}),{mode:'INDIVIDUAL',ids:[8,9]});
+ assert.throws(()=>parseLoanSelection({mode:'INVENTARIO_COMPLETO',recordIds:['REG-8','REG-9']}),/individuales/);
+ assert.throws(()=>parseLoanSelection({mode:'INDIVIDUAL',recordIds:['REG-8','REG-8']}),/duplicados/);
 });
 test('devoluciones no pueden repetir expedientes y las fechas son reales',()=>{
  assert.deepEqual(parseReturnItems(['REG-1','REG-3']),[1,3]);

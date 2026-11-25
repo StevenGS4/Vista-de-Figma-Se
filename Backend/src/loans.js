@@ -34,13 +34,13 @@ const isLoanStaff=async(id)=>{
 
 const returnConditions = new Set(['GOOD', 'ISSUE']);
 const conditionLabel = { GOOD: 'Buen estado', ISSUE: 'Con incidencias' };
-const conditionFromNotes = (notes) => (
- notes?.startsWith('Estado al recibir: Buen estado.') ? 'GOOD' :
- notes?.startsWith('Estado al recibir: Con incidencias.') ? 'ISSUE' : ''
+const conditionFromNotes = (notes, prefix='Estado al recibir') => (
+ notes?.startsWith(prefix+': Buen estado.') ? 'GOOD' :
+ notes?.startsWith(prefix+': Con incidencias.') ? 'ISSUE' : ''
 );
 
-async function oneLoan(id) {
- const [rows]=await pool.execute(`SELECT p.id,p.folio,p.modalidad,i.folio AS inventoryFolio,a.codigo AS areaCode,
+async function oneLoan(id, db=pool) {
+ const [rows]=await db.execute(`SELECT p.id,p.folio,p.modalidad,i.folio AS inventoryFolio,a.codigo AS areaCode,
   p.solicitante_nombre,p.solicitante_usuario_id,p.fecha_prestamo,p.fecha_prevista,p.cerrado_en,p.estado,p.observaciones,
   p.recibido_por_nombre,
   CONCAT_WS(' ',ua.nombres,ua.apellido_paterno,ua.apellido_materno) AS autorizado_nombre,
@@ -51,7 +51,7 @@ async function oneLoan(id) {
   WHERE p.id=?`,[id]);
  if(!rows.length)return null;
  const p=rows[0];
- const [items]=await pool.execute(`SELECT pe.expediente_id,e.numero_expediente,e.titulo_asunto,e.codigo_clasificacion,
+ const [items]=await db.execute(`SELECT pe.expediente_id,e.numero_expediente,e.titulo_asunto,e.codigo_clasificacion,
   DATE_FORMAT(pe.devuelto_en,'%Y-%m-%d') AS returnedDate,
   pe.observaciones_devolucion,
   CONCAT_WS(' ',ud.nombres,ud.apellido_paterno,ud.apellido_materno) AS returnedBy
@@ -59,22 +59,26 @@ async function oneLoan(id) {
   JOIN expedientes e ON e.id=pe.expediente_id
   LEFT JOIN usuarios ud ON ud.id=pe.recibido_devolucion_por
   WHERE pe.prestamo_id=? ORDER BY pe.expediente_id`,[id]);
- const [movements]=await pool.execute(`SELECT ph.id,ph.expediente_id,ph.accion,ph.detalle,
+ const [movements]=await db.execute(`SELECT ph.id,ph.expediente_id,ph.accion,ph.detalle,
   DATE_FORMAT(ph.fecha,'%Y-%m-%d') AS moveDate,
   CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS actor
   FROM prestamo_historial ph JOIN usuarios u ON u.id=ph.actor_id
   WHERE ph.prestamo_id=? ORDER BY ph.id`,[id]);
+ const deliveryConditions=new Map(movements.filter(m=>m.accion==='ENTREGA').map(m=>[
+  String(m.expediente_id),conditionFromNotes(m.detalle,'Estado al entregar')
+ ]));
  const remaining=items.filter(x=>!x.returnedDate);
  const latestReturn=[...items].filter(x=>x.returnedDate).sort((a,b)=>b.returnedDate.localeCompare(a.returnedDate))[0];
  return {
   id:'LOAN-'+p.id,folio:p.folio,recordId:'REG-'+items[0]?.expediente_id,
   recordIds:remaining.map(x=>'REG-'+x.expediente_id),
   inventoryFolio:p.inventoryFolio||'',
-  items:p.modalidad==='INVENTARIO_COMPLETO'?items.map(x=>({
+  items:items.map(x=>({
    id:'REG-'+x.expediente_id,number:x.numero_expediente,title:x.titulo_asunto,
    classification:x.codigo_clasificacion||'',returnedDate:x.returnedDate||'',
+   deliveryCondition:deliveryConditions.get(String(x.expediente_id))||'',
    condition:x.returnedDate?conditionFromNotes(x.observaciones_devolucion):''
-  })):undefined,
+  })),
   deliveredRecordIds:items.map(x=>'REG-'+x.expediente_id),
   mode:p.modalidad==='INVENTARIO_COMPLETO'?'Inventario completo':'Expediente individual',
   requestingAreaId:p.areaCode,requesterName:p.solicitante_nombre,
@@ -122,9 +126,10 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
  }catch(e){next(e);}
 });
 loansRouter.post('/',async(req,res,next)=>{
+ let conn;
  try{
   const user=req.auth.user;guard(user);
-  // El SP confirma el préstamo; verificar la migración ANTES de invocarlo.
+  // Verificar que la base pueda guardar la cuenta solicitante.
   const [migration]=await pool.execute(`SELECT 1 AS ready FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='prestamos'
       AND COLUMN_NAME='solicitante_usuario_id'`);
@@ -151,58 +156,55 @@ loansRouter.post('/',async(req,res,next)=>{
   const deliverer=await findActiveUser(delivererId);
   if(!deliverer || !await isLoanStaff(delivererId))
    throw fail('La persona que entrega debe ser personal autorizado del archivo de concentración',400);
+  const conditions=data.deliveryConditions;
+  if(ids.some(id=>!returnConditions.has(conditions?.['REG-'+id])))
+   throw fail('Indica el estado de entrega de cada expediente');
   const placeholders=ids.map(()=>'?').join(',');
-  const [found]=await pool.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
-  i.estado AS inventoryState
-  FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
-  WHERE e.id IN (${placeholders}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL ORDER BY e.id`,ids);
+  conn=await pool.getConnection();
+  await conn.beginTransaction();
+  const [found]=await conn.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
+   e.archivo_zona,e.lugar_resguardo,e.estante,e.nivel,e.seccion_fisica
+   FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
+   WHERE e.id IN (${placeholders}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL
+   ORDER BY e.id FOR UPDATE`,ids);
   if(found.length!==ids.length)throw fail('Uno o más expedientes no existen',404);
-  const inventoryId=found[0].inventario_id;
-  if(found.some(e=>e.inventario_id!==inventoryId||e.etapa!=='CONCENTRACION'||
-    e.disponibilidad!=='EN_ARCHIVO'))
-    throw fail('Los expedientes deben pertenecer al mismo inventario aceptado y estar disponibles',409);
-  // Un expediente administrativamente aceptado NO es prestable hasta que
-  // el administrador coteje y ubique físicamente todos los documentos.
-  const [placed]=await pool.query(`SELECT e.id,e.archivo_zona,e.lugar_resguardo,e.estante,e.nivel,e.seccion_fisica,
+  if(found.some(e=>e.etapa!=='CONCENTRACION'||e.disponibilidad!=='EN_ARCHIVO'))
+   throw fail('Todos los expedientes deben estar disponibles en Concentración',409);
+  const [placed]=await conn.query(`SELECT e.id,
    (SELECT r.estado FROM recepciones r
      JOIN transferencia_expedientes_v ti ON ti.transferencia_id=r.transferencia_id
-     WHERE ti.expediente_id=e.id
-     ORDER BY r.id DESC LIMIT 1) AS recepcion_estado
+     WHERE ti.expediente_id=e.id ORDER BY r.id DESC LIMIT 1) AS recepcion_estado
    FROM expedientes e WHERE e.id IN (${placeholders})`,ids);
-  if(placed.length!==ids.length||placed.some(e=>e.recepcion_estado!=='RECIBIDA'||
-     !e.archivo_zona||!e.lugar_resguardo||!e.estante||!e.nivel||!e.seccion_fisica))
-   throw fail('El inventario requiere recepción física completa y ubicación asignada por el administrador antes de prestarse',409);
-  if(mode==='INVENTARIO_COMPLETO'){
-   const [all]=await pool.execute('SELECT id FROM expedientes WHERE inventario_id=?',[inventoryId]);
-   const wanted=new Set(ids);
-   if(all.length!==ids.length||all.some(x=>!wanted.has(Number(x.id))))
-    throw fail('Debes seleccionar el inventario completo, sin excluir ningún expediente',409);
-  }
+  if(placed.some(e=>e.recepcion_estado!=='RECIBIDA')||
+    found.some(e=>!e.archivo_zona||!e.lugar_resguardo||!e.estante||!e.nivel||!e.seccion_fisica))
+   throw fail('Los expedientes requieren recepción física completa y ubicación asignada',409);
   const folio='PRE-'+new Date().getFullYear()+'-'+randomUUID().slice(0,14).toUpperCase();
-  // El procedimiento existente registra el préstamo y cambia disponibilidad
-  // de forma atómica; también preserva el bloqueo contra préstamos simultáneos.
-  const result=await pool.query('CALL sp_registrar_prestamo(?,?,?,?,?,?,?,?)',[
-   folio,mode,inventoryId,mode==='INDIVIDUAL'?ids[0]:null,
-   areas[0].id,personName(requester),user.id,data.expectedReturnDate
-  ]);
-  const [rows]=await pool.execute('SELECT id FROM prestamos WHERE folio=?',[folio]);
-  if(!rows.length)throw fail('No se encontró el préstamo recién creado',500);
-  const id=rows[0].id;
-  // El SP conserva autorizador = usuario autenticado; asociamos solicitante y
-  // entregador elegidos, ambos validados contra cuentas activas y roles de MySQL.
-  await pool.execute(`UPDATE prestamos SET solicitante_usuario_id=?,entregado_por=?,
-    recibido_por_nombre=?,observaciones=? WHERE id=?`,
-    [requesterId,delivererId,recipient,notes||null,id]);
-  await pool.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),delivererUserId:String(delivererId)})]);
-  res.status(201).json({loan:await oneLoan(id)});
+  const [{insertId:id}]=await conn.execute(`INSERT INTO prestamos
+    (folio,modalidad,inventario_id,area_solicitante_id,solicitante_nombre,solicitante_usuario_id,
+     fecha_prestamo,fecha_prevista,autorizado_por,entregado_por,recibido_por_nombre,observaciones,estado)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ACTIVO')`,
+    [folio,mode,found[0].inventario_id,areas[0].id,personName(requester),requesterId,
+     currentDate,data.expectedReturnDate,user.id,delivererId,recipient,notes||null]);
+  await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
+   [ids.map(expId=>[id,expId])]);
+  await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO' WHERE id IN (${placeholders})`,ids);
+  await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
+   [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel[conditions['REG-'+expId]]+'.'])]);
+  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+    [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),
+     delivererUserId:String(delivererId),conditions:Object.fromEntries(ids.map(expId=>['REG-'+expId,conditions['REG-'+expId]]))})]);
+  await conn.commit();
+  res.status(201).json({loan:await oneLoan(id,conn)});
  }catch(e){
+  if(conn)await conn.rollback();
   if(e.sqlState==='45000'||e.code==='ER_DUP_ENTRY'||e.code==='ER_SIGNAL_EXCEPTION')
    return res.status(409).json({error:'Préstamo no permitido: '+e.message});
   next(e);
- }
+ }finally{conn?.release();}
 });
+
 loansRouter.post('/:id/returns',async(req,res,next)=>{
+ let conn;
  try{
   const user=req.auth.user;guard(user);
   const idText=String(req.params.id);
@@ -213,42 +215,45 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   try{ids=parseReturnItems(req.body?.recordIds);}catch(e){throw fail(e.message);}
   const date=req.body?.date;
   if(!validDate(date)||date!==await mysqlToday())throw fail('La devolución se registra con la fecha real actual');
-  const [loanRows]=await pool.execute('SELECT estado,modalidad,DATE_FORMAT(fecha_prestamo,\'%Y-%m-%d\') AS loanDate FROM prestamos WHERE id=?',[id]);
-  if(!loanRows.length)throw fail('Préstamo no encontrado',404);
-  if(loanRows[0].estado!=='ACTIVO')throw fail('El préstamo ya está cerrado',409);
-  if(date<loanRows[0].loanDate)throw fail('La devolución no puede anteceder al préstamo');
   const receiver=name(req.body?.receivedBy),notes=name(req.body?.notes,2000);
   if(!receiver)throw fail('Indica quién recibe físicamente la devolución');
-  const [pending]=await pool.execute('SELECT expediente_id FROM prestamo_expedientes WHERE prestamo_id=? AND devuelto_en IS NULL',[id]);
-  const wanted=new Set(pending.map(x=>Number(x.expediente_id)));
-  if(ids.some(x=>!wanted.has(x)))throw fail('Uno o más expedientes ya fueron devueltos o no pertenecen al préstamo',409);
-  const completeInventory=loanRows[0].modalidad==='INVENTARIO_COMPLETO';
   const conditions=req.body?.conditions;
-  if(completeInventory && ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
+  if(ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
    throw fail('Indica el estado de cada expediente recibido');
-  // El SP confirma y libera cada expediente sin tocar su etapa archivística.
-  // Cada devolución individual es atómica; si alguna falla, se informa
-  // y el usuario puede consultar el préstamo actualizado antes de reintentar.
-  const completed=[];
-  for(const expId of ids){
-   try{
-    await pool.query('CALL sp_devolver_expediente(?,?,?)',[id,expId,user.id]);
-    completed.push(expId);
-    if(completeInventory || notes) {
-     const condition=completeInventory ? 'Estado al recibir: '+conditionLabel[conditions['REG-'+expId]]+'. ' : '';
-     const observation=condition+(notes?notes+' | ':'')+'Recibido físicamente por: '+receiver;
-     await pool.execute(
-      'UPDATE prestamo_expedientes SET observaciones_devolucion=? WHERE prestamo_id=? AND expediente_id=?',
-      [observation,id,expId]);
-    }
-   }catch(error){
-    return res.status(409).json({error:'Se devolvieron '+completed.length+
-      ' expediente(s). La operación se detuvo: '+error.message+'. Recarga para verificar el estado.'});
-   }
+
+  conn=await pool.getConnection();
+  await conn.beginTransaction();
+  const [[loan]]=await conn.execute(`SELECT estado,DATE_FORMAT(fecha_prestamo,'%Y-%m-%d') AS loanDate
+   FROM prestamos WHERE id=? FOR UPDATE`,[id]);
+  if(!loan)throw fail('Préstamo no encontrado',404);
+  if(loan.estado!=='ACTIVO')throw fail('El préstamo ya está cerrado',409);
+  if(date<loan.loanDate)throw fail('La devolución no puede anteceder al préstamo');
+  const [pending]=await conn.execute('SELECT expediente_id FROM prestamo_expedientes WHERE prestamo_id=? AND devuelto_en IS NULL FOR UPDATE',[id]);
+  const wanted=new Set(pending.map(row=>Number(row.expediente_id)));
+  if(ids.some(expId=>!wanted.has(expId)))throw fail('Uno o más expedientes ya fueron devueltos o no pertenecen al préstamo',409);
+
+  for(const [code,label] of Object.entries(conditionLabel)){
+   const matching=ids.filter(expId=>conditions['REG-'+expId]===code);
+   if(!matching.length)continue;
+   const prefix='Estado al recibir: '+label+'. Recibido físicamente por: '+receiver;
+   const observation=(prefix+(notes?' | '+notes:'')).slice(0,2000);
+   await conn.query(`UPDATE prestamo_expedientes SET devuelto_en=NOW(),recibido_devolucion_por=?,observaciones_devolucion=?
+    WHERE prestamo_id=? AND expediente_id IN (${matching.map(()=>'?').join(',')})`,
+    [user.id,observation,id,...matching]);
+   await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
+    [matching.map(expId=>[id,expId,user.id,'DEVOLUCION',observation])]);
   }
-  await pool.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
-    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds:completed.map(x=>'REG-'+x),receivedBy:receiver,
-     ...(completeInventory ? {conditions:Object.fromEntries(completed.map(x=>['REG-'+x,conditions['REG-'+x]]))} : {})})]);
-  res.json({loan:await oneLoan(id)});
- }catch(e){next(e);}
+  await conn.query(`UPDATE expedientes SET disponibilidad='EN_ARCHIVO' WHERE id IN (${ids.map(()=>'?').join(',')})`,ids);
+  if(ids.length===wanted.size)
+   await conn.execute("UPDATE prestamos SET estado='DEVUELTO',cerrado_en=NOW() WHERE id=?",[id]);
+  const recordIds=ids.map(expId=>'REG-'+expId);
+  await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+    [user.id,'prestamos',id,'DEVOLUCION',JSON.stringify({recordIds,receivedBy:receiver,
+     conditions:Object.fromEntries(recordIds.map(recordId=>[recordId,conditions[recordId]]))})]);
+  await conn.commit();
+  res.json({loan:await oneLoan(id,conn)});
+ }catch(e){
+  if(conn)await conn.rollback();
+  next(e);
+ }finally{conn?.release();}
 });
