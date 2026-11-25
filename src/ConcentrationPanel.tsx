@@ -646,19 +646,19 @@ function ConcentrationDetail({
             }
           />
         </DetailSection>
+        {canViewSketch && (
+          <DetailSection icon={<MapPin size={17} />} title="Croquis de ubicación">
+            <div className="col-span-full grid min-w-0 gap-2">
+              {record.shelf && record.level && record.physicalSection ? (
+                <>
+                  <p className="text-sm">{[record.archiveZone, record.room, locationSummary(record)].filter(Boolean).join(" · ")}</p>
+                  <LocationShelf level={record.level} section={record.physicalSection} />
+                </>
+              ) : <p className="text-sm">El expediente aún no tiene estante, nivel y sección registrados.</p>}
+            </div>
+          </DetailSection>
+        )}
       </div>
-
-      {canViewSketch && (
-        <section className="surface my-4 grid gap-3 rounded-xl p-4" aria-label="Croquis de ubicación">
-          <h3 className="font-semibold">Croquis de ubicación</h3>
-          {record.shelf && record.level && record.physicalSection ? (
-            <>
-              <p className="text-sm">{[record.archiveZone, record.room, locationSummary(record)].filter(Boolean).join(" · ")}</p>
-              <LocationShelf level={record.level} section={record.physicalSection} />
-            </>
-          ) : <p className="text-sm">El expediente aún no tiene estante, nivel y sección registrados.</p>}
-        </section>
-      )}
 
       <div
         className={`availability-panel availability-panel--${record.availability === "En archivo" ? "available" : "loaned"}`}
