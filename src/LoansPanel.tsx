@@ -385,10 +385,32 @@ function RecordSelector({
   const [until, setUntil] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(() => new Set(selection.map(record => record.id)));
-  const activeIds = useMemo(() => new Set(loans.filter(loan => loan.status === "Activo").flatMap(loanRecordIds)), [loans]);
+  const todayInNayarit = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mazatlan" });
+  const [today, setToday] = useState(todayInNayarit);
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(todayInNayarit()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const loansByRecord = useMemo(() => {
+    const active = new Map<string, ArchivalLoan>();
+    for (const loan of loans) {
+      if (loan.status === "Activo") {
+        for (const id of loanRecordIds(loan)) active.set(id, loan);
+      }
+    }
+    return active;
+  }, [loans]);
   const concentration = records.filter(record => record.stage === "Archivo de concentración");
   const isAvailable = (record: ArchivalRecord) => record.availability === "En archivo" &&
-    record.receptionConfirmed && Boolean(record.archiveZone && record.room && record.shelf && record.level && record.physicalSection) && !activeIds.has(record.id);
+    record.receptionConfirmed && Boolean(record.archiveZone && record.room && record.shelf && record.level && record.physicalSection) && !loansByRecord.has(record.id);
+  const removeSelection = (id: string) => setSelected(current => new Set([...current].filter(item => item !== id)));
+  const remainingTime = (date?: string) => {
+    const days = (Date.parse(date ?? "") - Date.parse(today)) / 86_400_000;
+    if (!Number.isFinite(days)) return "Sin fecha prevista";
+    if (days < 0) return `Vencido hace ${-days} ${days === -1 ? "día" : "días"}`;
+    if (days === 0) return "Devuelve hoy";
+    return days === 1 ? "Falta 1 día" : `Faltan ${days} días`;
+  };
   const terms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const sectionName = (id: string) => cadidoSections.find(item => item.id === id)?.name || id || "Sin sección";
   const seriesOptions = new Map(concentration.filter(record => !section || record.cadidoSectionId === section)
@@ -421,7 +443,7 @@ function RecordSelector({
         <span className="record-mode"><Archive size={16} /> Concentración</span>
       </div>
       <section className="surface select-record-card">
-        <div className="loan-selection-filters">
+        <div className="loan-selection-filters" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
           <label className="search-box"><Search size={16} />
             <input aria-label="Buscar expediente" placeholder="Nombre, número o código CADIDO" value={search}
               onChange={event => { setSearch(event.target.value); setPage(1); }} />
@@ -445,32 +467,40 @@ function RecordSelector({
         {from && until && from > until && <p role="alert" className="px-5 py-2">La fecha inicial debe ser anterior o igual a la final.</p>}
         <div className="grid gap-3 px-5 py-4">
           {grouped.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(([key, items]) => (
-            <details key={key} className="rounded-lg border border-[#c8d4cc] bg-[#f8f7f2] p-3" open={terms.length > 0 || Boolean(series) || undefined}>
-              <summary className="cursor-pointer text-sm font-semibold text-[#173c34]">
+            <details key={key} className="overflow-hidden rounded-lg border border-[#b4c4bb] bg-[#f8f7f2]" open={terms.length > 0 || Boolean(series) || undefined}>
+              <summary className="cursor-pointer bg-[#205b4d] px-4 py-3 text-sm font-semibold text-[#fffdf6]">
                 {sectionName(items[0].cadidoSectionId)} · {items[0].cadidoCode} · {items[0].cadidoSeriesName || "Serie documental"} <small>({items.length})</small>
               </summary>
-              <ul className="mt-2 divide-y divide-[#d9e3dc]">
-                {items.map(record => (
-                  <li key={record.id} className="py-2">
-                    <label className="flex cursor-pointer items-center gap-3">
-                      <input type="checkbox" className="size-4 shrink-0 accent-[#205b4d]" checked={selected.has(record.id)}
-                        disabled={!isAvailable(record)} onChange={event => {
-                          const checked = event.target.checked;
-                          setSelected(current => {
-                            const next = new Set(current);
-                            if (checked) next.add(record.id);
-                            else next.delete(record.id);
-                            return next;
-                          });
-                        }} />
-                      <span className="min-w-0 grow break-words">
-                        <strong className="block">{record.title}</strong>
-                        <small className="text-[#687570]">{record.recordNumber} · {record.archiveClassificationCode || record.cadidoCode}</small>
-                      </span>
-                      {!isAvailable(record) && <small className="text-[#687570]">No disponible</small>}
-                    </label>
-                  </li>
-                ))}
+              <ul className="grid gap-2 p-3">
+                {items.map(record => {
+                  const activeLoan = loansByRecord.get(record.id);
+                  const borrowed = Boolean(activeLoan) || record.availability === "Prestado";
+                  const available = isAvailable(record);
+                  return (
+                    <li key={record.id}>
+                      <label className={`flex flex-wrap items-center gap-3 rounded-md border p-3 ${available
+                        ? "cursor-pointer border-[#c8d4cc] bg-white hover:bg-[#eef4ef]"
+                        : "cursor-not-allowed border-[#d1d5d3] bg-[#e8eae8] text-[#555e5a]"}`}>
+                        <input type="checkbox" className="size-4 shrink-0 accent-[#205b4d]" checked={available && selected.has(record.id)}
+                          disabled={!available} onChange={event => {
+                            if (event.target.checked) setSelected(current => new Set([...current, record.id]));
+                            else removeSelection(record.id);
+                          }} />
+                        <span className="min-w-0 grow break-words">
+                          <strong className="block">{record.title}</strong>
+                          <small className="text-[#687570]">{record.recordNumber} · {record.archiveClassificationCode || record.cadidoCode}</small>
+                        </span>
+                        {borrowed ? (
+                          <span className="grid gap-0.5 text-xs">
+                            <strong>Prestado</strong>
+                            <span>{remainingTime(activeLoan?.expectedReturnDate)}</span>
+                            {activeLoan?.expectedReturnDate && <span>Fecha prevista: {formatDate(activeLoan.expectedReturnDate)}</span>}
+                          </span>
+                        ) : !available && <small>No disponible</small>}
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
             </details>
           ))}
@@ -483,6 +513,24 @@ function RecordSelector({
             <button type="button" aria-label="Página siguiente" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={16} /></button>
           </div>
         </div>
+        <section className="mx-5 mt-3 overflow-hidden rounded-lg border border-[#b4c4bb]" aria-labelledby="loan-selection-summary">
+          <h3 id="loan-selection-summary" className="bg-[#205b4d] px-4 py-3 text-sm font-semibold text-[#fffdf6]">Expedientes seleccionados</h3>
+          {selectedRecords.length ? (
+            <ul className="divide-y divide-[#d9e3dc] bg-[#f8f7f2] px-4">
+              {selectedRecords.map(record => (
+                <li key={record.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="min-w-0 break-words">
+                    <strong className="block text-[#173c34]">{record.title}</strong>
+                    <small className="text-[#687570]">{record.recordNumber}</small>
+                  </span>
+                  <button type="button" className="text-button" aria-label={`Quitar selección de ${record.recordNumber}`} onClick={() => removeSelection(record.id)}>
+                    <X size={14} /> Quitar selección
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="px-4 py-3 text-sm text-[#687570]">Todavía no has seleccionado expedientes.</p>}
+        </section>
         <div className="flex flex-wrap items-center justify-end gap-3 p-4">
           <span aria-live="polite">{selectedRecords.length} seleccionados</span>
           <Button className="button--primary" disabled={!selectedRecords.length} onClick={() => onSelect(selectedRecords)}>Continuar</Button>
