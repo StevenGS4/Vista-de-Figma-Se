@@ -1425,12 +1425,14 @@ function AcceptModal({
           <AlertCircle size={17} />
           La recepción física se registrará posteriormente.
         </div>
-        <label className="form-field transfer-dictamen-field">
-          <span>Fundamento del dictamen <b>*</b></span>
-          <textarea rows={4} value={detail} onChange={e => {setDetail(e.target.value); setError("");}} maxLength={2000}
-            placeholder="Explica por qué procede la transferencia." aria-invalid={Boolean(error)} />
-          {error && <small className="field-error" role="alert">{error}</small>}
-        </label>
+        <div className="modal__body" style={{ boxSizing: "border-box", width: "100%", padding: "12px 24px 20px" }}>
+          <label className="form-field transfer-dictamen-field" style={{ width: "auto", margin: 0 }}>
+            <span>Fundamento del dictamen <b>*</b></span>
+            <textarea rows={4} value={detail} onChange={e => {setDetail(e.target.value); setError("");}} maxLength={2000}
+              placeholder="Explica por qué procede la transferencia." aria-invalid={Boolean(error)} />
+            {error && <small className="field-error" role="alert">{error}</small>}
+          </label>
+        </div>
         <div className="modal__footer">
           <Button className="button--secondary" onClick={onCancel}>
             Cancelar
