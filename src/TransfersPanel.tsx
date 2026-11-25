@@ -143,7 +143,7 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas", "Mis transferencias", "Transferencias de mi equipo"] as const;
+  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas", "Mis transferencias"] as const;
   const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
   const [mineOnly, setMineOnly] = useState(false);
   const [area, setArea] = useState("");
@@ -164,8 +164,6 @@ function TransferTray({
   const matchesView = (transfer: DocumentaryTransfer, currentView: typeof view) => {
     switch (currentView) {
       case "Mis transferencias": return transfer.requestedBy === currentUser.id;
-      case "Transferencias de mi equipo": return role === "Encargado de área" &&
-        transfer.areaId === currentUser.areaId && transfer.requestedBy !== currentUser.id;
       case "Seguimiento": return transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
       case "Pendiente": return ["En preparación", "Pendiente de visto bueno del área", "Pendiente de revisión administrativa"].includes(transfer.status);
       case "Con observaciones": return transfer.status === "Con observaciones";
@@ -199,7 +197,7 @@ function TransferTray({
       (!query || [transfer.folio, areaName(transfer.areaId), requesterName(transfer, users)]
         .some(value => value.toLowerCase().includes(query)));
   });
-  const showReceptionStatus = view === "Mis transferencias" || view === "Transferencias de mi equipo";
+  const showReceptionStatus = view === "Mis transferencias";
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -228,16 +226,12 @@ function TransferTray({
           </button>}
         </div>
         <nav className="transfer-tabs flex-wrap" aria-label="Vistas de transferencias">
-          {views.filter(item => {
-            if (item === "Mis transferencias") return isAdmin || role === "Encargado de área";
-            if (item === "Transferencias de mi equipo") return role === "Encargado de área";
-            return true;
-          }).map(item => (
+          {views.filter(item => item !== "Mis transferencias" || isAdmin || role === "Encargado de área").map(item => (
             <button type="button" key={item} className={view === item ? "is-active" : ""}
               aria-current={view === item ? "true" : undefined}
               onClick={() => {
                 setView(item);
-                if (item === "Mis transferencias" || item === "Transferencias de mi equipo") {
+                if (item === "Mis transferencias") {
                   setMineOnly(false);
                   setArea("");
                   setRequester("");
