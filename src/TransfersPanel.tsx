@@ -640,25 +640,30 @@ function TransferWizard({
                     key={inventoryId}
                   >
                     <div className="eligible-inventory-group__header border-l-4 border-l-[#547e6b]">
-                      <span>
-                        <strong>{inventoryId}</strong>
-                        <small>
-                          {areaName(inventoryRecords[0].areaId)} · {inventoryRecords.length} expedientes
-                        </small>
-                      </span>
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          setSelectedInventoryIds((current) =>
-                            current.includes(inventoryId)
-                              ? current.filter((id) => id !== inventoryId)
-                              : [...current, inventoryId],
-                          );
-                        }}
-                        type="button"
-                      >
-                        <Check size={15} /> {selected ? "Quitar inventario" : "Seleccionar inventario completo"}
-                      </button>
+                      <div className="min-w-0">
+                        <label className="flex min-w-0 cursor-pointer items-start gap-3">
+                          <input
+                            aria-label={`Seleccionar inventario completo ${inventoryId}`}
+                            checked={selected}
+                            className="mt-0.5 size-5 shrink-0 cursor-pointer appearance-auto accent-[#245d4d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245d4d]"
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setSelectedInventoryIds((current) =>
+                                checked
+                                  ? [...current, inventoryId]
+                                  : current.filter((id) => id !== inventoryId),
+                              );
+                            }}
+                            type="checkbox"
+                          />
+                          <span className="grid min-w-0 gap-1 wrap-anywhere">
+                            <strong>{inventoryId}</strong>
+                            <small>
+                              {areaName(inventoryRecords[0].areaId)} · {inventoryRecords.length} expedientes
+                            </small>
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <div>
                       {visibleRows.map((record) => (
