@@ -49,7 +49,8 @@ type TransferDetailView = "tracking" | "documents" | "inventory";
 type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
 
 const transferSteps = [
-  { label: "Seleccionar expedientes de Trámite", icon: ListChecks },
+  { label: "Archivos de origen", icon: FolderArchive },
+  { label: "Seleccionar expedientes", icon: ListChecks },
   { label: "Vista previa y envío", icon: Files },
 ];
 
@@ -537,6 +538,9 @@ function TransferWizard({
   }, []);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
+  const [sourceIds, setSourceIds] = useState<string[]>(() => [...new Set(
+    allRecords.filter(record => activeTransfer?.recordIds.includes(record.id)).map(record => record.inventoryId || record.id),
+  )]);
   const [selectedIds, setSelectedIds] = useState<string[]>(() => activeTransfer?.recordIds ?? []);
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -573,8 +577,8 @@ function TransferWizard({
       record.cadidoCode.toLowerCase().includes(query)
     );
   });
-  const selectedRecords = allRecords.filter((record) =>
-    selectedIds.includes(record.id),
+  const selectedRecords = eligible.filter((record) =>
+    sourceIds.includes(record.inventoryId || record.id) && selectedIds.includes(record.id),
   );
   const eligibleInventories = Array.from(
     eligible.reduce((groups, record) => {
@@ -584,14 +588,11 @@ function TransferWizard({
     }, new Map<string, ArchivalRecord[]>()),
   );
 
-  const next = () => {
-    if (!selectedIds.length) {
-      setError("Selecciona al menos un expediente elegible para continuar.");
-      return;
-    }
-    if (!activeTransfer && selectedRecords.length > 1000) { setError("El máximo es de 1000 expedientes por solicitud."); return; }
+  const selectedSources = eligibleInventories.filter(([id]) => sourceIds.includes(id));
+  const goToStep = (target: number) => {
     setError("");
-    setStep(1);
+    setSearch("");
+    setStep(target);
   };
 
   return (
@@ -627,6 +628,36 @@ function TransferWizard({
         {step === 0 && (
           <div className="transfer-step">
             <div className="step-heading">
+              <span><FolderArchive size={21} /></span>
+              <div><h3>Selecciona los archivos de Trámite</h3><p>Marca uno o varios de tus archivos. Después elegirás los expedientes de cada uno.</p></div>
+            </div>
+            {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
+            {testMode === null && !settingsError && !activeTransfer && <p role="status">Consultando archivos elegibles…</p>}
+            {!eligibleInventories.length && (testMode !== null || activeTransfer) && <p>No hay archivos con expedientes elegibles.</p>}
+            <div className="eligible-list inventory-eligible-list">
+              {eligibleInventories.map(([id, records]) => (
+                <label key={id} className="eligible-inventory-group__header cursor-pointer border-b border-[#c8d4cc]">
+                  <span className="flex items-center gap-3">
+                    <input type="checkbox" checked={sourceIds.includes(id)} disabled={Boolean(activeTransfer)}
+                      onChange={event => {
+                        if (event.target.checked) {
+                          setSourceIds(current => [...current, id]);
+                        } else {
+                          setSourceIds(current => current.filter(source => source !== id));
+                          setSelectedIds(current => current.filter(recordId => !records.some(record => record.id === recordId)));
+                        }
+                      }} />
+                    <span><strong>{records[0].cadidoSeriesName || records[0].cadidoCode}</strong>
+                      <small>{id} · {records.length} expedientes elegibles</small></span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {step === 1 && (
+          <div className="transfer-step">
+            <div className="step-heading">
               <span>
                 <ListChecks size={21} />
               </span>
@@ -651,7 +682,7 @@ function TransferWizard({
             </div>
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
             <div className="eligible-list inventory-eligible-list">
-              {eligibleInventories.map(([inventoryId, inventoryRecords]) => {
+              {selectedSources.map(([inventoryId, inventoryRecords]) => {
                 const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
                 if (!visibleRows.length) return null;
                 const selected = inventoryRecords.some(record => selectedIds.includes(record.id));
@@ -692,7 +723,7 @@ function TransferWizard({
                   </section>
                 );
               })}
-              {!shown.length && (
+              {!selectedSources.some(([, records]) => records.some(record => shown.includes(record))) && (
                 <div className="empty-state compact-empty">
                   <Files size={27} />
                   <strong>No hay expedientes elegibles</strong>
@@ -711,7 +742,7 @@ function TransferWizard({
             )}
           </div>
         )}
-        {step === 1 && (
+        {step === 2 && (
           <div className="transfer-step transfer-step--wide">
             <div className="step-heading">
               <span>
@@ -730,22 +761,6 @@ function TransferWizard({
               <div><dt className="text-xs text-[#435951]">Área solicitante</dt><dd className="font-semibold">{areaName(currentUser.areaId)}</dd></div>
               <div><dt className="text-xs text-[#435951]">Selección</dt><dd className="font-semibold">{new Set(selectedRecords.map(record => record.inventoryId)).size} archivos · {selectedRecords.length} expedientes</dd></div>
             </dl>
-            <div className="origin-inventory-summary transfer-preview-origins">
-              {[...new Set(selectedRecords.map((record) => record.inventoryId))].map((id) => {
-                const origin = selectedRecords.filter((record) => record.inventoryId === id);
-                return (
-                  <div key={id}>
-                    <FolderArchive size={16} />
-                    <span>
-                      <strong>{id}</strong>
-                      <small>
-                        {areaName(origin[0].areaId)} · {origin.length} expedientes incluidos
-                      </small>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
             <InventoryTable records={selectedRecords} />
             <div className="inventory-note">
               <ShieldCheck size={17} />
@@ -761,18 +776,25 @@ function TransferWizard({
             {step > 0 && (
               <Button
                 className="button--secondary"
-                onClick={() => setStep(0)}
+                onClick={() => goToStep(step - 1)}
               >
                 <ChevronLeft size={17} />
                 Anterior
               </Button>
             )}
-            {step === 0 ? (
-              <Button className="button--primary" disabled={!selectedIds.length} onClick={next}>
-                Continuar <ArrowRight size={17} />
+            {step < 2 ? (
+              <Button className="button--primary" disabled={step === 0 ? !selectedSources.length : !selectedRecords.length}
+                onClick={() => {
+                  if (step === 1 && activeTransfer && selectedRecords.length !== activeTransfer.recordIds.length) {
+                    setError("No se pudieron cargar todos los expedientes de la solicitud original.");
+                    return;
+                  }
+                  goToStep(step + 1);
+                }}>
+                {step === 0 ? "Continuar" : "Ver vista previa"} <ArrowRight size={17} />
               </Button>
             ) : (
-              <Button className="button--primary" onClick={() => setConfirmOpen(true)}>
+              <Button className="button--primary" disabled={!selectedRecords.length || (Boolean(activeTransfer) && selectedRecords.length !== activeTransfer?.recordIds.length)} onClick={() => setConfirmOpen(true)}>
                 <Send size={17} /> {activeTransfer ? "Reenviar solicitud" : "Confirmar envío"}
               </Button>
             )}
