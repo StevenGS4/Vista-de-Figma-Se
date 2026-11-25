@@ -405,58 +405,69 @@ function ConcentrationList({
                       <tr className="concentration-inventory-detail-row">
                         <td colSpan={7} id={`concentration-inventory-${id}`}>
                           <div className="concentration-inventory-contents">
-                            {inventories.map(([inventoryId, inventoryRecords]) => (
-                              <details key={inventoryId} className="mb-3 rounded-lg border border-[#c8d4cc] p-3" open={inventories.length === 1 || Boolean(search.trim())}>
-                                <summary className="cursor-pointer font-semibold">
-                                  {inventoryRecords[0].inventoryId || "Archivo sin identificador"} · {inventoryRecords.length} expedientes
-                                </summary>
-                                  <div className="table-scroll">
-                                    <table className="data-table concentration-table concentration-expedient-table">
-                                      <thead><tr>
-                                        <th>Asunto e identificación</th>
-                                        <th>Disponibilidad</th>
-                                        <th className="align-right">Acciones</th>
-                                      </tr></thead>
-                                      <tbody>{inventoryRecords.map((record) => (
-                                        <tr key={record.id}>
-                                          <td>
-                                            {canViewDetail ? (
-                                              <button type="button" className="record-number-link" onClick={() => onView(record)}>
-                                                {record.title}
-                                              </button>
-                                            ) : <strong>{record.title}</strong>}
-                                            <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
-                                          </td>
-                                          <td><AvailabilityBadge value={record.availability}/></td>
-                                          <td>
-                                            <RowActionsMenu
-                                              label={`Acciones para ${record.recordNumber}`}
-                                              width={178}
-                                              actions={[
-                                                ...(canViewDetail ? [{
-                                                  label: "Ver detalle",
-                                                  icon: <Files size={16}/>,
-                                                  onSelect: () => onView(record),
-                                                }] : []),
-                                                ...(canEditLocation && record.receptionConfirmed ? [{
-                                                  label: "Completar datos del inventario",
-                                                  icon: <Pencil size={15}/>,
-                                                  onSelect: () => onEditInventoryData(record),
-                                                }] : []),
-                                                ...(canEditLocation ? [{
-                                                  label: "Editar ubicación",
-                                                  icon: <MapPin size={15}/>,
-                                                  onSelect: () => onEditLocation(record),
-                                                }] : []),
-                                              ]}
-                                            />
-                                          </td>
-                                        </tr>
-                                      ))}</tbody>
-                                    </table>
-                                  </div>
-                              </details>
-                            ))}
+                            {inventories.map(([inventoryId, inventoryRecords]) => {
+                              const titles = inventoryRecords.map(record => record.title || "Expediente sin título").join(" · ");
+                              return (
+                                <details key={inventoryId} className="mb-3 rounded-lg border border-[#c8d4cc] p-3" open={inventories.length === 1 || Boolean(search.trim())}>
+                                  <summary className="cursor-pointer">
+                                    <span className="inline-block max-w-[calc(100%_-_1.25rem)] align-middle">
+                                      <strong className="block truncate text-sm font-semibold text-[#173c34]"
+                                        title={titles}>
+                                        {titles}
+                                      </strong>
+                                      <small className="mt-0.5 block text-[10px] font-normal text-[#687570]">
+                                        {inventoryRecords[0].inventoryId || "Archivo sin identificador"} · {inventoryRecords.length} {inventoryRecords.length === 1 ? "expediente" : "expedientes"}
+                                      </small>
+                                    </span>
+                                  </summary>
+                                    <div className="table-scroll">
+                                      <table className="data-table concentration-table concentration-expedient-table">
+                                        <thead><tr>
+                                          <th>Asunto e identificación</th>
+                                          <th>Disponibilidad</th>
+                                          <th className="align-right">Acciones</th>
+                                        </tr></thead>
+                                        <tbody>{inventoryRecords.map((record) => (
+                                          <tr key={record.id}>
+                                            <td>
+                                              {canViewDetail ? (
+                                                <button type="button" className="record-number-link" onClick={() => onView(record)}>
+                                                  {record.title}
+                                                </button>
+                                              ) : <strong>{record.title}</strong>}
+                                              <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
+                                            </td>
+                                            <td><AvailabilityBadge value={record.availability}/></td>
+                                            <td>
+                                              <RowActionsMenu
+                                                label={`Acciones para ${record.recordNumber}`}
+                                                width={178}
+                                                actions={[
+                                                  ...(canViewDetail ? [{
+                                                    label: "Ver detalle",
+                                                    icon: <Files size={16}/>,
+                                                    onSelect: () => onView(record),
+                                                  }] : []),
+                                                  ...(canEditLocation && record.receptionConfirmed ? [{
+                                                    label: "Completar datos del inventario",
+                                                    icon: <Pencil size={15}/>,
+                                                    onSelect: () => onEditInventoryData(record),
+                                                  }] : []),
+                                                  ...(canEditLocation ? [{
+                                                    label: "Editar ubicación",
+                                                    icon: <MapPin size={15}/>,
+                                                    onSelect: () => onEditLocation(record),
+                                                  }] : []),
+                                                ]}
+                                              />
+                                            </td>
+                                          </tr>
+                                        ))}</tbody>
+                                      </table>
+                                    </div>
+                                </details>
+                              );
+                            })}
                           </div>
                         </td>
                       </tr>
