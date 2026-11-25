@@ -7,7 +7,6 @@ export function transferTask(transfer: DocumentaryTransfer, user: UserRecord, ro
   const own = transfer.requestedBy === user.id;
   const manager = role === "Encargado de área" && transfer.areaId === user.areaId;
   const admin = role === "Administrador / Coordinador";
-  const sender = own || manager;
   const document = (step: number, kind: string, label: string, mine: boolean, owner: string) =>
     ({ step, kind, label, mine, owner });
   if (transfer.status === "Cancelada") return { step: -1, label: "Solicitud cancelada", owner: "", mine: false };
@@ -15,17 +14,17 @@ export function transferTask(transfer: DocumentaryTransfer, user: UserRecord, ro
   if (transfer.status === "Pendiente de visto bueno del área") {
     const note = documents.map(doc => doc.kind).lastIndexOf("SOLICITUD");
     if (note >= 0 && !documents.slice(note + 1).some(doc => doc.kind === "ACUSE_SOLICITUD" && doc.hasFile))
-      return document(0, "ACUSE_SOLICITUD", "Adjuntar acuse de solicitud", sender, "Solicitante o encargado del área");
+      return document(0, "ACUSE_SOLICITUD", "Adjuntar acuse de solicitud", own, "Solicitante");
     return { step: 1, label: "Dar visto bueno", owner: transfer.assignedAreaManagerName || "Encargado del área", mine: !own && (admin || (manager && permissions.includes("approve-area-transfers"))) };
   }
   if (transfer.status === "Pendiente de revisión administrativa")
     return { step: 2, label: "Revisar y emitir dictamen", owner: "Administrador", mine: admin && !own && permissions.some(permission => ["review-transfers", "accept-transfers"].includes(permission)) };
   if (transfer.status === "Aceptada") {
     if (has("DICTAMEN_FAVORABLE")) {
-      const area = "Solicitante o encargado del área";
-      if (!has("NOTA_TRASLADO")) return document(3, "NOTA_TRASLADO", "Registrar nota de traslado", sender, area);
-      if (!has("ACUSE_TRASLADO")) return document(3, "ACUSE_TRASLADO", "Adjuntar acuse de traslado", sender, area);
-      if (!has("ENTREGA")) return document(3, "ENTREGA", "Registrar entrega", sender, area);
+      const area = "Encargado del área";
+      if (!has("NOTA_TRASLADO")) return document(3, "NOTA_TRASLADO", "Registrar nota de traslado", manager, area);
+      if (!has("ACUSE_TRASLADO")) return document(3, "ACUSE_TRASLADO", "Adjuntar acuse de traslado", manager, area);
+      if (!has("ENTREGA")) return document(3, "ENTREGA", "Registrar entrega", manager, area);
       if (!has("FORMATO_FIRMADO")) return document(4, "FORMATO_FIRMADO", "Adjuntar formato firmado", admin, "Administrador");
     }
     return { step: 4, label: "Registrar recepción física", owner: "Administrador", mine: admin && permissions.includes("update-location") };

@@ -1028,6 +1028,7 @@ function RequestDetail({
               key={transfer.id}
               transfer={transfer}
               user={currentUser}
+              role={role}
               initialKind={task.mine && "kind" in task ? task.kind : undefined}
               actionLabel={task.mine && "kind" in task ? task.label : undefined}
               onChange={onDocumentsChange}
@@ -1075,7 +1076,7 @@ function RequestDetail({
           </div>
         </>
       )}
-      {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} />}
+      {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} role={role} />}
       {detailView === "tracking" && <>
       <div className={showStorage ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "grid gap-4"}>
         <section className="surface min-w-0 overflow-hidden rounded-xl">
@@ -1207,40 +1208,40 @@ const documentNames: Record<string,string> = {
   FORMATO_FIRMADO:"Formato de transferencia con firmas autógrafas",
 };
 
-function TransferDocuments({transfer,user,initialKind,actionLabel,onChange}: {
+function TransferDocuments({transfer,user,role,initialKind,actionLabel,onChange}: {
   transfer:DocumentaryTransfer;
   user:UserRecord;
+  role:Role;
   initialKind?:string;
   actionLabel?:string;
   onChange?:(updated:DocumentaryTransfer)=>void;
 }) {
   const [detail,setDetail]=useState("");
-  const [kind,setKind]=useState(initialKind ?? "");
-  const [formOpen,setFormOpen]=useState(false);
+  const [kind,setKind]=useState("");
+
   const [file,setFile]=useState<File|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const {confirm,dialog}=useConfirmAction();
-  const sender=transfer.requestedBy===user.id ||
-    (transfer.areaId===user.areaId && user.roles.includes("Encargado de área"));
-  const documents=transfer.documents ?? [];
-  const hasDocument=(kind:string)=>documents.some(doc=>doc.kind===kind);
-  const options:string[]=[];
-  const canRequestExtension = sender && transfer.status === "Pendiente de visto bueno del área";
-  if (canRequestExtension) {
-    options.push("ACUSE_SOLICITUD");
-    if (kind === "SOLICITUD_AMPLIACION") options.push("SOLICITUD_AMPLIACION");
+  const requester = transfer.requestedBy === user.id;
+  const areaManager = role === "Encargado de área" && transfer.areaId === user.areaId;
+  const documents = transfer.documents ?? [];
+  const hasDocument = (kind: string) => documents.some(doc => doc.kind === kind);
+  const options: string[] = [];
+  if (transfer.status === "Pendiente de visto bueno del área") {
+    if (requester) options.push("ACUSE_SOLICITUD");
+    if (areaManager) options.push("SOLICITUD_AMPLIACION");
   }
-  if(transfer.status==="Aceptada" && transfer.receptionStatus!=="Recibida"){
-    if(sender){
+  if (transfer.status === "Aceptada" && transfer.receptionStatus !== "Recibida") {
+    if (areaManager) {
       options.push("NOTA_TRASLADO");
-      if(hasDocument("NOTA_TRASLADO"))options.push("ACUSE_TRASLADO");
-      if(hasDocument("ACUSE_TRASLADO"))options.push("ENTREGA");
+      if (hasDocument("NOTA_TRASLADO")) options.push("ACUSE_TRASLADO");
+      if (hasDocument("ACUSE_TRASLADO")) options.push("ENTREGA");
     }
-    if(user.roles.includes("Administrador / Coordinador") &&
-      (hasDocument("ENTREGA") || !hasDocument("DICTAMEN_FAVORABLE")))options.push("FORMATO_FIRMADO");
+    if (role === "Administrador / Coordinador" &&
+      (hasDocument("ENTREGA") || !hasDocument("DICTAMEN_FAVORABLE"))) options.push("FORMATO_FIRMADO");
   }
-  const selected=options.includes(kind) ? kind : options.find(option => !hasDocument(option)) ?? options[0] ?? "";
+  const selected=options.includes(kind) ? kind : "";
   const lastRequest=documents.map(doc=>doc.kind).lastIndexOf("SOLICITUD");
   const current=[...documents].reverse().find(doc=>doc.kind===selected &&
     (selected!=="ACUSE_SOLICITUD" || documents.indexOf(doc)>lastRequest));
@@ -1257,27 +1258,22 @@ function TransferDocuments({transfer,user,initialKind,actionLabel,onChange}: {
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
   if (onChange) {
     if (!options.length) return null;
-    if (!formOpen) return (
-      <div className="flex justify-end">
-        <Button className="button--primary" onClick={() => {
-          changeDocument(initialKind ?? "");
-          setFormOpen(true);
-        }}><Files size={16} /> {actionLabel ?? "Gestionar evidencias"}</Button>
+    if (!selected) return (
+      <div className="flex flex-wrap justify-end gap-2">
+        {options.map(option => (
+          <Button key={option} className={option === initialKind ? "button--primary" : "button--secondary"}
+            onClick={() => changeDocument(option)}>
+            <Files size={16} /> {option === initialKind ? actionLabel ?? documentNames[option] : documentNames[option]}
+          </Button>
+        ))}
       </div>
     );
     return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold">{actionLabel ?? "Gestionar evidencias"}</h3>
-        <Button className="button--secondary" disabled={busy} onClick={() => setFormOpen(false)}>Cerrar</Button>
+        <h3 className="font-semibold">{documentNames[selected]}</h3>
+        <Button className="button--secondary" disabled={busy} onClick={() => changeDocument("")}>Cerrar</Button>
       </header>
-    {canRequestExtension && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] px-3 py-2 text-sm">
-      <button type="button" className="text-button" disabled={busy}
-        onClick={() => changeDocument(selected === "SOLICITUD_AMPLIACION" ? "ACUSE_SOLICITUD" : "SOLICITUD_AMPLIACION")}>
-        {selected === "SOLICITUD_AMPLIACION" ? "Volver al acuse de solicitud" :
-          hasDocument("SOLICITUD_AMPLIACION") ? "Consultar ampliación de plazo" : "Registrar ampliación de plazo (opcional)"}
-      </button>
-      <p>Solo corresponde si el área generadora no responde.</p>
-    </div>}
+    {selected === "SOLICITUD_AMPLIACION" && <p className="text-sm">Solo corresponde si el área generadora no responde.</p>}
     <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4 sm:p-5" style={{ gridTemplateColumns: "minmax(0, 1fr)" }} onSubmit={async event=>{
       event.preventDefault();
       if(busy)return;
@@ -1296,13 +1292,10 @@ function TransferDocuments({transfer,user,initialKind,actionLabel,onChange}: {
         setFileVersion(n=>n+1);
         setDetail("");
         setFile(null);
-        setFormOpen(false);
+        setKind("");
       }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
       finally{setBusy(false);}
     }}>
-      <label className="w-full max-w-xl">Documento<select className="min-h-10" value={selected} onChange={e=>changeDocument(e.target.value)}>
-        {options.map(option=><option key={option} value={option}>{documentNames[option]}</option>)}
-      </select></label>
       {selected === "ACUSE_SOLICITUD" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Adjunta el acuse de la última Atenta Nota antes del visto bueno.</p>}
       {selected === "NOTA_TRASLADO" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Se usa después del dictamen favorable para solicitar el vehículo al Enlace Administrativo.</p>}
       {selected === "ACUSE_TRASLADO" && <p className="rounded-md border-l-4 border-[#789b8a] bg-[#e9eee8] px-3 py-2 text-sm text-[#35584b]">Es la copia de recibido de la Atenta Nota de traslado.</p>}
@@ -1581,7 +1574,7 @@ function ReceptionForm({
           <div className="transfer-evidence" role="status">
             <strong>Evidencia pendiente</strong>
             <ul>
-              {missingDelivery && <li>Registro de entrega con representante del área. Lo registra el solicitante o el encargado del área.</li>}
+              {missingDelivery && <li>Registro de entrega con representante del área. Lo registra el encargado del área.</li>}
               {missingSignedFormat && <li>PDF del formato con firmas autógrafas. Lo adjunta el administrador después del registro de entrega.</li>}
             </ul>
             <Button className="button--secondary" onClick={onBack}>Volver a Documentos de la transferencia</Button>

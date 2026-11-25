@@ -402,9 +402,11 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
   conn=await pool.getConnection();await conn.beginTransaction();
   const t=await rawTransfer(conn,visible.id,true);
   if(!t||!canViewTransfer(user,t))throw problem('Transferencia fuera de tu alcance',403);
-  const sender=Number(t.solicitante_id)===Number(user.id)||user.roles.includes('Encargado de área')&&user.areaId===t.areaCode;
-  const allowed=(sender&&t.estado==='PENDIENTE_VB'&&['ACUSE_SOLICITUD','SOLICITUD_AMPLIACION'].includes(kind))
-   ||(t.estado==='ACEPTADA'&&((sender&&['NOTA_TRASLADO','ACUSE_TRASLADO','ENTREGA'].includes(kind))
+  const requester=Number(t.solicitante_id)===Number(user.id);
+  const areaManager=user.roles.includes('Encargado de área')&&user.areaId===t.areaCode;
+  const allowed=(t.estado==='PENDIENTE_VB'&&((requester&&kind==='ACUSE_SOLICITUD')
+   ||(areaManager&&kind==='SOLICITUD_AMPLIACION')))
+   ||(t.estado==='ACEPTADA'&&((areaManager&&['NOTA_TRASLADO','ACUSE_TRASLADO','ENTREGA'].includes(kind))
    ||(canReceiveTransfer(user,t)&&kind==='FORMATO_FIRMADO')));
   if(!allowed)throw problem('El documento no corresponde a tu etapa o función',403);
   if(t.estado==='ACEPTADA'){
@@ -482,7 +484,7 @@ transfersRouter.post('/:id/reception',async(req,res,next)=>{
   if(state==='Recibida'){
    const managed=await hasDocument(conn,id,'DICTAMEN_FAVORABLE');
    if(managed&&!await hasDocument(conn,id,'ENTREGA'))
-    throw problem('Falta el registro de entrega con representante del área. Lo registra el solicitante o el encargado del área.',409);
+    throw problem('Falta el registro de entrega con representante del área. Lo registra el encargado del área.',409);
    if(managed&&!await hasDocument(conn,id,'FORMATO_FIRMADO'))
     throw problem('Falta adjuntar el PDF del formato con firmas autógrafas en Documentos de la transferencia.',409);
    const [linked]=await conn.execute(`SELECT e.id FROM expedientes e
