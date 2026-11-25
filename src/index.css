@@ -4704,7 +4704,7 @@
   background: var(--green-50);
 }
 
-.eligible-list input {
+.eligible-list > label > input[type="checkbox"] {
   position: absolute;
   width: 1px;
   height: 1px;
