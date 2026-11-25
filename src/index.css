@@ -8231,12 +8231,30 @@
 .transfer-test-settings__switch { display: flex; align-items: center; gap: 10px; color: var(--green-950); font-weight: 600; font-size: 13px; }
 .transfer-test-settings__switch input { width: 18px; height: 18px; accent-color: var(--green-800); }
 
-.decision-modal .transfer-dictamen-field {
-  width: 100%;
-  text-align: left;
-  margin-block: 14px;
+.decision-modal--accept h2 {
+  margin-inline: 20px;
+  font-size: 20px;
 }
-.transfer-dictamen-field textarea { resize: vertical; }
+
+.decision-modal--accept .transfer-dictamen-field {
+  align-self: stretch;
+  margin: 4px clamp(16px, 5vw, 24px) 20px;
+  text-align: left;
+}
+
+.transfer-dictamen-field > span {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.transfer-dictamen-field textarea {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.transfer-dictamen-field textarea::placeholder {
+  color: var(--gray-600);
+}
 .transfer-evidence {
   display: grid;
   gap: 8px;
