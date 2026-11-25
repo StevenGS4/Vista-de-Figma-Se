@@ -143,7 +143,7 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas"] as const;
+  const views = ["Seguimiento", "Mis transferencias", "Transferencias de mi equipo", "Todas", "Pendiente", "Con observaciones", "Aceptadas"] as const;
   const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
   const [mineOnly, setMineOnly] = useState(false);
   const [area, setArea] = useState("");
@@ -163,6 +163,9 @@ function TransferTray({
   }, [currentUser.areaId, currentUser.id, role, transfers]);
   const matchesView = (transfer: DocumentaryTransfer, currentView: typeof view) => {
     switch (currentView) {
+      case "Mis transferencias": return transfer.requestedBy === currentUser.id;
+      case "Transferencias de mi equipo": return role === "Encargado de área" &&
+        transfer.areaId === currentUser.areaId && transfer.requestedBy !== currentUser.id;
       case "Seguimiento": return transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
       case "Pendiente": return ["En preparación", "Pendiente de visto bueno del área", "Pendiente de revisión administrativa"].includes(transfer.status);
       case "Con observaciones": return transfer.status === "Con observaciones";
@@ -196,6 +199,7 @@ function TransferTray({
       (!query || [transfer.folio, areaName(transfer.areaId), requesterName(transfer, users)]
         .some(value => value.toLowerCase().includes(query)));
   });
+  const showReceptionStatus = view === "Mis transferencias" || view === "Transferencias de mi equipo";
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -223,11 +227,19 @@ function TransferTray({
             <Clock3 size={16} /> {pending} {pending === 1 ? "acción pendiente" : "acciones pendientes"}
           </button>}
         </div>
-        <nav className="transfer-tabs" aria-label="Estado de las transferencias">
-          {views.map(item => (
+        <nav className="transfer-tabs" aria-label="Vistas de transferencias">
+          {views.filter(item => item !== "Transferencias de mi equipo" || role === "Encargado de área").map(item => (
             <button type="button" key={item} className={view === item ? "is-active" : ""}
               aria-current={view === item ? "true" : undefined}
-              onClick={() => { setView(item); setPage(1); }}>
+              onClick={() => {
+                setView(item);
+                if (item === "Mis transferencias" || item === "Transferencias de mi equipo") {
+                  setMineOnly(false);
+                  setArea("");
+                  setRequester("");
+                }
+                setPage(1);
+              }}>
               {item}<span>{visibleByRole.filter(transfer => matchesView(transfer, item)).length}</span>
             </button>
           ))}
@@ -313,6 +325,9 @@ function TransferTray({
                     </td>
                     <td>
                       <TransferStatusBadge status={transfer.status} />
+                      {showReceptionStatus && transfer.status === "Aceptada" && (
+                        <div className="mt-1"><ReceptionBadge status={transfer.receptionStatus} /></div>
+                      )}
                     </td>
                     <td>
                       {task.mine && <span className="mb-1 block font-semibold text-[#1e5b4f]">Te toca a ti</span>}
