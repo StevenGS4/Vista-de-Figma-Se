@@ -923,7 +923,6 @@ function RequestDetail({
   users: UserRecord[];
 }) {
   const [detailView, setDetailView] = useState<TransferDetailView>("overview");
-  const [documentKind, setDocumentKind] = useState("");
   const task = transferTask(transfer, currentUser, role, permissions);
   const received = transfer.receptionStatus === "Recibida";
   const canSeeStorage = role === "Administrador / Coordinador" ||
@@ -995,7 +994,7 @@ function RequestDetail({
       <nav className="mb-4 flex flex-wrap gap-2 rounded-xl border border-[#c8d4cc] bg-[#e9eee8] p-2" aria-label="Detalle de la transferencia">
         {([["overview", "Vista"], ["tracking", "Seguimiento"], ["documents", "Documentos de la transferencia"]] as const).map(([value, label]) => (
           <button type="button" key={value} aria-current={detailView === value ? "true" : undefined}
-            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e5b4f] ${detailView === value ? "border-[#789b8a] bg-[#fbfaf6] text-[#002f2a] shadow-sm" : "border-transparent text-[#35584b] hover:bg-[#dce7df]"}`} onClick={() => { setDocumentKind(""); setDetailView(value); }}>
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e5b4f] ${detailView === value ? "border-[#789b8a] bg-[#fbfaf6] text-[#002f2a] shadow-sm" : "border-transparent text-[#35584b] hover:bg-[#dce7df]"}`} onClick={() => setDetailView(value)}>
             {value === "overview" && <Files size={16} aria-hidden="true" />}
             {label}{value === "documents" && <span className="rounded-full bg-[#dce7df] px-1.5 text-xs text-[#244f41]">{documents.length}</span>}
           </button>
@@ -1024,22 +1023,59 @@ function RequestDetail({
             {!receipt && <p className="px-5 py-3 text-sm text-[#435951]">Sin acuse de solicitud adjunto.</p>}
             <InventoryTable records={included} />
           </section>
-          {canAreaReview && (
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              {needsReceipt && <p className="w-full text-sm">El área debe adjuntar el acuse antes de otorgar el visto bueno.</p>}
-              <Button className="button--danger-outline" onClick={onReturn}>
-                <RotateCcw size={16} />
-                Devolver con observaciones
-              </Button>
-              <Button className="button--primary" onClick={onAreaApprove} disabled={needsReceipt}>
-                <Check size={17} />
-                Dar visto bueno
-              </Button>
+          <div className="mt-4 grid gap-3">
+            <TransferDocuments
+              key={transfer.id}
+              transfer={transfer}
+              user={currentUser}
+              initialKind={task.mine && "kind" in task ? task.kind : undefined}
+              actionLabel={task.mine && "kind" in task ? task.label : undefined}
+              onChange={onDocumentsChange}
+            />
+            {canAreaReview && needsReceipt && (
+              <p className="text-sm">El área debe adjuntar el acuse antes de otorgar el visto bueno.</p>
+            )}
+            {canAccept && (
+              <p className="text-sm">El dictamen favorable autoriza el traslado. La etapa cambia al confirmar la recepción física.</p>
+            )}
+            {role === "Administrador / Coordinador" &&
+              transfer.status === "Pendiente de revisión administrativa" &&
+              transfer.requestedBy === currentUser.id && (
+                <div className="blocked-review">
+                  <ShieldCheck size={17} />
+                  No puedes aprobar una transferencia solicitada por tu propia cuenta.
+                </div>
+              )}
+            <div className="flex flex-wrap items-center justify-end gap-2 empty:hidden">
+              {onCancelRequest && <Button className="button--danger-outline" onClick={onCancelRequest}>Cancelar solicitud</Button>}
+              {(canAreaReview || canReview) && (
+                <Button className="button--danger-outline" onClick={onReturn}>
+                  <RotateCcw size={16} /> Devolver con observaciones
+                </Button>
+              )}
+              {task.mine && task.step === 0 && !("kind" in task) && (
+                <Button className="button--primary" onClick={onContinue}>{task.label}</Button>
+              )}
+              {canAreaReview && (
+                <Button className="button--primary" onClick={onAreaApprove} disabled={needsReceipt}>
+                  <Check size={17} /> Dar visto bueno
+                </Button>
+              )}
+              {canAccept && (
+                <Button className="button--primary" onClick={onAccept}>
+                  <Check size={17} /> Emitir dictamen
+                </Button>
+              )}
+              {canReceive && task.mine && task.step === 4 && !("kind" in task) && (
+                <Button className="button--primary" onClick={onReceive}>
+                  <PackageCheck size={16} /> Registrar recepción
+                </Button>
+              )}
             </div>
-          )}
+          </div>
         </>
       )}
-      {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} initialKind={documentKind} onChange={onDocumentsChange} />}
+      {detailView === "documents" && <TransferDocuments key={transfer.id} transfer={transfer} user={currentUser} />}
       {detailView === "tracking" && <>
       <div className={showStorage ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "grid gap-4"}>
         <section className="surface min-w-0 overflow-hidden rounded-xl">
@@ -1083,46 +1119,12 @@ function RequestDetail({
             <p className="text-sm font-semibold text-[#1e5b4f]">{task.mine ? "Te toca a ti" : task.owner ? "Siguiente acción" : "Solicitud cerrada"}</p>
             <h3 className="mt-1 text-lg font-semibold">{task.label}</h3>
             {task.owner && <p className="mt-1 text-sm">{task.owner}</p>}
-            {task.mine && "kind" in task && task.kind && <div className="mt-3">
-              <Button className="button--primary" onClick={() => { setDocumentKind(task.kind ?? ""); setDetailView("documents"); }}>Abrir documento</Button>
-            </div>}
-            {task.mine && task.step === 0 && !("kind" in task) && <div className="mt-3">
-              <Button className="button--primary" onClick={onContinue}>{task.label}</Button>
-            </div>}
-            {task.mine && task.step === 4 && !("kind" in task) && <div className="mt-3">
-              <Button className="button--primary" onClick={onReceive}><PackageCheck size={16} /> Registrar recepción</Button>
-            </div>}
-            {(canReview || canAccept) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <p className="w-full text-sm">El dictamen favorable autoriza el traslado. La etapa cambia al confirmar la recepción física.</p>
-                {canReview && (
-                  <Button className="button--danger-outline" onClick={onReturn}>
-                    <RotateCcw size={16} />
-                    Devolver con observaciones
-                  </Button>
-                )}
-                {canAccept && (
-                  <Button className="button--primary" onClick={onAccept}>
-                    <Check size={17} />
-                    Emitir dictamen favorable
-                  </Button>
-                )}
-              </div>
-            )}
-            {role === "Administrador / Coordinador" &&
-              transfer.status === "Pendiente de revisión administrativa" &&
-              transfer.requestedBy === currentUser.id && (
-                <div className="blocked-review">
-                  <ShieldCheck size={17} />
-                  No puedes aprobar una transferencia solicitada por tu propia cuenta.
-                </div>
-              )}
+
           </div>}
           </div>
         </section>
         {showStorage && <TransferStorage records={included} />}
       </div>
-      {onCancelRequest && <div className="flex justify-end"><Button className="button--danger-outline" onClick={onCancelRequest}>Cancelar solicitud</Button></div>}
       </>}
     </div>
   );
@@ -1205,11 +1207,16 @@ const documentNames: Record<string,string> = {
   FORMATO_FIRMADO:"Formato de transferencia con firmas autógrafas",
 };
 
-function TransferDocuments({transfer,user,initialKind,onChange}: {
-  transfer:DocumentaryTransfer; user:UserRecord; initialKind:string; onChange:(updated:DocumentaryTransfer)=>void;
+function TransferDocuments({transfer,user,initialKind,actionLabel,onChange}: {
+  transfer:DocumentaryTransfer;
+  user:UserRecord;
+  initialKind?:string;
+  actionLabel?:string;
+  onChange?:(updated:DocumentaryTransfer)=>void;
 }) {
   const [detail,setDetail]=useState("");
-  const [kind,setKind]=useState(initialKind);
+  const [kind,setKind]=useState(initialKind ?? "");
+  const [formOpen,setFormOpen]=useState(false);
   const [file,setFile]=useState<File|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
@@ -1248,12 +1255,21 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
     setError("");
   };
   const saveError=(error:unknown)=>setError(error instanceof Error?error.message:"No se pudo guardar el documento.");
-  return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
-    <header className="flex items-center gap-2 text-[#002f2a]"><Files size={19} /><h3 className="text-base font-semibold">Documentos de la transferencia</h3></header>
-    {transfer.status!=="Cancelada" && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-3">
-    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
-    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
-    </div>}
+  if (onChange) {
+    if (!options.length) return null;
+    if (!formOpen) return (
+      <div className="flex justify-end">
+        <Button className="button--primary" onClick={() => {
+          changeDocument(initialKind ?? "");
+          setFormOpen(true);
+        }}><Files size={16} /> {actionLabel ?? "Gestionar evidencias"}</Button>
+      </div>
+    );
+    return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">{actionLabel ?? "Gestionar evidencias"}</h3>
+        <Button className="button--secondary" disabled={busy} onClick={() => setFormOpen(false)}>Cerrar</Button>
+      </header>
     {canRequestExtension && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] px-3 py-2 text-sm">
       <button type="button" className="text-button" disabled={busy}
         onClick={() => changeDocument(selected === "SOLICITUD_AMPLIACION" ? "ACUSE_SOLICITUD" : "SOLICITUD_AMPLIACION")}>
@@ -1262,7 +1278,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </button>
       <p>Solo corresponde si el área generadora no responde.</p>
     </div>}
-    {options.length>0 && <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4 sm:p-5" style={{ gridTemplateColumns: "minmax(0, 1fr)" }} onSubmit={async event=>{
+    <form className="transfer-documents__form min-w-0 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4 sm:p-5" style={{ gridTemplateColumns: "minmax(0, 1fr)" }} onSubmit={async event=>{
       event.preventDefault();
       if(busy)return;
       setBusy(true);
@@ -1280,6 +1296,7 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
         setFileVersion(n=>n+1);
         setDetail("");
         setFile(null);
+        setFormOpen(false);
       }catch(error){setError(error instanceof Error?error.message:"No se pudo guardar el documento.");}
       finally{setBusy(false);}
     }}>
@@ -1315,7 +1332,16 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
       </div>
       </>}
       {error && <p role="alert" className="field-error">{error}</p>}
-    </form>}
+    </form>
+      {dialog}
+    </section>;
+  }
+  return <section className="surface grid gap-4 rounded-xl p-4 sm:p-5">
+    <header className="flex items-center gap-2 text-[#002f2a]"><Files size={19} /><h3 className="text-base font-semibold">Documentos de la transferencia</h3></header>
+    {transfer.status!=="Cancelada" && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-3">
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id)}><Download size={15} />{transfer.areaApprovedAt ? "Formato de transferencia primaria (Excel)" : "Relación de expedientes (Excel)"}</a>
+    <a className="button button--secondary" href={transferApi.documentUrl(transfer.id,undefined,true)}>Descargar copia</a>
+    </div>}
     <section aria-label="Historial de documentos" className="min-w-0 rounded-lg border border-[#c8d4cc] bg-[#e9eee8] p-4">
       <h4 className="mb-3 text-sm font-semibold text-[#002f2a]">Documentos registrados ({documents.length})</h4>
       {documents.length > 0 ? (
@@ -1353,7 +1379,6 @@ function TransferDocuments({transfer,user,initialKind,onChange}: {
         </ol>
       ) : <p>Aún no hay documentos guardados.</p>}
     </section>
-    {dialog}
   </section>;
 }
 
