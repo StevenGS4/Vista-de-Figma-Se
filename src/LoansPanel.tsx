@@ -467,8 +467,8 @@ function RecordSelector({
         {from && until && from > until && <p role="alert" className="px-5 py-2">La fecha inicial debe ser anterior o igual a la final.</p>}
         <div className="grid gap-3 px-5 py-4">
           {grouped.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(([key, items]) => (
-            <details key={key} className="overflow-hidden rounded-lg border border-[#b4c4bb] bg-[#f8f7f2]" open={terms.length > 0 || Boolean(series) || undefined}>
-              <summary className="cursor-pointer bg-[#205b4d] px-4 py-3 text-sm font-semibold text-[#fffdf6]">
+            <details key={key} className="overflow-hidden rounded-lg border border-[#d0d7d2] bg-[#faf9f5]" open={terms.length > 0 || Boolean(series) || undefined}>
+              <summary className="cursor-pointer bg-[#edf0ec] px-4 py-3 text-sm font-semibold text-[#243931]">
                 {sectionName(items[0].cadidoSectionId)} · {items[0].cadidoCode} · {items[0].cadidoSeriesName || "Serie documental"} <small>({items.length})</small>
               </summary>
               <ul className="grid gap-2 p-3">
@@ -514,7 +514,7 @@ function RecordSelector({
           </div>
         </div>
         <section className="mx-5 mt-3 overflow-hidden rounded-lg border border-[#b4c4bb]" aria-labelledby="loan-selection-summary">
-          <h3 id="loan-selection-summary" className="bg-[#205b4d] px-4 py-3 text-sm font-semibold text-[#fffdf6]">Expedientes seleccionados</h3>
+          <h3 id="loan-selection-summary" className="bg-[#edf0ec] px-4 py-3 text-sm font-semibold text-[#243931]">Expedientes seleccionados</h3>
           {selectedRecords.length ? (
             <ul className="divide-y divide-[#d9e3dc] bg-[#f8f7f2] px-4">
               {selectedRecords.map(record => (
@@ -1313,6 +1313,7 @@ export default function LoansPanel({
   const [selectedRecords, setSelectedRecords] = useState<ArchivalRecord[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<ArchivalLoan | null>(null);
   const [message, setMessage] = useState("");
+  const [loanError, setLoanError] = useState<{ title: string; detail: string } | null>(null);
   useEffect(() => {
     if (!/registrado correctamente|devolución completada|devolución parcial registrada/i.test(message)) return;
     const timer=window.setTimeout(()=>setMessage(""),4000);
@@ -1357,8 +1358,7 @@ export default function LoansPanel({
       });
     }catch(error){
       const message=error instanceof Error?error.message:"No se pudo registrar el préstamo.";
-      setMessage(message);
-      window.alert(message);
+      setLoanError({ title: "No se pudo registrar el préstamo", detail: message });
     }
   };
   const returnLoan=async(date:string,receivedBy:string,notes:string,returnedIds:string[],conditions:Record<string,LoanReturnCondition>)=>{
@@ -1384,7 +1384,7 @@ export default function LoansPanel({
       setView("detail");
     }catch(error){
       const message=error instanceof Error?error.message:"No se pudo registrar la devolución.";
-      setMessage(message);
+      setLoanError({ title: "No se pudo registrar la devolución", detail: message });
       // Actualizar tras un conflicto con otra sesión.
       try{
         const [freshLoans,freshRecords]=await Promise.all([loanApi.list(),concentrationApi.list()]);
@@ -1394,7 +1394,6 @@ export default function LoansPanel({
         const ids=new Set(freshRecords.map(r=>r.id));
         onRecordsChange([...records.filter(r=>!ids.has(r.id)),...freshRecords]);
       }catch(syncError){console.error("Error sincronizando devolución:",syncError);}
-      window.alert(message);
     }
   };
 
@@ -1412,28 +1411,53 @@ export default function LoansPanel({
       />
     );
 
+  const errorDialog = loanError && (
+    <div className="modal-backdrop" style={{ zIndex: 110 }}>
+      <section className="modal decision-modal" role="alertdialog" aria-modal="true"
+        aria-labelledby="loan-error-title" aria-describedby="loan-error-detail"
+        onKeyDown={event => { if (event.key === "Escape") setLoanError(null); }}>
+        <div className="modal__header">
+          <h2 id="loan-error-title">{loanError.title}</h2>
+          <AlertCircle size={20} className="text-[#75163c]" aria-hidden="true" />
+        </div>
+        <div className="modal__body">
+          <p id="loan-error-detail" className="break-words text-sm">{loanError.detail}</p>
+        </div>
+        <div className="modal__footer">
+          <button type="button" className="button button--primary" autoFocus onClick={() => setLoanError(null)}>Entendido</button>
+        </div>
+      </section>
+    </div>
+  );
+
   if (view === "form" && selectedRecords.length)
     return (
-      <LoanForm
-        currentUser={currentUser}
-        onBack={() => setView("select")}
-        onConfirm={createLoan}
-        records={selectedRecords}
-      />
+      <>
+        <LoanForm
+          currentUser={currentUser}
+          onBack={() => setView("select")}
+          onConfirm={createLoan}
+          records={selectedRecords}
+        />
+        {errorDialog}
+      </>
     );
 
   if (view === "return" && selectedLoan) {
     const record = recordFor(records, selectedLoan.recordId);
     if (record || selectedLoan.items?.length || selectedLoan.mode === "Inventario completo")
       return (
-        <ReturnForm
-          key={selectedLoan.id}
-          currentUser={currentUser}
-          loan={selectedLoan}
-          onBack={() => setView("detail")}
-          onSave={returnLoan}
-          record={record}
-        />
+        <>
+          <ReturnForm
+            key={selectedLoan.id}
+            currentUser={currentUser}
+            loan={selectedLoan}
+            onBack={() => setView("detail")}
+            onSave={returnLoan}
+            record={record}
+          />
+          {errorDialog}
+        </>
       );
   }
 

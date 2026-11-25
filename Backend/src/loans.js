@@ -127,6 +127,7 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
 });
 loansRouter.post('/',async(req,res,next)=>{
  let conn;
+ let committedFolio;
  try{
   const user=req.auth.user;guard(user);
   // Verificar que la base pueda guardar la cuenta solicitante.
@@ -158,12 +159,13 @@ loansRouter.post('/',async(req,res,next)=>{
    throw fail('La persona que entrega debe ser personal autorizado del archivo de concentración',400);
   const placeholders=ids.map(()=>'?').join(',');
   conn=await pool.getConnection();
-  await conn.beginTransaction();
+  const multiple=ids.length>1;
+  if(multiple)await conn.beginTransaction();
   const [found]=await conn.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
    e.archivo_zona,e.lugar_resguardo,e.estante,e.nivel,e.seccion_fisica
    FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
    WHERE e.id IN (${placeholders}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL
-   ORDER BY e.id FOR UPDATE`,ids);
+   ORDER BY e.id${multiple?' FOR UPDATE':''}`,ids);
   if(found.length!==ids.length)throw fail('Uno o más expedientes no existen',404);
   if(found.some(e=>e.etapa!=='CONCENTRACION'||e.disponibilidad!=='EN_ARCHIVO'))
    throw fail('Todos los expedientes deben estar disponibles en Concentración',409);
@@ -176,26 +178,49 @@ loansRouter.post('/',async(req,res,next)=>{
     found.some(e=>!e.archivo_zona||!e.lugar_resguardo||!e.estante||!e.nivel||!e.seccion_fisica))
    throw fail('Los expedientes requieren recepción física completa y ubicación asignada',409);
   const folio='PRE-'+new Date().getFullYear()+'-'+randomUUID().slice(0,14).toUpperCase();
-  const [{insertId:id}]=await conn.execute(`INSERT INTO prestamos
-    (folio,modalidad,inventario_id,area_solicitante_id,solicitante_nombre,solicitante_usuario_id,
-     fecha_prestamo,fecha_prevista,autorizado_por,entregado_por,recibido_por_nombre,observaciones,estado)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ACTIVO')`,
-    [folio,mode,found[0].inventario_id,areas[0].id,personName(requester),requesterId,
-     currentDate,data.expectedReturnDate,user.id,delivererId,recipient,notes||null]);
-  await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
-   [ids.map(expId=>[id,expId])]);
-  await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO' WHERE id IN (${placeholders})`,ids);
-  await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
-   [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
+  let id;
+  if(multiple){
+   const [{insertId}]=await conn.execute(`INSERT INTO prestamos
+     (folio,modalidad,inventario_id,area_solicitante_id,solicitante_nombre,solicitante_usuario_id,
+      fecha_prestamo,fecha_prevista,autorizado_por,entregado_por,recibido_por_nombre,observaciones,estado)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ACTIVO')`,
+     [folio,mode,found[0].inventario_id,areas[0].id,personName(requester),requesterId,
+      currentDate,data.expectedReturnDate,user.id,delivererId,recipient,notes||null]);
+   id=insertId;
+   await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
+    [ids.map(expId=>[id,expId])]);
+   await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO' WHERE id IN (${placeholders})`,ids);
+   await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
+    [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
+  }else{
+   // El procedimiento instalado aplica el cambio de disponibilidad protegido por MySQL.
+   await conn.query('CALL sp_registrar_prestamo(?,?,?,?,?,?,?,?)',[
+    folio,mode,found[0].inventario_id,ids[0],areas[0].id,personName(requester),user.id,data.expectedReturnDate
+   ]);
+   committedFolio=folio;
+   const [[created]]=await conn.execute('SELECT id FROM prestamos WHERE folio=?',[folio]);
+   if(!created)throw fail('No se encontró el préstamo recién creado',500);
+   id=created.id;
+   await conn.beginTransaction();
+   await conn.execute(`UPDATE prestamos SET solicitante_usuario_id=?,entregado_por=?,
+     recibido_por_nombre=?,observaciones=? WHERE id=?`,[requesterId,delivererId,recipient,notes||null,id]);
+   await conn.execute(`UPDATE prestamo_historial SET detalle=? WHERE prestamo_id=? AND accion='ENTREGA'`,
+    ['Estado al entregar: '+conditionLabel.GOOD+'.',id]);
+  }
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
     [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),
      delivererUserId:String(delivererId),conditions:Object.fromEntries(ids.map(expId=>['REG-'+expId,'GOOD']))})]);
   await conn.commit();
+  committedFolio=folio;
   res.status(201).json({loan:await oneLoan(id,conn)});
  }catch(e){
   if(conn)await conn.rollback();
+  if(committedFolio){
+   console.error('Préstamo guardado con error posterior:',e.code||e.message);
+   return res.status(500).json({error:'El préstamo '+committedFolio+' se guardó. Recarga la bandeja para verificarlo antes de volver a intentar.'});
+  }
   if(e.sqlState==='45000'||e.code==='ER_DUP_ENTRY'||e.code==='ER_SIGNAL_EXCEPTION')
-   return res.status(409).json({error:'Préstamo no permitido: '+e.message});
+   return res.status(409).json({error:'MySQL rechazó el registro del préstamo. Motivo: '+e.message});
   next(e);
  }finally{conn?.release();}
 });
