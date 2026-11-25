@@ -43,6 +43,15 @@ async function history(conn,id){
  return rows.map(r=>({id:'H-'+r.id,type:types[r.accion]||'Revisión',
  date:r.date,actor:String(r.usuario_id),detail:r.detalle||''}));
 }
+function decodePdf(encoded){
+ if(!encoded)return null;
+ if(typeof encoded!=='string'||encoded.length>5600000||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))
+  throw problem('El PDF debe pesar hasta 4 MB');
+ const pdf=Buffer.from(encoded,'base64');
+ if(pdf.length>4194304||pdf.subarray(0,5).toString()!=='%PDF-')
+  throw problem('Adjunta un PDF válido de hasta 4 MB');
+ return pdf;
+}
 async function saveDocument(conn,id,user,kind,detail,pdf=null){
  await conn.execute(`INSERT INTO transferencia_documentos
   (transferencia_id,tipo,actor_id,detalle,pdf) VALUES (?,?,?,?,?)`,[id,kind,user.id,detail,pdf]);
@@ -194,6 +203,9 @@ transfersRouter.post('/',async(req,res,next)=>{
   const user=req.auth.user;ensureAuth(user);
   if(!canSubmitTransfer(user))throw problem('El rol actual no puede solicitar transferencias',403);
   const ids=onlyIds(req.body?.recordIds);
+  const receiptDetail=text(req.body?.receipt?.detail,2000);
+  const receiptPdf=decodePdf(req.body?.receipt?.pdf);
+  if(receiptDetail.length<5||!receiptPdf)throw problem('Captura la referencia y adjunta el PDF del acuse de solicitud');
   conn=await pool.getConnection();await conn.beginTransaction();
   const testMode=await transferTestMode(conn,true);
   await reserveEligibleRecords(conn,ids,user,testMode);
@@ -206,6 +218,7 @@ transfersRouter.post('/',async(req,res,next)=>{
   await conn.query('INSERT INTO transferencia_expedientes(transferencia_id,expediente_id) VALUES ?',
    [ids.map(id=>[created.insertId,id])]);
   await saveDocument(conn,created.insertId,user,'SOLICITUD','Al titular del área generadora: se solicita autorización para trasladar los expedientes de la relación anexa.');
+  await saveDocument(conn,created.insertId,user,'ACUSE_SOLICITUD',receiptDetail,receiptPdf);
   await addHistory(conn,created.insertId,user,'PREPARAR','Expedientes seleccionados: '+ids.length);
   await addHistory(conn,created.insertId,user,'ENVIAR','Solicitud enviada a visto bueno del encargado de área');
   if(testMode)await addHistory(conn,created.insertId,user,'PREPARAR','Solicitud creada en modo de pruebas: se omitió la validación de cierre y plazo AT.');
@@ -385,13 +398,7 @@ transfersRouter.post('/:id/documentos',async(req,res,next)=>{
   if(documentId!=null&&!/^[1-9][0-9]*$/.test(String(documentId)))throw problem('Documento inválido');
   if(remove&&!documentId)throw problem('Documento inválido');
   if(!remove&&detail.length<5)throw problem('Captura el folio o los datos del documento');
-  const encoded=req.body?.pdf;
-  let pdf=null;
-  if(encoded){
-   if(typeof encoded!=='string'||encoded.length>5600000||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))throw problem('El PDF debe pesar hasta 4 MB');
-   pdf=Buffer.from(encoded,'base64');
-   if(pdf.length>4194304||pdf.subarray(0,5).toString()!=='%PDF-')throw problem('Adjunta un PDF válido de hasta 4 MB');
-  }
+  const pdf=decodePdf(req.body?.pdf);
   conn=await pool.getConnection();await conn.beginTransaction();
   const t=await rawTransfer(conn,visible.id,true);
   if(!t||!canViewTransfer(user,t))throw problem('Transferencia fuera de tu alcance',403);

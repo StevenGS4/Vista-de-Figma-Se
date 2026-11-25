@@ -54,6 +54,7 @@ export const tramiteApi = {
 
 import type { DocumentaryTransfer, ReceptionStatus } from './transfers';
 export type ReceptionSourceBox={recordId:string;boxNumber:string};
+export type TransferReceipt = { detail: string; pdf: string };
 export const transferApi={
  cancel:async(id:string,detail:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/cancelar',
   {method:'POST',body:JSON.stringify({detail})})).transfer,
@@ -68,9 +69,9 @@ export const transferApi={
    '/api/transferencias/'+encodeURIComponent(id)+'/reception-boxes'
  )).boxes,
  list:async()=>((await request<{transfers:DocumentaryTransfer[]}>('/api/transferencias')).transfers),
- submit:async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string)=>{
+ submit:async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string,receipt?:TransferReceipt)=>{
    const path=existing?'/api/transferencias/'+encodeURIComponent(existing.id)+'/resend':'/api/transferencias';
-   return (await request<{transfer:DocumentaryTransfer}>(path,{method:'POST',body:JSON.stringify({recordIds,correction})})).transfer;
+   return (await request<{transfer:DocumentaryTransfer}>(path,{method:'POST',body:JSON.stringify({recordIds,correction,receipt})})).transfer;
  },
  areaApprove:async(id:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/approve-area',{method:'POST',body:'{}'})).transfer,
  observe:async(id:string,observation:string)=>(await request<{transfer:DocumentaryTransfer}>('/api/transferencias/'+encodeURIComponent(id)+'/observe',{method:'POST',body:JSON.stringify({observation})})).transfer,

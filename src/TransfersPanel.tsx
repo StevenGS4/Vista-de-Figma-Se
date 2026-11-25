@@ -1,3 +1,4 @@
+import type { TransferReceipt } from "./api";
 import { transferTask } from "./transferTask";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -51,7 +52,8 @@ type PanelView = "list" | "wizard" | "detail" | "reception" | "history";
 const transferSteps = [
   { label: "Archivos de origen", icon: FolderArchive },
   { label: "Seleccionar expedientes", icon: ListChecks },
-  { label: "Vista previa y envío", icon: Files },
+  { label: "Vista previa", icon: Files },
+  { label: "Acuse y envío", icon: Send },
 ];
 
 const formatDate = (value: string) =>
@@ -359,13 +361,14 @@ function TransferTray({
   );
 }
 
-function TransferProgress({ current }: { current: number }) {
+function TransferProgress({ current, resend }: { current: number; resend: boolean }) {
+  const steps = resend ? transferSteps.slice(0, 3) : transferSteps;
   return (
-    <div className="transfer-progress" style={{ gridTemplateColumns: `repeat(${transferSteps.length}, minmax(0, 1fr))` }}>
+    <div className="transfer-progress" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
       <div className="transfer-progress__line">
-        <span style={{ width: `${(current / (transferSteps.length - 1)) * 100}%` }} />
+        <span style={{ width: `${(current / (steps.length - 1)) * 100}%` }} />
       </div>
-      {transferSteps.map((step, index) => {
+      {steps.map((step, index) => {
         const Icon = step.icon;
         return (
           <div
@@ -525,7 +528,7 @@ function TransferWizard({
   allRecords: ArchivalRecord[];
   currentUser: UserRecord;
   onCancel: () => void;
-  onSubmit: (recordIds: string[], existing: DocumentaryTransfer | null, correction?: string) => Promise<void>;
+  onSubmit: (recordIds: string[], existing: DocumentaryTransfer | null, correction?: string, receipt?: TransferReceipt) => Promise<void>;
   transfers: DocumentaryTransfer[];
 }) {
   const [testMode, setTestMode] = useState<boolean | null>(null);
@@ -543,6 +546,9 @@ function TransferWizard({
   )]);
   const [selectedIds, setSelectedIds] = useState<string[]>(() => activeTransfer?.recordIds ?? []);
   const [error, setError] = useState("");
+  const [receiptDetail, setReceiptDetail] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const finalStep = activeTransfer ? 2 : 3;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const blockedIds = new Set(
     transfers
@@ -623,7 +629,7 @@ function TransferWizard({
           </span>
         </div>
       )}
-      <TransferProgress current={step} />
+      <TransferProgress current={step} resend={Boolean(activeTransfer)} />
       <section className="surface transfer-wizard">
         {step === 0 && (
           <div className="transfer-step">
@@ -634,11 +640,11 @@ function TransferWizard({
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
             {testMode === null && !settingsError && !activeTransfer && <p role="status">Consultando archivos elegibles…</p>}
             {!eligibleInventories.length && (testMode !== null || activeTransfer) && <p>No hay archivos con expedientes elegibles.</p>}
-            <div className="eligible-list inventory-eligible-list">
+            <div className="grid gap-3 sm:grid-cols-2">
               {eligibleInventories.map(([id, records]) => (
-                <label key={id} className="eligible-inventory-group__header cursor-pointer border-b border-[#c8d4cc]">
-                  <span className="flex items-center gap-3">
-                    <input type="checkbox" checked={sourceIds.includes(id)} disabled={Boolean(activeTransfer)}
+                <label key={id} className={`flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-4 ${sourceIds.includes(id) ? "border-emerald-700 bg-emerald-50" : "border-[#c8d4cc] bg-[#fbfaf6]"}`}>
+
+                    <input type="checkbox" className="mt-1 size-4 shrink-0 accent-emerald-800" checked={sourceIds.includes(id)} disabled={Boolean(activeTransfer)}
                       onChange={event => {
                         if (event.target.checked) {
                           setSourceIds(current => [...current, id]);
@@ -647,9 +653,8 @@ function TransferWizard({
                           setSelectedIds(current => current.filter(recordId => !records.some(record => record.id === recordId)));
                         }
                       }} />
-                    <span><strong>{records[0].cadidoSeriesName || records[0].cadidoCode}</strong>
-                      <small>{id} · {records.length} expedientes elegibles</small></span>
-                  </span>
+                    <span className="min-w-0 break-words"><strong className="block text-sm">{records[0].cadidoSeriesName || records[0].cadidoCode}</strong>
+                      <small className="block text-[#435951]">{id} · {records.length} expedientes elegibles</small></span>
                 </label>
               ))}
             </div>
@@ -768,6 +773,29 @@ function TransferWizard({
             </div>
           </div>
         )}
+        {step === 3 && (
+          <div className="transfer-step">
+            <div className="step-heading">
+              <span><Files size={21} /></span>
+              <div><h3>Acuse de solicitud</h3><p>Adjunta el acuse de la solicitud de transferencia antes de enviarla al encargado.</p></div>
+            </div>
+            <div className="grid gap-4 rounded-lg border border-[#c8d4cc] bg-[#fbfaf6] p-4 md:grid-cols-2">
+              <label className="form-field"><span>Folio o referencia del acuse</span>
+                <input value={receiptDetail} maxLength={2000} onChange={event => setReceiptDetail(event.target.value)} />
+              </label>
+              <label className="form-field"><span>Acuse en PDF (máximo 4 MB)</span>
+                <input type="file" accept=".pdf,application/pdf" onChange={event => {
+                  const file = event.target.files?.[0] ?? null;
+                  const valid = file && /\.pdf$/i.test(file.name) && file.size <= 4194304 && file.size > 0;
+                  setReceiptFile(valid ? file : null);
+                  setError(file && !valid ? "Adjunta un PDF válido de hasta 4 MB." : "");
+                }} />
+                {receiptFile && <small>Adjunto: {receiptFile.name}</small>}
+              </label>
+            </div>
+            {error && <p className="field-error" role="alert">{error}</p>}
+          </div>
+        )}
         <div className="record-wizard__footer">
           <Button className="button--ghost" onClick={onCancel}>
             Cancelar
@@ -782,7 +810,7 @@ function TransferWizard({
                 Anterior
               </Button>
             )}
-            {step < 2 ? (
+            {step < finalStep ? (
               <Button className="button--primary" disabled={step === 0 ? !selectedSources.length : !selectedRecords.length}
                 onClick={() => {
                   if (step === 1 && activeTransfer && selectedRecords.length !== activeTransfer.recordIds.length) {
@@ -791,10 +819,10 @@ function TransferWizard({
                   }
                   goToStep(step + 1);
                 }}>
-                {step === 0 ? "Continuar" : "Ver vista previa"} <ArrowRight size={17} />
+                {step === 0 ? "Continuar" : step === 1 ? "Ver vista previa" : "Adjuntar acuse"} <ArrowRight size={17} />
               </Button>
             ) : (
-              <Button className="button--primary" disabled={!selectedRecords.length || (Boolean(activeTransfer) && selectedRecords.length !== activeTransfer?.recordIds.length)} onClick={() => setConfirmOpen(true)}>
+              <Button className="button--primary" disabled={!selectedRecords.length || (!activeTransfer && (!receiptFile || receiptDetail.trim().length < 5)) || (Boolean(activeTransfer) && selectedRecords.length !== activeTransfer?.recordIds.length)} onClick={() => setConfirmOpen(true)}>
                 <Send size={17} /> {activeTransfer ? "Reenviar solicitud" : "Confirmar envío"}
               </Button>
             )}
@@ -805,7 +833,20 @@ function TransferWizard({
         <ConfirmationModal
           count={selectedRecords.length}
           onCancel={() => setConfirmOpen(false)}
-          onConfirm={correction => onSubmit(selectedRecords.map((record) => record.id), activeTransfer, correction)}
+          onConfirm={async correction => {
+            let receipt: TransferReceipt | undefined;
+            if (!activeTransfer) {
+              if (!receiptFile || receiptDetail.trim().length < 5) throw new Error("Completa el acuse de solicitud.");
+              const pdf = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result).split(",")[1]);
+                reader.onerror = () => reject(new Error("No se pudo leer el PDF del acuse."));
+                reader.readAsDataURL(receiptFile);
+              });
+              receipt = { detail: receiptDetail.trim(), pdf };
+            }
+            await onSubmit(selectedRecords.map(record => record.id), activeTransfer, correction, receipt);
+          }}
           resend={Boolean(activeTransfer)}
         />
       )}
@@ -1746,8 +1787,8 @@ export default function TransfersPanel({
   const failure=(error:unknown)=>{
     setMessage(error instanceof Error ? error.message : "No se pudo completar la operación.");
   };
-  const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string)=>{
-      const updated=await transferApi.submit(recordIds,existing,correction);
+  const submitTransfer=async(recordIds:string[],existing:DocumentaryTransfer|null,correction?:string,receipt?:TransferReceipt)=>{
+      const updated=await transferApi.submit(recordIds,existing,correction,receipt);
       saveTransferState(updated);
       setWizardTransfer(null);
       setView("list");
