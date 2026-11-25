@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { homeApi, type LoanNotice } from "./api";
+import { createPortal } from "react-dom";
+import { homeApi, type LoanNotice, type OverdueLoanReport } from "./api";
 import { Bell, BookOpen, Check, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
@@ -16,6 +17,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
 }) {
  const [searchOpen,setSearchOpen]=useState(false);
  const [notificationsOpen,setNotificationsOpen]=useState(false);
+ const [openReport,setOpenReport]=useState<OverdueLoanReport|null>(null);
  const [query,setQuery]=useState("");
  const key="semarnat-notices-read-"+user.id;
  const [seen,setSeen]=useState<string[]>([]);
@@ -29,7 +31,8 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   const load=()=>homeApi.loanNotices().then(items=>{if(active)setPersonalLoanNotices(items);})
     .catch(error=>console.error("No se pudieron consultar avisos de préstamos:",error));
   void load();
-  return ()=>{active=false;};
+  const timer=window.setInterval(load,30_000);
+  return ()=>{active=false;window.clearInterval(timer);};
  },[user.id]);
  const notices=useMemo(()=>{
    const staff=buildHomeNotices(user,role,transfers,loans).filter(n=>allowed.includes(n.module));
@@ -89,12 +92,27 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
     <div className="home-notice-heading"><strong>Notificaciones</strong><small>{unread} sin leer</small></div>
     <div className="home-notice-items">
       {notices.length===0 && <p className="home-no-notices">No hay avisos registrados para tus funciones.</p>}
-      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
+      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if("report" in n && n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
         <span className={"activity-item__icon activity-item__icon--"+n.color}>{seen.includes(n.id)?<Check size={15}/>:<Bell size={15}/>}</span>
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}
     </div>
     <small>Notificaciones de movimientos y asuntos pendientes.</small>
   </div>}
+  {openReport && createPortal(
+    <div className="modal-backdrop">
+      <section className="modal decision-modal" role="dialog" aria-modal="true" aria-labelledby="loan-report-notice-title"
+        onKeyDown={event=>{if(event.key==="Escape")setOpenReport(null);}}>
+        <div className="modal__header">
+          <div><span>{openReport.number}</span><h2 id="loan-report-notice-title">Reporte por tardanza de devolución</h2></div>
+        </div>
+        <div className="modal__body grid gap-3 text-sm">
+          <p>Se emitió el reporte <strong>{openReport.number}</strong> para el préstamo <strong>{openReport.loanFolio}</strong>.</p>
+          <p>La fecha prevista de devolución era {openReport.dueDate.split("-").reverse().join("/")}. {openReport.reason}</p>
+          <p>{openReport.loanStatus==="ACTIVO" ? "Devuelve los expedientes pendientes a la brevedad." : "La devolución ya quedó registrada."}</p>
+        </div>
+        <div className="modal__footer"><button type="button" className="button button--primary" autoFocus onClick={()=>setOpenReport(null)}>Entendido</button></div>
+      </section>
+    </div>, document.body)}
  </>;
 }

@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
+import { readOverdueLoanReports } from './loans.js';
 
 // Solo acciones realizadas por la cuenta autenticada. La tabla auditoria ya
 // forma parte del modelo existente; no se requiere ninguna migración.
@@ -14,7 +15,7 @@ const titles = {
     VISTO_BUENO: 'Visto bueno registrado', OBSERVAR: 'Observaciones registradas',
     ACEPTAR: 'Transferencia aceptada', RECEPCION: 'Recepción física registrada',
   },
-  prestamos: { ENTREGA: 'Préstamo registrado', DEVOLUCION: 'Devolución registrada' },
+  prestamos: { ENTREGA: 'Préstamo registrado', DEVOLUCION: 'Devolución registrada', REPORTE_TARDANZA: 'Reporte por tardanza emitido' },
   expedientes: { ACTUALIZAR_UBICACION: 'Ubicación actualizada' },
   exportaciones: { DESCARGAR: 'Inventario Excel descargado' },
 };
@@ -78,7 +79,12 @@ homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
     DATEDIFF(p.fecha_prevista,p.fecha_prestamo) AS durationDays
     FROM prestamos p WHERE p.solicitante_usuario_id=?
     ORDER BY p.id DESC`,[req.auth.user.id]);
-  const notices=[];
+  const reports=await readOverdueLoanReports(req.auth.user.id);
+  const notices=reports.map(report=>({
+   id:'loan-report-'+report.id,title:'Reporte por tardanza de devolución',
+   detail:report.number+' · '+report.loanFolio,module:'inicio',date:report.date,color:'wine',
+   report
+  }));
   for(const loan of rows){
    notices.push({
     id:'requester-loan-'+loan.id,

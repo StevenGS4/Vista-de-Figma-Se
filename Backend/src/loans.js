@@ -100,6 +100,56 @@ async function oneLoan(id, db=pool) {
 const guard=user=>{if(!canManageLoans(user))throw fail(
  user.mustChangePassword?'Debes cambiar tu contraseña':'Permiso de préstamos requerido',403);};
 
+const reportAction='REPORTE_TARDANZA';
+const reportReason='El préstamo no se devolvió en tiempo y forma.';
+export async function readOverdueLoanReports(requesterId=null,db=pool){
+ const [rows]=await db.execute(`SELECT CAST(r.id AS CHAR) AS id,p.folio AS loanFolio,
+  CAST(p.solicitante_usuario_id AS CHAR) AS requesterId,p.solicitante_nombre AS requesterName,
+  a.codigo AS areaId,p.estado AS loanStatus,DATE_FORMAT(p.fecha_prevista,'%Y-%m-%d') AS dueDate,
+  r.detalle AS reportData
+  FROM auditoria r JOIN prestamos p ON p.id=r.entidad_id
+  JOIN areas a ON a.id=p.area_solicitante_id
+  WHERE r.entidad='prestamos' AND r.accion=?${requesterId===null?'':' AND p.solicitante_usuario_id=?'}
+  ORDER BY r.id DESC`,requesterId===null?[reportAction]:[reportAction,requesterId]);
+ return rows.map(({reportData,...row})=>{
+  const data=typeof reportData==='string'?JSON.parse(reportData):reportData;
+  return {...row,number:'RPT-'+row.id,date:data.date,reason:data.reason||reportReason};
+ });
+}
+loansRouter.get('/reportes',async(req,res,next)=>{
+ try{
+  guard(req.auth.user);
+  res.set('Cache-Control','private, no-store');
+  res.json({reports:await readOverdueLoanReports()});
+ }catch(e){next(e);}
+});
+loansRouter.post('/:id/reportes',async(req,res,next)=>{
+ let conn;
+ try{
+  const user=req.auth.user;guard(user);
+  if(!/^LOAN-[1-9]\d*$/.test(req.params.id))throw fail('Préstamo inválido');
+  const id=req.params.id.slice(5);
+  conn=await pool.getConnection();
+  await conn.beginTransaction();
+  const [[loan]]=await conn.execute(`SELECT folio,estado,solicitante_usuario_id,
+   fecha_prevista < CURDATE() AS overdue, DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today
+   FROM prestamos WHERE id=? FOR UPDATE`,[id]);
+  if(!loan)throw fail('Préstamo no encontrado',404);
+  if(loan.estado!=='ACTIVO'||!loan.overdue)throw fail('Solo se pueden reportar préstamos vencidos que siguen activos',409);
+  if(!loan.solicitante_usuario_id)throw fail('Este préstamo no tiene una cuenta solicitante vinculada para recibir la notificación',409);
+  const [[existing]]=await conn.execute(`SELECT id FROM auditoria WHERE entidad='prestamos'
+   AND entidad_id=? AND accion=? LIMIT 1`,[id,reportAction]);
+  if(existing)throw fail('Ya se emitió el reporte RPT-'+existing.id+' para este préstamo.',409);
+  const [{insertId}]=await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
+   [user.id,'prestamos',id,reportAction,JSON.stringify({folio:loan.folio,date:loan.today,reason:reportReason})]);
+  await conn.commit();
+  res.status(201).json({number:'RPT-'+insertId});
+ }catch(e){
+  if(conn)await conn.rollback();
+  next(e);
+ }finally{conn?.release();}
+});
+
 loansRouter.get('/',async(req,res,next)=>{
  try{
   guard(req.auth.user);

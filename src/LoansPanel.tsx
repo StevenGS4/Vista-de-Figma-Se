@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
-import { loanApi, concentrationApi, type LoanEligibleUser } from "./api";
+import { loanApi, concentrationApi, type LoanEligibleUser, type OverdueLoanReport } from "./api";
 import { ArchivalLoan, effectiveLoanStatus, todayIso, type LoanReturnCondition } from "./loans";
 import { ArchivalRecord, cadidoSections, locationSummary } from "./records";
 
@@ -139,6 +139,7 @@ function LoanTray({
   loans,
   onCreate,
   onOpen,
+  onReport,
   records,
 }: {
   initialSearch?: string;
@@ -146,6 +147,7 @@ function LoanTray({
   canReturn: boolean;
   loans: ArchivalLoan[];
   onCreate: () => void;
+  onReport: (loan: ArchivalLoan) => void;
   onOpen: (loan: ArchivalLoan, action?: "return" | "history") => void;
   records: ArchivalRecord[];
 }) {
@@ -155,6 +157,7 @@ function LoanTray({
     const state=effectiveLoanStatus(selected);
     return state==="Devuelto"?"Devueltos":state==="Vencido"?"Vencidos":"Activos";
   });
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [search, setSearch] = useState(initialSearch);
   const [searched, setSearched] = useState(Boolean(initialSearch));
   const [page, setPage] = useState(1);
@@ -220,9 +223,10 @@ function LoanTray({
           <div className="transfer-tabs">
             {(["Activos", "Próximos a vencer", "Vencidos", "Devueltos"] as LoanFilter[]).map((item) => (
               <button
-                className={filter === item ? "is-active" : ""}
+                className={!reportsOpen && filter === item ? "is-active" : ""}
                 key={item}
                 onClick={() => {
+                  setReportsOpen(false);
                   setFilter(item);
                   setPage(1);
                   setSearched(true);
@@ -249,8 +253,11 @@ function LoanTray({
                 </span>
               </button>
             ))}
+            <button type="button" className={reportsOpen ? "is-active" : ""} onClick={() => setReportsOpen(true)}>
+              Reportes levantados
+            </button>
           </div>
-          <label className="search-box">
+          {!reportsOpen && <label className="search-box">
             <Search size={17} />
             <input
               onChange={(event) => {
@@ -261,9 +268,9 @@ function LoanTray({
               placeholder="Buscar folio, expediente o solicitante..."
               value={search}
             />
-          </label>
+          </label>}
         </div>
-        {!searched ? (
+        {reportsOpen ? <OverdueReports /> : !searched ? (
           <div className="empty-state concentration-search-empty">
             <Search size={30} />
             <strong>Busca o selecciona una vista rápida</strong>
@@ -321,12 +328,15 @@ function LoanTray({
                         label={`Acciones para ${loan.folio}`}
                         width={200}
                         actions={[
-                          { label: "Ver seguimiento", icon: <Eye size={16}/>,
+                          { label: effectiveLoanStatus(loan) === "Vencido" ? "Ver detalle" : "Ver seguimiento", icon: <Eye size={16}/>,
                             onSelect: () => onOpen(loan) },
                           ...(active && canReturn ? [{
                             label: "Registrar devolución",
                             icon: <RotateCcw size={15}/>,
                             onSelect: () => onOpen(loan, "return"),
+                          }] : []),
+                          ...(effectiveLoanStatus(loan) === "Vencido" ? [{
+                            label: "Emitir reporte", icon: <FileCheck2 size={15}/>, onSelect: () => onReport(loan),
                           }] : []),
                           { label: "Ver historial", icon: <History size={15}/>,
                             onSelect: () => onOpen(loan, "history") },
@@ -365,6 +375,57 @@ function LoanTray({
         </div>}
       </section>
     </>
+  );
+}
+
+function OverdueReports() {
+  const [reports, setReports] = useState<OverdueLoanReport[]>([]);
+  const [area, setArea] = useState("");
+  const [requester, setRequester] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    loanApi.reports().then(items => { if (active) setReports(items); })
+      .catch(error => { if (active) setError(error instanceof Error ? error.message : "No se pudieron cargar los reportes."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const areaOptions = [...new Set(reports.map(report => report.areaId))]
+    .sort((left, right) => areaName(left).localeCompare(areaName(right), "es"));
+  const byArea = reports.filter(report => !area || report.areaId === area);
+  const requesters = [...new Map(byArea.map(report => [report.requesterId, report.requesterName]))]
+    .sort(([, left], [, right]) => left.localeCompare(right, "es"));
+  const filtered = byArea.filter(report => !requester || report.requesterId === requester);
+  return (
+    <section aria-label="Reportes levantados">
+      <div className="flex flex-wrap gap-3 p-4">
+        <label className="grid gap-1 text-xs font-semibold">Área
+          <select className="filter-select" value={area} onChange={event => { setArea(event.target.value); setRequester(""); }}>
+            <option value="">Todas las áreas</option>
+            {areaOptions.map(id => <option key={id} value={id}>{areaName(id)}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-semibold">Solicitante
+          <select className="filter-select" value={requester} onChange={event => setRequester(event.target.value)}>
+            <option value="">Todos los solicitantes</option>
+            {requesters.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+      </div>
+      {loading ? <p className="p-4" role="status">Cargando reportes…</p> :
+        error ? <p className="p-4" role="alert">{error}</p> :
+        filtered.length ? <div className="table-scroll"><table className="data-table">
+          <thead><tr><th>Reporte</th><th>Préstamo</th><th>Área</th><th>Solicitante</th><th>Vencimiento</th><th>Emisión</th><th>Estado</th></tr></thead>
+          <tbody>{filtered.map(report => (
+            <tr key={report.id}>
+              <td><strong>{report.number}</strong></td><td>{report.loanFolio}</td><td>{areaName(report.areaId)}</td>
+              <td>{report.requesterName}</td><td>{formatDate(report.dueDate)}</td><td>{formatDate(report.date)}</td>
+              <td>{report.loanStatus === "ACTIVO" ? "Vencido" : "Devuelto"}</td>
+            </tr>
+          ))}</tbody>
+        </table></div> : <p className="p-4">No hay reportes para los filtros seleccionados.</p>}
+    </section>
   );
 }
 
@@ -884,6 +945,7 @@ function LoanDetail({
   onBack,
   onHistory,
   onReturn,
+  onReport,
   record,
 }: {
   canReturn: boolean;
@@ -891,6 +953,7 @@ function LoanDetail({
   onBack: () => void;
   onHistory: () => void;
   onReturn: () => void;
+  onReport: () => void;
   record?: ArchivalRecord;
 }) {
   const status = effectiveLoanStatus(loan);
@@ -925,6 +988,9 @@ function LoanDetail({
           <History size={16} />
           Historial
         </Button>
+        {status === "Vencido" && <Button className="button--danger-outline" onClick={onReport}>
+          <FileCheck2 size={16} /> Emitir reporte
+        </Button>}
         {loan.status === "Activo" && canReturn && (
           <Button className="button--primary" onClick={onReturn}>
             <RotateCcw size={16} />
@@ -1318,6 +1384,13 @@ export default function LoansPanel({
   const [selectedRecords, setSelectedRecords] = useState<ArchivalRecord[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<ArchivalLoan | null>(null);
   const [message, setMessage] = useState("");
+  const [reportLoan, setReportLoan] = useState<ArchivalLoan | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const openReport = (loan: ArchivalLoan) => {
+    setReportError("");
+    setReportLoan(loan);
+  };
   const [loanError, setLoanError] = useState<{ title: string; detail: string } | null>(null);
   useEffect(() => {
     if (!/registrado correctamente|devolución completada|devolución parcial registrada/i.test(message)) return;
@@ -1435,6 +1508,38 @@ export default function LoansPanel({
     </div>
   );
 
+  const reportDialog = reportLoan && (
+    <div className="modal-backdrop">
+      <section className="modal decision-modal" role="dialog" aria-modal="true" aria-labelledby="issue-loan-report">
+        <div className="modal__header">
+          <div><span>{reportLoan.folio}</span><h2 id="issue-loan-report">Emitir reporte por tardanza</h2></div>
+        </div>
+        <div className="modal__body grid gap-3 text-sm">
+          <p><strong>Solicitante:</strong> {reportLoan.requesterName}</p>
+          <p><strong>Vencimiento:</strong> {formatDate(reportLoan.expectedReturnDate)}</p>
+          <p>El préstamo no se devolvió en tiempo y forma. Se notificará al solicitante que debe devolverlo a la brevedad.</p>
+          {reportError && <p className="field-error" role="alert">{reportError}</p>}
+        </div>
+        <div className="modal__footer">
+          <Button className="button--secondary" disabled={reportBusy} onClick={() => setReportLoan(null)}>Cancelar</Button>
+          <Button className="button--primary" disabled={reportBusy} onClick={async () => {
+            setReportBusy(true);
+            setReportError("");
+            try {
+              const number = await loanApi.reportOverdue(reportLoan.id);
+              setMessage(`Reporte ${number} registrado correctamente. Se notificó al solicitante.`);
+              setReportLoan(null);
+            } catch (error) {
+              setReportError(error instanceof Error ? error.message : "No se pudo emitir el reporte.");
+            } finally {
+              setReportBusy(false);
+            }
+          }}>{reportBusy ? "Emitiendo…" : "Emitir reporte"}</Button>
+        </div>
+      </section>
+    </div>
+  );
+
   if (view === "form" && selectedRecords.length)
     return (
       <>
@@ -1492,8 +1597,10 @@ export default function LoansPanel({
             }}
             onHistory={() => setView("history")}
             onReturn={() => setView("return")}
+            onReport={() => openReport(selectedLoan)}
             record={record}
           />
+          {reportDialog}
         </>
       );
   }
@@ -1506,7 +1613,9 @@ export default function LoansPanel({
           {message}
         </div>
       )}
+      {reportDialog}
       <LoanTray
+        onReport={openReport}
         initialSearch={initialSearch}
         canCreate={canCreate}
         canReturn={canReturn}
