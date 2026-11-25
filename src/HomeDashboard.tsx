@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Archive, Bell, Check, ChevronRight, Clock3, Download, FileCheck2, FilePlus2, FolderArchive, PackageCheck, RotateCcw } from "lucide-react";
-import { homeApi, type HomeActivity } from "./api";
+import { useEffect, useState } from "react";
+import { Archive, Check, ChevronRight, Clock3, Download, FileCheck2, FilePlus2, FolderArchive, PackageCheck, RotateCcw } from "lucide-react";
+import { homeApi, type HomeActivity, type PersonalLoan } from "./api";
 import { type UserRecord, type Role } from "./data";
 import type { DocumentaryTransfer } from "./transfers";
 import type { ArchivalLoan } from "./loans";
+import { assignedTransferTasks, homeToday, lastActiveInventory, personalLoanTiming } from "./homePending";
 import type { ArchivalRecord } from "./records";
 
 export type HomeModule = "inicio" | "tramite" | "concentracion" | "transferencias" | "prestamos" | "inventarios" | "control-area" | "administracion";
@@ -44,7 +45,7 @@ export function buildHomeNotices(user: UserRecord, role: Role, transfers: Docume
       if(days <= 3) notices.push({id:"loan-due-"+loan.id+"-"+loan.expectedReturnDate,title:days<0?"Préstamo vencido":days===0?"Préstamo vence hoy":"Préstamo próximo a vencer",detail:loan.folio+" · "+(days<0?Math.abs(days)+" día(s) de retraso":days+" día(s) restantes"),module:"prestamos",date:loan.expectedReturnDate,color:days<0?"wine":"gold"});
     }
   }
-  return notices.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,30);
+  return notices.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 }
 
 const activityIcon = (action:string) => action==="DESCARGAR"?Download:action==="DEVOLUCION"?RotateCcw:action==="ENTREGA"?PackageCheck:action==="CREAR"?FilePlus2:action==="ACEPTAR"||action==="VISTO_BUENO"?FileCheck2:FolderArchive;
@@ -55,11 +56,11 @@ function when(date:string|null) {
   return Number.isNaN(d.getTime())?String(date).slice(0,16):d.toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"});
 }
 
-export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpenFolio,onOpenRecord,transfers,loans,records}:{
+export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpenFolio,onOpenRecord,transfers,personalLoans,permissions,onOpenLoans,records}:{
   user:UserRecord;role:Role;allowedModules:HomeModule[];onNavigate:(module:HomeModule)=>void;
   onOpenFolio:(module:"transferencias"|"prestamos",folio:string)=>void;
   onOpenRecord:(record:ArchivalRecord)=>void;
-  transfers:DocumentaryTransfer[];loans:ArchivalLoan[];records:ArchivalRecord[];
+  transfers:DocumentaryTransfer[];personalLoans:PersonalLoan[];permissions:string[];onOpenLoans:()=>void;records:ArchivalRecord[];
 }) {
   const [activity,setActivity]=useState<HomeActivity[]>([]);
   const [loading,setLoading]=useState(true);
@@ -77,9 +78,10 @@ export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpe
     return ()=>{alive=false;window.clearInterval(interval);};
   },[user.id]);
 
-  const notices=useMemo(()=>buildHomeNotices(user,role,transfers,loans),[user,role,transfers,loans]);
-  const pending=notices.filter(n=>n.id.startsWith("loan-due-")||n.id.startsWith("transfer-vb-")||n.id.startsWith("transfer-admin-")||n.id.startsWith("transfer-reception-"));
-  const lastInventory=records.find(r=>r.stage==="Archivo de trámite" && (role==="Administrador / Coordinador" || (r.areaId===user.areaId && (role==="Encargado de área"||r.createdBy===user.id))));
+  const pending = allowedModules.includes("transferencias") ? assignedTransferTasks(user,role,transfers,permissions) : [];
+  const today = homeToday();
+  const reminders = personalLoans.filter(loan => personalLoanTiming(loan,today).reminder);
+  const lastInventory = lastActiveInventory(user,role,records);
   return <div className="dashboard">
     <div className="home-greeting" role="status">
       <h3>{greetingForHour(hour)}, {user.firstName}.</h3>
@@ -104,13 +106,9 @@ export default function HomeDashboard({user,role,allowedModules,onNavigate,onOpe
       <aside className="surface pending-panel">
         <div className="section-heading"><div><h2>Pendientes operativos</h2><p>Acciones reales según tu rol y los registros disponibles.</p></div></div>
         <div className="pending-list">
-          {pending.length===0 && !lastInventory && <div className="empty-state compact-empty"><Check size={25}/><strong>Sin pendientes detectados</strong><p>No hay acciones vencidas o esperando revisión en los datos consultados.</p></div>}
-          {pending.slice(0,4).map(n=><button key={n.id} onClick={()=>{
-            if(!allowedModules.includes(n.module))return;
-            if(n.module==="transferencias" || n.module==="prestamos")
-              onOpenFolio(n.module,n.detail.split(" · ")[0]);
-            else onNavigate(n.module);
-          }}><span><AlertTriangle size={16}/></span><div><strong>{n.title}</strong><small>{n.detail}</small></div><ChevronRight size={15}/></button>)}
+          {pending.length===0 && reminders.length===0 && !lastInventory && <div className="empty-state compact-empty"><Check size={25}/><strong>Sin pendientes detectados</strong><p>No hay acciones vencidas o esperando revisión en los datos consultados.</p></div>}
+          {reminders.map(loan => <button key={loan.folio} className="home-pending--amber" onClick={onOpenLoans}><span><Clock3 size={16}/></span><div><strong>Recuerda devolver tu préstamo</strong><small>{loan.folio} · {personalLoanTiming(loan,today).label}</small></div><ChevronRight size={15}/></button>)}
+          {pending.slice(0,4).map(({transfer,task}) => <button key={transfer.id} className="home-pending--blue" onClick={()=>onOpenFolio("transferencias",transfer.folio)}><span><FolderArchive size={16}/></span><div><strong>{task.label}</strong><small>{transfer.folio}</small></div><ChevronRight size={15}/></button>)}
           {lastInventory && allowedModules.includes("tramite") && <button onClick={()=>onOpenRecord(lastInventory)}><span><Archive size={16}/></span><div><strong>Consultar último inventario en trámite</strong><small>{lastInventory.inventoryId}</small></div><ChevronRight size={15}/></button>}
         </div>
       </aside>

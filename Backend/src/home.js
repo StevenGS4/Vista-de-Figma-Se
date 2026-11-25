@@ -51,6 +51,22 @@ homeRouter.get('/actividad', async (req,res,next) => {
 
 /* Avisos de préstamos exclusivamente para el solicitante autenticado. No da
    acceso al catálogo completo de préstamos ni a expedientes ajenos. */
+homeRouter.get('/mis-prestamos',async(req,res,next)=>{
+ try{
+  if(req.auth.user.mustChangePassword)return res.status(403).json({error:'Primero cambia tu contraseña'});
+  const [loans]=await pool.execute(`SELECT p.folio,p.estado AS status,i.folio AS inventory,
+   DATE_FORMAT(p.fecha_prestamo,'%Y-%m-%d') AS loanDate,
+   DATE_FORMAT(p.fecha_prevista,'%Y-%m-%d') AS dueDate,
+   DATE_FORMAT(p.cerrado_en,'%Y-%m-%d') AS returnedDate,
+   (SELECT CONCAT_WS(' · ',e.numero_expediente,e.titulo_asunto)
+    FROM prestamo_expedientes pe JOIN expedientes e ON e.id=pe.expediente_id
+    WHERE pe.prestamo_id=p.id ORDER BY e.id LIMIT 1) AS record
+   FROM prestamos p LEFT JOIN inventarios i ON i.id=p.inventario_id
+   WHERE p.solicitante_usuario_id=? ORDER BY p.id DESC`,[req.auth.user.id]);
+  res.set('Cache-Control','private, no-store');
+  res.json({loans});
+ }catch(error){next(error);}
+});
 homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
  try{
   if(req.auth.user.mustChangePassword)return res.status(403).json({error:'Primero cambia tu contraseña'});
@@ -58,9 +74,10 @@ homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
     DATE_FORMAT(p.fecha_prestamo,'%Y-%m-%d') AS loanDate,
     DATE_FORMAT(p.fecha_prevista,'%Y-%m-%d') AS dueDate,
     DATE_FORMAT(p.cerrado_en,'%Y-%m-%d') AS returnedDate,
-    DATEDIFF(p.fecha_prevista,CURDATE()) AS remainingDays
+    DATEDIFF(p.fecha_prevista,CURDATE()) AS remainingDays,
+    DATEDIFF(p.fecha_prevista,p.fecha_prestamo) AS durationDays
     FROM prestamos p WHERE p.solicitante_usuario_id=?
-    ORDER BY p.id DESC LIMIT 30`,[req.auth.user.id]);
+    ORDER BY p.id DESC`,[req.auth.user.id]);
   const notices=[];
   for(const loan of rows){
    notices.push({
@@ -74,7 +91,7 @@ homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
      title:'Préstamo devuelto',detail:loan.folio,
      module:'inicio',date:loan.returnedDate||loan.loanDate,color:'green'
     });
-   }else if(loan.remainingDays<=3){
+   }else if(loan.remainingDays!=null && loan.remainingDays<=Math.ceil(Math.max(0,loan.durationDays)*0.1)){
     notices.push({
      id:'requester-due-'+loan.id+'-'+loan.dueDate,
      title:loan.remainingDays<0?'Tu préstamo está vencido':
@@ -86,6 +103,6 @@ homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
    }
   }
   res.set('Cache-Control','private, no-store');
-  res.json({notices:notices.slice(0,40)});
+  res.json({notices});
  }catch(error){next(error);}
 });

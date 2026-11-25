@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi, homeApi, type PersonalLoan } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -49,6 +49,7 @@ import { ArchivalLoan } from "./loans";
 import HomeDashboard from "./HomeDashboard";
 import GuidedTour from "./GuidedTour";
 import UserManualPanel from "./UserManualPanel";
+import ProfileActivityDialog, { type ProfileActivityView } from "./ProfileActivityDialog";
 import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
@@ -624,6 +625,7 @@ function Sidebar({
 
 function Header({
   active,
+  onProfileActivity,
   onChangePassword,
   onLogout,
   onMenu,
@@ -642,6 +644,7 @@ function Header({
   onManual,
 }: {
   active: ModuleId;
+  onProfileActivity: (view: ProfileActivityView) => void;
   records: ArchivalRecord[];
   transfers: DocumentaryTransfer[];
   loans: ArchivalLoan[];
@@ -712,6 +715,15 @@ function Header({
                   </button>
                 ))}
               </div>
+              {([
+                ["notifications", "Mis notificaciones", Bell],
+                ["pending", "Mis pendientes", Clock3],
+                ["loans", "Mis préstamos", BriefcaseBusiness],
+              ] as const).map(([view, label, Icon]) => (
+                <button key={view} className="profile-logout" onClick={() => { setProfileOpen(false); onProfileActivity(view); }}>
+                  <Icon size={17} /> {label}
+                </button>
+              ))}
               <button
                 className="profile-logout"
                 onClick={() => {
@@ -857,6 +869,16 @@ function Application({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalQuery, setGlobalQuery] = useState("");
+  const [profileActivity,setProfileActivity] = useState<ProfileActivityView | null>(null);
+  const [personalLoans,setPersonalLoans] = useState<PersonalLoan[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => homeApi.personalLoans().then(items => { if (alive) setPersonalLoans(items); })
+      .catch(error => console.error("No fue posible consultar tus préstamos:",error));
+    void refresh();
+    const timer = window.setInterval(refresh,60000);
+    return () => { alive = false; window.clearInterval(timer); };
+  },[currentUser.id]);
   const currentPermissions = rolePermissions[role];
   const allowed = useMemo(
     () =>
@@ -931,9 +953,15 @@ function Application({
         onMobileClose={() => setMobileOpen(false)}
         onNavigate={navigate}
       />
+      {profileActivity && <ProfileActivityDialog view={profileActivity} user={currentUser} role={role}
+        permissions={currentPermissions} allowed={allowed} records={archivalRecords} transfers={transfers} loans={loans}
+        onClose={() => setProfileActivity(null)}
+        onOpenTransfer={folio => { setProfileActivity(null); openFolio("transferencias",folio); }}
+        onOpenRecord={record => { setProfileActivity(null); openSearchResult(record); }} />}
       <div className="app-main">
         <Header
           active={active}
+          onProfileActivity={view => { setProfileActivity(view); void refreshHomeEvents(); }}
           onChangePassword={onChangePassword}
           onLogout={onLogout}
           onMenu={() => {
@@ -976,7 +1004,8 @@ function Application({
           {active === "inicio" ? (
             <HomeDashboard user={currentUser} role={role} allowedModules={allowed} onNavigate={navigate}
                 onOpenFolio={openFolio} onOpenRecord={openSearchResult}
-                transfers={transfers} loans={loans} records={archivalRecords} />
+                transfers={transfers} personalLoans={personalLoans} permissions={currentPermissions}
+                onOpenLoans={() => setProfileActivity("loans")} records={archivalRecords} />
           ) : active === "tramite" ? (
             <Suspense fallback={moduleFallback}>
               <RecordsPanel

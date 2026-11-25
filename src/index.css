@@ -8250,3 +8250,47 @@
 .transfer-evidence ul { list-style: disc; padding-inline-start: 18px; }
 .transfer-evidence .button { justify-self: start; white-space: normal; }
 .transfer-reception-location { padding: 16px; margin-block: 16px; }
+
+.profile-activity-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  max-height: 85dvh;
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  background: var(--white);
+  color: var(--green-950);
+  box-shadow: var(--shadow-lg);
+}
+.profile-activity-dialog::backdrop { background: rgb(15 43 35 / 48%); }
+.profile-activity-dialog > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+}
+.profile-activity-dialog h2 { font-size: 18px; font-weight: 700; }
+.profile-activity-body { display: grid; gap: 10px; padding: 16px 20px; }
+.profile-activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+  background: var(--gray-50);
+}
+.profile-activity-item > div { flex: 1; min-width: min(12rem, 100%); overflow-wrap: anywhere; }
+.profile-activity-item small { display: block; color: var(--gray-600); }
+.profile-activity-item.home-pending--blue, .pending-list > button.home-pending--blue { background: #eaf3fb; border-color: #abc9e2; }
+.profile-activity-item.home-pending--amber, .pending-list > button.home-pending--amber { background: #fff3dc; border-color: #dfbd81; }
+.pending-list > button.home-pending--blue > span { background: #d4e7f6; color: #22567c; }
+.pending-list > button.home-pending--amber > span { background: #ffe3af; color: #805310; }
