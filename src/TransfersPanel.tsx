@@ -594,6 +594,7 @@ function TransferWizard({
     }, new Map<string, ArchivalRecord[]>()),
   );
 
+  const visibleExpedientes = shown.filter(record => sourceIds.includes(record.inventoryId || record.id));
   const selectedSources = eligibleInventories.filter(([id]) => sourceIds.includes(id));
   const goToStep = (target: number) => {
     setError("");
@@ -687,48 +688,32 @@ function TransferWizard({
             </div>
             {settingsError && <p role="alert" className="field-error">{settingsError}</p>}
             <div className="eligible-list inventory-eligible-list">
-              {selectedSources.map(([inventoryId, inventoryRecords]) => {
-                const visibleRows = inventoryRecords.filter((record) => shown.includes(record));
-                if (!visibleRows.length) return null;
-                const selected = inventoryRecords.some(record => selectedIds.includes(record.id));
-                return (
-                  <section
-                    className={`eligible-inventory-group ${selected ? "is-selected" : ""}`}
-                    key={inventoryId}
-                  >
-                    <div className="eligible-inventory-group__header border-l-4 border-l-[#547e6b]">
-                      <span>
-                        <strong>{inventoryRecords[0].cadidoSeriesName || inventoryRecords[0].cadidoCode} · {inventoryId}</strong>
-                        <small>
-                          {areaName(inventoryRecords[0].areaId)} · {inventoryRecords.length} expedientes elegibles
-                        </small>
-                      </span>
-                    </div>
-                    <div>
-                      {visibleRows.map((record) => (
-                          <div className="eligible-row-readonly" key={record.id}>
-                            <label className="flex items-center gap-2">
-                              <input type="checkbox" aria-label={`Transferir expediente ${record.recordNumber}`}
-                                checked={selectedIds.includes(record.id)}
-                                disabled={Boolean(activeTransfer) || (!selectedIds.includes(record.id) && selectedIds.length >= 1000)}
-                                onChange={event => {
-                                  const checked = event.target.checked;
-                                  setSelectedIds(current => checked ? [...current, record.id] : current.filter(id => id !== record.id));
-                                }} />
-                              <span><strong style={{ fontSize: "0.875rem" }}>{record.recordNumber}</strong>
-                              <small style={{ fontSize: "0.75rem", color: "#435951" }}>{record.title}</small></span>
-                            </label>
-                            <span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span>
-                            <span className="eligible-meta">
-                              {record.filesCount} legajos · {record.foliosCount} folios
-                            </span>
-                          </div>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
-              {!selectedSources.some(([, records]) => records.some(record => shown.includes(record))) && (
+              {visibleExpedientes.length > 0 ? (
+                <div className="table-scroll">
+                  <table className="data-table">
+                    <thead><tr>
+                      <th>Seleccionar</th><th>Número de expediente</th><th>Título o asunto</th>
+                      <th>Clave archivística</th><th>Archivo de origen</th>
+                    </tr></thead>
+                    <tbody>{visibleExpedientes.map(record => {
+                      const checked = selectedIds.includes(record.id);
+                      return <tr key={record.id}>
+                        <td><input type="checkbox" aria-label={`Transferir expediente ${record.recordNumber}`}
+                          style={{ appearance: "auto", width: 18, height: 18, accentColor: "#245348" }}
+                          checked={checked} disabled={Boolean(activeTransfer) || (!checked && selectedIds.length >= 1000)}
+                          onChange={event => {
+                            const mark = event.target.checked;
+                            setSelectedIds(current => mark ? [...current, record.id] : current.filter(id => id !== record.id));
+                          }} /></td>
+                        <td><strong>{record.recordNumber}</strong></td>
+                        <td>{record.title}</td>
+                        <td><span className="cadido-code">{record.archiveClassificationCode || record.cadidoCode}</span></td>
+                        <td>{record.cadidoSeriesName || record.cadidoCode}</td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              ) : (
                 <div className="empty-state compact-empty">
                   <Files size={27} />
                   <strong>No hay expedientes elegibles</strong>
