@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Download, Plus, Search, X } from "lucide-react";
 import { disposalApi, type DisposalDetail, type DisposalProposal, type DisposalRecord } from "./api";
-import type { Role } from "./data";
+import type { Role, UserRecord } from "./data";
+import type { ArchivalRecord } from "./records";
+import ConcentrationPanel from "./ConcentrationPanel";
 import { homeToday } from "./homePending";
 
 const statuses = {
@@ -145,11 +147,12 @@ function ResolutionForm({ proposal, busy, onResolve }: {
   </form>;
 }
 
-export default function DisposalsPanel({ role, onDischarged }: {
-  role: Role; onDischarged: (ids: string[]) => void;
+export default function DisposalsPanel({ currentUser, role, onDischarged }: {
+  currentUser: UserRecord; role: Role; onDischarged: (ids: string[]) => void;
 }) {
   const [proposals, setProposals] = useState<DisposalProposal[]>([]);
   const [detail, setDetail] = useState<DisposalDetail>();
+  const [archive, setArchive] = useState<ArchivalRecord[]>();
   const [candidates, setCandidates] = useState<DisposalRecord[]>();
   const [status, setStatus] = useState<"" | DisposalProposal["status"]>("");
   const [notice, setNotice] = useState("");
@@ -180,18 +183,32 @@ export default function DisposalsPanel({ role, onDischarged }: {
     setCandidates(undefined);
   };
 
+  if (archive) return <>
+    <button type="button" className="text-button mb-3" onClick={() => setArchive(undefined)}>
+      <ArrowLeft size={16} /> Volver a propuestas
+    </button>
+    <ConcentrationPanel disposed currentUser={currentUser} role={role} records={archive}
+      permissions={[]} onRecordsChange={setArchive} />
+  </>;
+
   return <>
     <div className="records-page-heading">
       <div>
         <h2>Bajas</h2>
         <p>Propón expedientes de Concentración y consulta la resolución de cada solicitud.</p>
       </div>
-      {canPropose && !candidates && !detail && (
-        <button type="button" className="button button--primary" disabled={busy}
-          onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
-          <Plus size={17} /> Nueva propuesta
+      {!candidates && !detail && <div className="flex flex-wrap gap-2">
+        <button type="button" className="button button--secondary" disabled={busy}
+          onClick={() => void run(async () => setArchive((await disposalApi.archive()).records))}>
+          Expedientes dados de baja
         </button>
-      )}
+        {canPropose && (
+          <button type="button" className="button button--primary" disabled={busy}
+            onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
+            <Plus size={17} /> Nueva propuesta
+          </button>
+        )}
+      </div>}
     </div>
     <div className="primary-builder grid gap-4">
       {error && <p className="validation-summary" role="alert">{error}</p>}

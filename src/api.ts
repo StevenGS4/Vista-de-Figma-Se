@@ -309,6 +309,7 @@ export type DisposalProposal = {
 };
 export type DisposalDetail = DisposalProposal & {records:DisposalRecord[]};
 export const disposalApi = {
+ archive:()=>request<{records:ArchivalRecord[]}>('/api/bajas/archivo'),
  list:()=>request<{proposals:DisposalProposal[]}>('/api/bajas'),
  candidates:()=>request<{records:DisposalRecord[]}>('/api/bajas/expedientes'),
  detail:(id:string)=>request<{proposal:DisposalDetail}>('/api/bajas/'+encodeURIComponent(id)),

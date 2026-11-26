@@ -4,6 +4,7 @@ import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
 import { hasRole, roleNames } from './auth-policy.js';
 import { readRecords } from './tramite.js';
+import { enrichConcentrationRecords } from './concentration.js';
 import { validDate } from './loan-policy.js';
 import { safeCell } from './export-policy.js';
 
@@ -40,11 +41,18 @@ const parseId = value => {
  if(!/^[1-9]\d{0,19}$/.test(value))throw fail('Propuesta inválida');
  return value;
 };
+const physicalLocation = record => [
+ record.archiveZone,record.room,record.shelf&&'Estante '+record.shelf,
+ record.level&&'Nivel '+record.level,record.physicalSection&&'Sección '+record.physicalSection,
+ record.position&&'Posición '+record.position,record.locationBox&&'Caja '+record.locationBox,
+ record.locationNotes&&'Observaciones: '+record.locationNotes,
+].filter(Boolean).join(' · ');
 const snapshot = record => ({
  id:record.id, number:record.recordNumber, title:record.title, inventory:record.inventoryId,
  section:record.cadidoSectionName||record.cadidoSectionId, sectionCode:record.cadidoSectionId,
  series:record.cadidoSeriesName, code:record.cadidoCode, classification:record.archiveClassificationCode,
  opened:record.openDate, closed:record.closeDate, retention:record.totalValidity,
+ physicalLocation:physicalLocation(record),
 });
 const withFolio = row => ({...row,folio:folio(row.id)});
 
@@ -52,8 +60,15 @@ async function proposalFor(user,id){
  const {sql,args}=scope(user);
  const [[row]]=await pool.execute(proposalSelect+' WHERE b.id=?'+sql,[id,...args]);
  if(!row)throw fail('Propuesta no encontrada',404);
- const [items]=await pool.execute('SELECT ficha FROM propuesta_baja_expedientes WHERE propuesta_id=? ORDER BY expediente_id',[id]);
- return {...withFolio(row),records:items.map(({ficha})=>typeof ficha==='string'?JSON.parse(ficha):ficha)};
+ const [items]=await pool.execute(`SELECT be.ficha,e.archivo_zona AS archiveZone,e.lugar_resguardo AS room,
+  e.estante AS shelf,e.nivel AS level,e.seccion_fisica AS physicalSection,e.posicion AS position,
+  e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes
+  FROM propuesta_baja_expedientes be JOIN expedientes e ON e.id=be.expediente_id
+  WHERE be.propuesta_id=? ORDER BY be.expediente_id`,[id]);
+ return {...withFolio(row),records:items.map(({ficha,...location})=>{
+  const record=typeof ficha==='string'?JSON.parse(ficha):ficha;
+  return {...record,physicalLocation:record.physicalLocation??physicalLocation(location)};
+ })};
 }
 
 disposalsRouter.get('/',async(req,res,next)=>{
@@ -61,6 +76,16 @@ disposalsRouter.get('/',async(req,res,next)=>{
   const {sql,args}=scope(req.auth.user);
   const [proposals]=await pool.execute(proposalSelect+' WHERE 1=1'+sql+' ORDER BY b.id DESC',args);
   res.json({proposals:proposals.map(withFolio)});
+ }catch(error){next(error);}
+});
+
+disposalsRouter.get('/archivo',async(req,res,next)=>{
+ try{
+  const {sql,args}=scope(req.auth.user);
+  const records=await readRecords(pool,`WHERE e.etapa='CONCENTRACION' AND e.deleted_at IS NOT NULL
+   AND EXISTS (SELECT 1 FROM propuesta_baja_expedientes be JOIN propuestas_baja b ON b.id=be.propuesta_id
+    WHERE be.expediente_id=e.id AND b.estado='BAJA'${sql})`,args,true);
+  res.json({records:await enrichConcentrationRecords(records)});
  }catch(error){next(error);}
 });
 
@@ -121,21 +146,22 @@ disposalsRouter.get('/:id/listado.xlsx',async(req,res,next)=>{
   const proposal=await proposalFor(req.auth.user,parseId(req.params.id));
   const book=new ExcelJS.Workbook();
   const sheet=book.addWorksheet('Propuesta de baja',{views:[{state:'frozen',ySplit:6}]});
-  [14,22,26,24,27,52,16,16,17,26].forEach((width,index)=>{sheet.getColumn(index+1).width=width;});
-  sheet.mergeCells('A1:J1');
+  [14,22,26,24,27,52,16,16,17,26,64].forEach((width,index)=>{sheet.getColumn(index+1).width=width;});
+  sheet.mergeCells('A1:K1');
   sheet.getCell('A1').value='SEMARNAT · Listado de expedientes propuestos para baja documental';
   const add=values=>sheet.addRow(values.map(safeCell));
   add(['Folio',proposal.folio,'Área',proposal.area]);
   add(['Fecha',proposal.createdDate,'Elaboró',proposal.requester]);
-  sheet.mergeCells('A4:J4');
+  sheet.mergeCells('A4:K4');
   sheet.getCell('A4').value='Relación para remitir a Oficina Central';
   add([]);
-  const heading=add(['Consecutivo','Núm. expediente','Clasificación','Sección','Serie documental','Título o asunto','Apertura','Cierre','Vigencia total','Inventario de origen']);
+  const heading=add(['Consecutivo','Núm. expediente','Clasificación','Sección','Serie documental','Título o asunto','Apertura','Cierre','Vigencia total','Inventario de origen','Ubicación física']);
   heading.font={bold:true,color:{argb:'FFFFFFFF'}};
   heading.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF205B4D'}};
   proposal.records.forEach((record,index)=>add([index+1,record.number,record.classification,record.section,
-   [record.code,record.series].filter(Boolean).join(' · '),record.title,record.opened,record.closed,record.retention,record.inventory]));
-  sheet.autoFilter='A6:J'+sheet.rowCount;
+   [record.code,record.series].filter(Boolean).join(' · '),record.title,record.opened,record.closed,record.retention,record.inventory,record.physicalLocation]));
+  sheet.getColumn(11).alignment={vertical:'top',wrapText:true};
+  sheet.autoFilter='A6:K'+sheet.rowCount;
   const bytes=await book.xlsx.writeBuffer();
   res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
    .attachment(proposal.folio+'.xlsx').send(Buffer.from(bytes));

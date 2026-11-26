@@ -1084,7 +1084,7 @@ function Application({
             </Suspense>
           ) : active === "bajas" ? (
             <Suspense fallback={moduleFallback}>
-              <DisposalsPanel role={role} onDischarged={ids => {
+              <DisposalsPanel currentUser={currentUser} role={role} onDischarged={ids => {
                 const discharged = new Set(ids);
                 onRecordsChange(archivalRecords.filter(record => !discharged.has(record.id)));
               }} />

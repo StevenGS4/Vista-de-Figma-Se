@@ -37,6 +37,7 @@ type LocationErrors = Partial<
   Record<"archiveZone" | "room" | "shelf" | "level" | "physicalSection", string>
 >;
 
+const disposedDate = (record: ArchivalRecord) => record.recordDeletedAt?.slice(0, 10) || "";
 const concentrationDate = (record: ArchivalRecord) => record.receptionDate || record.transferDate || record.inventoryDate || "";
 
 const formatDate = (value: string) =>
@@ -64,7 +65,7 @@ function Button({
   );
 }
 
-function AvailabilityBadge({ value }: { value: RecordAvailability }) {
+function AvailabilityBadge({ value }: { value: RecordAvailability | "Baja definitiva" }) {
   return (
     <span className={`record-badge record-badge--${value === "En archivo" ? "green" : "wine"}`}>
       <span />
@@ -138,6 +139,7 @@ function EditInventoryData({record, onCancel, onSave}: {
 }
 
 function ConcentrationList({
+  disposed,
   initialSearch = "",
   canEditLocation,
   canViewDetail,
@@ -146,6 +148,7 @@ function ConcentrationList({
   onView,
   records,
 }: {
+  disposed: boolean;
   initialSearch?: string;
   canEditLocation: boolean;
   canViewDetail: boolean;
@@ -167,12 +170,13 @@ function ConcentrationList({
   const [expandedInventory, setExpandedInventory] = useState<string | null>(null);
   const pageSize = 5;
 
+  const recordDate = disposed ? disposedDate : concentrationDate;
   const filtered = useMemo(() => {
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const groups = new Map<string, ArchivalRecord[]>();
     const seen = new Set<string>();
-    for (const record of [...records].sort((a, b) => concentrationDate(b).localeCompare(concentrationDate(a)))) {
-      const date = concentrationDate(record);
+    for (const record of [...records].sort((a, b) => recordDate(b).localeCompare(recordDate(a)))) {
+      const date = recordDate(record);
       if (seen.has(record.id) || (area && record.areaId !== area) ||
         (section && record.cadidoSectionId !== section) || (cadido && record.cadidoCode !== cadido) ||
         (cadidoYear && record.cadidoYear !== cadidoYear) ||
@@ -198,7 +202,7 @@ function ConcentrationList({
       return { id, header: items[0], records: items, inventories: [...inventories] };
     });
     return recentOnly ? matching.slice(0,5) : matching;
-  }, [records, search, area, section, cadido, cadidoYear, availability, recentOnly, from, to]);
+  }, [recordDate, records, search, area, section, cadido, cadidoYear, availability, recentOnly, from, to]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -223,8 +227,8 @@ function ConcentrationList({
     <>
       <div className="records-page-heading">
         <div>
-          <h2>Archivo de concentración</h2>
-          <p>Consulta los expedientes transferidos agrupados por sección y serie documental.</p>
+          <h2>{disposed ? "Expedientes dados de baja" : "Archivo de concentración"}</h2>
+          <p>{disposed ? "Consulta el historial por sección y serie documental." : "Consulta los expedientes transferidos agrupados por sección y serie documental."}</p>
         </div>
         <span className="access-chip">
           <Archive size={15} />
@@ -235,13 +239,13 @@ function ConcentrationList({
         <div className="records-filter-head">
           <div>
             <h3>Búsqueda por sección y serie</h3>
-            <p>Series ordenadas por la recepción más reciente.</p>
+            <p>{disposed ? "Series ordenadas por la baja más reciente." : "Series ordenadas por la recepción más reciente."}</p>
           </div>
-          <div className="availability-key">
+          {!disposed && <div className="availability-key">
             <span>Disponibilidad:</span>
             <AvailabilityBadge value="En archivo" />
             <AvailabilityBadge value="Prestado" />
-          </div>
+          </div>}
         </div>
         <div className="concentration-filters">
           <label className="filter-select"><select aria-label="Filtrar por sección" value={section}
@@ -286,7 +290,7 @@ function ConcentrationList({
             <option value="">Todas las ediciones CADIDO</option>
             {[...new Set(records.map(r=>r.cadidoYear).filter(Boolean))].sort().map(v=><option key={v} value={v}>{v}</option>)}
           </select></label>
-          <label className="filter-select">
+          {!disposed && <label className="filter-select">
             <select
               aria-label="Filtrar por disponibilidad"
               onChange={(event) => {
@@ -299,7 +303,7 @@ function ConcentrationList({
               <option>En archivo</option>
               <option>Prestado</option>
             </select>
-          </label>
+          </label>}
           <div className="concentration-filters__secondary">
             <div className="concentration-filters__dates">
               <label className="filter-date">Desde
@@ -356,7 +360,7 @@ function ConcentrationList({
                 <th>Código CADIDO</th>
                 <th>Fecha más reciente</th>
                 <th>Expedientes</th>
-                <th>Disponibilidad</th>
+                <th>{disposed ? "Estado" : "Disponibilidad"}</th>
                 <th className="align-right">Ver archivos</th>
               </tr>
             </thead>
@@ -364,7 +368,7 @@ function ConcentrationList({
               {visible.map(({ id, header, records: items, inventories }) => {
                 const expanded = expandedInventory === id;
                 const onLoan = items.filter((record) => record.availability === "Prestado").length;
-                const availabilityLabel = onLoan === 0
+                const availabilityLabel = disposed ? "Baja definitiva" : onLoan === 0
                   ? "Todos en archivo"
                   : onLoan === items.length ? "Todos prestados" : `${onLoan} prestados de ${items.length}`;
                 return (
@@ -387,7 +391,7 @@ function ConcentrationList({
                       </td>
                       <td>{sectionName(header.cadidoSectionId)}</td>
                       <td><span className="cadido-code">{header.cadidoCode}</span></td>
-                      <td>{formatDate(concentrationDate(header))}</td>
+                      <td>{formatDate(recordDate(header))}</td>
                       <td>{items.length}</td>
                       <td>{availabilityLabel}</td>
                       <td className="align-right">
@@ -424,7 +428,7 @@ function ConcentrationList({
                                       <table className="data-table concentration-table concentration-expedient-table">
                                         <thead><tr>
                                           <th>Asunto e identificación</th>
-                                          <th>Disponibilidad</th>
+                                          <th>{disposed ? "Estado" : "Disponibilidad"}</th>
                                           <th className="align-right">Acciones</th>
                                         </tr></thead>
                                         <tbody>{inventoryRecords.map((record) => (
@@ -437,7 +441,7 @@ function ConcentrationList({
                                               ) : <strong>{record.title}</strong>}
                                               <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
                                             </td>
-                                            <td><AvailabilityBadge value={record.availability}/></td>
+                                            <td><AvailabilityBadge value={disposed ? "Baja definitiva" : record.availability}/></td>
                                             <td>
                                               <RowActionsMenu
                                                 label={`Acciones para ${record.recordNumber}`}
@@ -546,6 +550,7 @@ function DetailSection({
 }
 
 function ConcentrationDetail({
+  disposed,
   canEditLocation,
   canViewSketch,
   onBack,
@@ -553,6 +558,7 @@ function ConcentrationDetail({
   onEditInventoryData,
   record,
 }: {
+  disposed: boolean;
   canEditLocation: boolean;
   canViewSketch: boolean;
   onBack: () => void;
@@ -580,9 +586,9 @@ function ConcentrationDetail({
         <div className="record-detail-hero__status">
           <span className="record-badge record-badge--green">
             <span />
-            Archivo de concentración
+            {disposed ? "Historial de bajas" : "Archivo de concentración"}
           </span>
-          <AvailabilityBadge value={record.availability} />
+          <AvailabilityBadge value={disposed ? "Baja definitiva" : record.availability} />
         </div>
         {canEditLocation && (
           <Button className="button--primary" onClick={onEditLocation}>
@@ -671,20 +677,28 @@ function ConcentrationDetail({
         )}
       </div>
 
-      <div
-        className={`availability-panel availability-panel--${record.availability === "En archivo" ? "available" : "loaned"}`}
-      >
-        {record.availability === "En archivo" ? <ShieldCheck size={20} /> : <Clock3 size={20} />}
-        <div>
-          <span>Disponibilidad física</span>
-          <strong>{record.availability}</strong>
-          <p>
-            {record.availability === "En archivo"
-              ? "El expediente se encuentra disponible en la ubicación registrada."
-              : "El expediente tiene un préstamo activo. La etapa archivística permanece en concentración."}
-          </p>
+      {disposed ? (
+        <div className="availability-panel availability-panel--loaned">
+          <Archive size={20} />
+          <div><span>Estado archivístico</span><strong>Baja definitiva</strong>
+            <p>Registrada el {formatDate(disposedDate(record))}. Se conserva la ficha y la última ubicación registrada.</p></div>
         </div>
-      </div>
+      ) : (
+        <div
+          className={`availability-panel availability-panel--${record.availability === "En archivo" ? "available" : "loaned"}`}
+        >
+          {record.availability === "En archivo" ? <ShieldCheck size={20} /> : <Clock3 size={20} />}
+          <div>
+            <span>Disponibilidad física</span>
+            <strong>{record.availability}</strong>
+            <p>
+              {record.availability === "En archivo"
+                ? "El expediente se encuentra disponible en la ubicación registrada."
+                : "El expediente tiene un préstamo activo. La etapa archivística permanece en concentración."}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -868,6 +882,7 @@ function EditLocation({
 }
 
 export default function ConcentrationPanel({
+  disposed = false,
   initialSearch = "",
   currentUser,
   onRecordsChange,
@@ -875,6 +890,7 @@ export default function ConcentrationPanel({
   records,
   role,
 }: {
+  disposed?: boolean;
   initialSearch?: string;
   currentUser: UserRecord;
   onRecordsChange: (records: ArchivalRecord[]) => void;
@@ -902,9 +918,9 @@ export default function ConcentrationPanel({
     return record.areaId === currentUser.areaId && record.createdBy === currentUser.id;
   });
   const canEditLocation =
-    role === "Administrador / Coordinador" &&
+    !disposed && role === "Administrador / Coordinador" &&
     permissions.includes("update-location");
-  const canViewDetail = permissions.includes("view-records");
+  const canViewDetail = disposed || permissions.includes("view-records");
 
   const saveLocation = async (record: ArchivalRecord) => {
     try {
@@ -953,6 +969,7 @@ export default function ConcentrationPanel({
           </div>
         )}
         <ConcentrationDetail
+          disposed={disposed}
           canViewSketch={role === "Administrador / Coordinador" || role === "Encargado de préstamos / Control archivístico"}
           canEditLocation={canEditSelected}
           onBack={() => {
@@ -968,6 +985,7 @@ export default function ConcentrationPanel({
 
   return (
     <ConcentrationList
+      disposed={disposed}
       initialSearch={initialSearch}
       onEditInventoryData={openInventoryData}
       canEditLocation={canEditLocation}
