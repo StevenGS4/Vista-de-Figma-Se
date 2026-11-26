@@ -6808,11 +6808,13 @@
 }
 
 
-/* Archivo de trámite: cinco controles alineados, con anchos equilibrados.
-   La regla específica prevalece sobre el estilo antiguo de una columna. */
+/* Archivo de trámite: los controles comparten una sola fila. */
 .records-filters.inventory-list-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(145px, 1fr)) minmax(118px, 0.75fr);
+  grid-template-columns: minmax(180px, 1.5fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(112px, 1fr);
+  overflow-x: auto;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -6820,10 +6822,11 @@
 
 .records-filters.inventory-list-filters > * {
   min-width: 0;
+  height: 40px;
   width: 100%;
 }
 
-.records-filters.inventory-list-filters .records-search input {
+.records-filters.inventory-list-filters :is(.records-search input, .filter-select select) {
   min-width: 0;
   width: 100%;
 }
@@ -6867,23 +6870,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1160px) {
-  .records-filters.inventory-list-filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .records-filters.inventory-list-filters .records-search {
-    grid-column: span 2;
-  }
-}
-
 @media (max-width: 760px) {
-  .records-filters.inventory-list-filters {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-  }
-  .records-filters.inventory-list-filters .records-search {
-    grid-column: auto;
-  }
   .inventory-preview-add-row .button {
     width: 100%;
   }
