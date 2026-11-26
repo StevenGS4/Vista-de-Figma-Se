@@ -2,11 +2,10 @@
 // El servidor aplica siempre el alcance del usuario; nunca confía en IDs del navegador.
 import { exportScope } from './export-policy.js';
 import { readRecords } from './tramite.js';
+import { validDate } from './loan-policy.js';
 
 const error=(message,status=400)=>Object.assign(new Error(message),{status});
 const numeric=(value,min,max)=>Number.isInteger(Number(value))&&Number(value)>=min&&Number(value)<=max;
-const datePattern=/^\d{4}-\d{2}-\d{2}$/;
-const dateValid=s=>typeof s==='string'&&datePattern.test(s)&&!Number.isNaN(Date.parse(s+'T12:00:00Z'));
 const allowedPeriods=['all','week','twoweeks','fortnight','month','bimester','trimester','fourmonth','semester','year','custom'];
 const allowedStage=['tramite','concentracion','ambos'];
 const allowedDates=['inventory','opening','transfer'];
@@ -27,7 +26,7 @@ export function normalizePrimarySelection(body={},requireRecords=false){
  if(period!=='all'&&period!=='custom'&&!numeric(year,1900,2200))throw error('Selecciona un año válido');
  if(ranges[period]&&!numeric(block??1,1,ranges[period]))throw error('Periodo fuera de rango');
  const from=body.from||'',to=body.to||'';
- if(period==='custom'&&(!dateValid(from)||!dateValid(to)||from>to))throw error('Rango de fechas inválido');
+ if((from&&!validDate(from))||(period==='custom'&&(!from||!validDate(to)||from>to)))throw error('Rango de fechas inválido');
  const area=String(body.area||'').trim(),creator=String(body.creator||'').trim();
  const section=String(body.section||'').trim(),series=String(body.series||'').trim();
  const cadido=String(body.cadido||'').trim().toLowerCase();
@@ -88,13 +87,12 @@ export async function selectPrimaryRecords(conn,user,body,requireRecords=false){
  if(f.series){filters.push('sr.codigo=?');args.push(f.series);}
  if(f.cadido){filters.push('LOWER(e.codigo_clasificacion) LIKE ?');args.push('%'+f.cadido.replace(/[%_]/g,'\\$&')+'%');}
  const bounds=periodBounds(f);
- if(bounds){
-  const column={inventory:'i.fecha_elaboracion',opening:'e.apertura',transfer:'t.enviada_en'}[f.dateField];
-  // La columna de transferencia pertenece a la subconsulta de readRecords,
-  // por lo que se evalúa después de cargar expedientes autorizados.
-  if(f.dateField!=='transfer'){
-   filters.push(column+' BETWEEN ? AND ?');args.push(...bounds);
-  }
+ const start=bounds&&bounds[0]>f.from?bounds[0]:f.from;
+ const end=bounds?.[1];
+ if(f.dateField!=='transfer'){
+  const column=f.dateField==='opening'?'e.apertura':'i.fecha_elaboracion';
+  if(start){filters.push(column+'>=?');args.push(start);}
+  if(end){filters.push(column+'<=?');args.push(end);}
  }
  if(f.recordIds.length){
   filters.push('e.id IN ('+f.recordIds.map(()=>'?').join(',')+')');
@@ -109,7 +107,8 @@ export async function selectPrimaryRecords(conn,user,body,requireRecords=false){
   ${where}`,args);
  if(Number(count[0].n)>15000)throw error('Demasiados expedientes. Reduce el periodo o los filtros (máximo 15,000)',413);
  let records=await readRecords(conn,where,args);
- if(bounds&&f.dateField==='transfer')records=records.filter(r=>r.transferDate>=bounds[0]&&r.transferDate<=bounds[1]);
+ if((start||end)&&f.dateField==='transfer')records=records.filter(r=>r.transferDate&&
+  (!start||r.transferDate>=start)&&(!end||r.transferDate<=end));
  if(requireRecords&&new Set(records.map(record=>record.id)).size!==f.recordIds.length)
   throw error('Uno o más expedientes ya no coinciden con los filtros o están fuera de tu alcance',409);
  const unique=new Map(records.map(r=>[r.id,r]));

@@ -147,11 +147,13 @@ export default function PrimaryTransferBuilder({
     <label className="form-field"><span>Etapa documental</span><select value={draft.stage} onChange={e=>change("stage",e.target.value as PrimaryFilters["stage"])}>
      <option value="ambos">Trámite y concentración</option><option value="tramite">Solo en trámite</option><option value="concentracion">Solo en concentración</option>
     </select></label>
-    <label className="form-field"><span>Fecha que se utilizará</span><select value={draft.dateField} onChange={e=>change("dateField",e.target.value as PrimaryFilters["dateField"])}>
-     <option value="inventory">Elaboración del inventario</option><option value="opening">Apertura del expediente</option><option value="transfer">Envío de transferencia</option>
-    </select></label>
+    <label className="form-field"><span>Fecha inicial</span>
+      <input type="date" aria-label="Fecha inicial de apertura del expediente" value={draft.from}
+       max={draft.period==="custom" ? draft.to || undefined : undefined}
+       onChange={e=>change("from",e.target.value)}/>
+    </label>
     <label className="form-field"><span>Periodo</span><select value={draft.period} onChange={e=>{change("period",e.target.value as PrimaryPeriod);change("block",1);}}>
-      {periods.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
+      {periods.map(x=><option key={x.value} value={x.value}>{x.value==="all"&&draft.from?"Desde la fecha inicial":x.label}</option>)}
     </select></label>
     {draft.period!=="all"&&draft.period!=="custom"&&<label className="form-field"><span>Año</span><input type="number" min={1900} max={2200} value={draft.year} onChange={e=>change("year",Number(e.target.value))}/></label>}
     {options.blocks>1&&<label className="form-field"><span>{draft.period==="month"?"Mes":"Periodo número"}</span>
@@ -161,8 +163,7 @@ export default function PrimaryTransferBuilder({
        </option>)}
       </select></label>}
     {draft.period==="custom"&&<>
-      <label className="form-field"><span>Desde</span><input type="date" value={draft.from} onChange={e=>change("from",e.target.value)}/></label>
-      <label className="form-field"><span>Hasta</span><input type="date" value={draft.to} onChange={e=>change("to",e.target.value)}/></label>
+      <label className="form-field"><span>Fecha final</span><input type="date" min={draft.from || undefined} value={draft.to} onChange={e=>change("to",e.target.value)}/></label>
     </>}
     <label className="form-field"><span>Área administrativa</span><select disabled={!isAdmin} value={isAdmin?draft.area:currentUser.areaId} onChange={e=>change("area",e.target.value)}>
       {isAdmin&&<option value="">Todas las áreas</option>}
