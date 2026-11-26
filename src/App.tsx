@@ -1262,22 +1262,24 @@ export default function App() {
   if (authLoading) return <main className="login"><p style={{padding:"3rem"}}>Verificando sesión...</p></main>;
   return currentUser ? (
     <>
-      <Application
-        archivalRecords={archivalRecords}
-        recordsLoadError={recordsLoadError}
-        currentUser={currentUser}
-        loans={loans}
-        onLogout={logout}
-        onChangePassword={() => setVoluntaryPasswordOpen(true)}
-        onLoansChange={setLoans}
-        onRecordsChange={setArchivalRecords}
-        onRolePermissionsChange={setRolePermissions}
-        onTransfersChange={setTransfers}
-        onUsersChange={setUsers}
-        transfers={transfers}
-        users={users}
-        rolePermissions={rolePermissions}
-      />
+      {!currentUser.mustChangePassword && (
+        <Application
+          archivalRecords={archivalRecords}
+          recordsLoadError={recordsLoadError}
+          currentUser={currentUser}
+          loans={loans}
+          onLogout={logout}
+          onChangePassword={() => setVoluntaryPasswordOpen(true)}
+          onLoansChange={setLoans}
+          onRecordsChange={setArchivalRecords}
+          onRolePermissionsChange={setRolePermissions}
+          onTransfersChange={setTransfers}
+          onUsersChange={setUsers}
+          transfers={transfers}
+          users={users}
+          rolePermissions={rolePermissions}
+        />
+      )}
       {currentUser.mustChangePassword && (
         <MandatoryPasswordChange
           onComplete={async (current,next) => {
