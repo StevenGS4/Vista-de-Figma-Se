@@ -1,1 +1,7 @@
-{}
+{
+  "title": "Inventario Documental SEMARNAT Nayarit",
+  "description": "Sistema de control archivístico de la Oficina de Representación de la SEMARNAT en Nayarit.",
+  "openGraph": {
+    "image": "https://res.cloudinary.com/dalmibumw/image/upload/v1794570715/sldzajfjhdowg7luhsyk.jpg"
+  }
+}
