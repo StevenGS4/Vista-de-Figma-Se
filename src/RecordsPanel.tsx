@@ -218,15 +218,15 @@ function InventoryList({
   const [cadidoYear, setCadidoYear] = useState("");
   const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
   const [quickView, setQuickView] = useState<
-    "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos los autorizados"
-  >(supervisionTitle ? "Todos los activos" : initialSearch ? "Todos los autorizados" : "Recientes activos");
+    "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos"
+  >(supervisionTitle ? "Todos los activos" : initialSearch ? "Todos" : "Recientes activos");
   const inventories = useMemo(
     () =>
       groupInventories(records).filter(({ header, id, records: rows }) => {
         const query = search.trim().toLowerCase();
         const transferred = rows.every((record) => record.stage === "Archivo de concentración");
         const matchesView =
-          quickView === "Todos los autorizados" ||
+          quickView === "Todos" ||
           (quickView === "Transferidos" && transferred) ||
           (quickView === "Todos los activos" && !transferred) ||
           (quickView === "Recientes activos" && !transferred);
@@ -318,7 +318,7 @@ function InventoryList({
               <option>Recientes activos</option>
               <option>Todos los activos</option>
               <option>Transferidos</option>
-              <option>Todos los autorizados</option>
+              <option>Todos</option>
             </select>
           </label>
           )}
@@ -473,7 +473,7 @@ function HeaderStep({
             <div><span>Responsable</span><strong>{form.responsible && form.responsible!=="Sin asignar" ? form.responsible : "Pendiente: asignar encargado en Administración"}</strong></div>
             <div><span>Cargo</span><strong>{form.responsiblePosition}</strong></div>
             <div><span>Fondo</span><strong>{form.fund}</strong></div>
-            <div><span>Edición vigente</span><strong>{selectedYear || "Sin CADIDO autorizado"}</strong></div>
+            <div><span>Edición vigente del CADIDO (Catálogo de Disposición Documental)</span><strong>{selectedYear || "Sin CADIDO autorizado"}</strong></div>
           </div>
           {!years.length && <p role="alert" className="field-error">El administrador debe asignar códigos de una edición CADIDO a esta área.</p>}
           {(!form.responsible || form.responsible==="Sin asignar") && <p role="alert" className="field-error">El administrador debe asignar un encargado de área antes de continuar.</p>}
