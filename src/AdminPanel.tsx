@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { usersApi, transferApi } from "./api";
+import { homeApi, usersApi, transferApi, type SessionActivityPeriod } from "./api";
 import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
 import {
@@ -398,6 +398,19 @@ function UserDetail({
   onPermissions: () => void;
   user: UserRecord;
 }) {
+  const [periods,setPeriods] = useState<SessionActivityPeriod[]>([]);
+  const [activityError,setActivityError] = useState("");
+  const [activityLoading,setActivityLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    setActivityLoading(true);
+    setActivityError("");
+    homeApi.sessionActivity(String(user.id)).then(rows => { if(active)setPeriods(rows); })
+      .catch(() => { if(active)setActivityError("No se pudo consultar la actividad de sesión."); })
+      .finally(() => { if(active)setActivityLoading(false); });
+    return () => { active = false; };
+  }, [user.id]);
+
   return (
     <div className="admin-form-page">
       <button className="text-button" onClick={onBack}>
@@ -451,6 +464,20 @@ function UserDetail({
         </div>
 
       </div>
+      <section className="surface detail-surface">
+        <div className="records-filter-head"><div>
+          <h3>Actividad de sesión</h3>
+          <p>Últimos 100 periodos registrados, en hora de Nayarit.</p>
+        </div></div>
+        {activityLoading ? <p className="p-4" role="status">Cargando actividad…</p>
+          : activityError ? <p className="p-4 field-error" role="alert">{activityError}</p>
+          : periods.length ? <div className="table-scroll"><table className="data-table">
+            <thead><tr><th>Inicio del periodo</th><th>Última actividad</th></tr></thead>
+            <tbody>{periods.map(period => <tr key={period.id}>
+              <td>{period.startedAt}</td><td>{period.lastActiveAt}</td>
+            </tr>)}</tbody>
+          </table></div> : <p className="p-4">Aún no hay actividad registrada para esta cuenta.</p>}
+      </section>
     </div>
   );
 }

@@ -992,7 +992,7 @@ function Application({
         onNavigate={navigate}
       />
       {profileActivity && <ProfileActivityDialog view={profileActivity} user={currentUser} role={role}
-        permissions={currentPermissions} allowed={allowed} records={archivalRecords} transfers={transfers} loans={homeLoans}
+        permissions={currentPermissions} allowed={allowed} records={archivalRecords} transfers={transfers}
         onClose={() => setProfileActivity(null)}
         onOpenTransfer={folio => { setProfileActivity(null); openFolio("transferencias",folio); }}
         onOpenRecord={record => { setProfileActivity(null); openSearchResult(record); }} />}
@@ -1224,6 +1224,28 @@ export default function App() {
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
     return ()=>{active=false;};
   },[currentUser?.id,currentUser?.mustChangePassword]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let lastSent = 0;
+    let busy = false;
+    const record = () => {
+      if (busy || document.visibilityState !== "visible" || Date.now() - lastSent < 60_000) return;
+      lastSent = Date.now();
+      busy = true;
+      homeApi.recordSessionActivity().catch(error => console.error("No se pudo registrar actividad de sesión:", error))
+        .finally(() => { busy = false; });
+    };
+    record();
+    window.addEventListener("pointerdown",record);
+    window.addEventListener("keydown",record);
+    document.addEventListener("visibilitychange",record);
+    return () => {
+      window.removeEventListener("pointerdown",record);
+      window.removeEventListener("keydown",record);
+      document.removeEventListener("visibilitychange",record);
+    };
+  }, [currentUser?.id]);
 
   const logout = async () => {
     try { await authApi.logout(); }

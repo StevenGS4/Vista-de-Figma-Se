@@ -183,11 +183,20 @@ export type PersonalLoan = {
  loanDate:string;dueDate:string|null;returnedDate:string|null;
  records:{id:string;number:string|null;title:string|null;returnedDate:string|null}[];
 };
-export type LoanNotice = {report?:OverdueLoanReport;id:string;title:string;detail:string;module:'inicio';date:string;color:'green'|'wine'|'gold'};
+export type StoredNotice = {
+ id:string;title:string;detail:string;module:"inicio"|"transferencias"|"prestamos";
+ date:string;color:"green"|"wine"|"gold";report?:OverdueLoanReport;read:boolean;
+};
+export type SessionActivityPeriod = { id:string; startedAt:string; lastActiveAt:string };
 export const homeApi={
+ notifications:async(role:string)=>((await request<{notices:StoredNotice[]}>('/api/inicio/notificaciones?role='+encodeURIComponent(role))).notices),
+ markNoticesRead:(role:string,ids:string[])=>request<{ok:boolean}>('/api/inicio/notificaciones/revisadas',{
+  method:'POST',body:JSON.stringify({role,ids}),
+ }),
+ recordSessionActivity:()=>request('/api/inicio/actividad-sesion',{method:'POST',body:'{}'}),
+ sessionActivity:async(id:string)=>((await request<{periods:SessionActivityPeriod[]}>('/api/inicio/actividad-sesion/'+encodeURIComponent(id))).periods),
  activity:async()=>((await request<{activities:HomeActivity[]}>('/api/inicio/actividad')).activities),
  personalLoans:async()=>((await request<{loans:PersonalLoan[]}>("/api/inicio/mis-prestamos")).loans),
- loanNotices:async()=>((await request<{notices:LoanNotice[]}>('/api/inicio/avisos-prestamos')).notices),
 };
 
 export const areasApi={

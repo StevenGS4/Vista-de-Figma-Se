@@ -1,7 +1,8 @@
 import express from 'express';
 import { pool } from './config/database.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, requireAdmin } from './auth.js';
 import { readOverdueLoanReports } from './loans.js';
+import { noticeScope, recordSessionActivity, saveNotices, staffNotices } from './profile-activity.js';
 
 // Solo acciones realizadas por la cuenta autenticada. La tabla auditoria ya
 // forma parte del modelo existente; no se requiere ninguna migración.
@@ -82,18 +83,16 @@ homeRouter.get('/mis-prestamos',async(req,res,next)=>{
   res.json({loans});
  }catch(error){next(error);}
 });
-homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
- try{
-  if(req.auth.user.mustChangePassword)return res.status(403).json({error:'Primero cambia tu contraseña'});
+async function personalNotices(userId){
   const [rows]=await pool.execute(`SELECT p.id,p.folio,p.estado,
     DATE_FORMAT(p.fecha_prestamo,'%Y-%m-%d') AS loanDate,
     DATE_FORMAT(p.fecha_prevista,'%Y-%m-%d') AS dueDate,
     DATE_FORMAT(p.cerrado_en,'%Y-%m-%d') AS returnedDate,
-    DATEDIFF(p.fecha_prevista,CURDATE()) AS remainingDays,
+    DATEDIFF(p.fecha_prevista,UTC_TIMESTAMP() - INTERVAL 7 HOUR) AS remainingDays,
     DATEDIFF(p.fecha_prevista,p.fecha_prestamo) AS durationDays
     FROM prestamos p WHERE p.solicitante_usuario_id=?
-    ORDER BY p.id DESC`,[req.auth.user.id]);
-  const reports=await readOverdueLoanReports(req.auth.user.id);
+    ORDER BY p.id DESC`,[userId]);
+  const reports=await readOverdueLoanReports(userId);
   const notices=reports.map(report=>({
    id:'loan-report-'+report.id,title:'Reporte por tardanza de devolución',
    detail:report.number+' · '+report.loanFolio,module:'inicio',date:report.date,color:'wine',
@@ -122,7 +121,61 @@ homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
     });
    }
   }
-  res.set('Cache-Control','private, no-store');
-  res.json({notices});
+  return notices;
+}
+
+homeRouter.get('/avisos-prestamos',async(req,res,next)=>{
+ try{
+  if(req.auth.user.mustChangePassword)return res.status(403).json({error:'Primero cambia tu contraseña'});
+  res.set('Cache-Control','private, no-store').json({notices:await personalNotices(req.auth.user.id)});
+ }catch(error){next(error);}
+});
+
+homeRouter.get('/notificaciones',async(req,res,next)=>{
+ try{
+  const user=req.auth.user;
+  const role=req.query.role;
+  const scope=noticeScope(user,role);
+  const [personal,staff]=await Promise.all([personalNotices(user.id),staffNotices(user,role)]);
+  await saveNotices(user.id,[['',personal],[scope,staff]]);
+  const [rows]=await pool.execute(`SELECT n.contenido,EXISTS (
+     SELECT 1 FROM usuario_notificaciones read_notice
+     WHERE read_notice.usuario_id=n.usuario_id AND read_notice.clave=n.clave AND read_notice.revisada_en IS NOT NULL
+   ) AS seen FROM usuario_notificaciones n WHERE n.usuario_id=? AND n.contexto IN ('',?)`,[user.id,scope]);
+  res.set('Cache-Control','private, no-store').json({notices:rows.map(row=>({
+   ...(typeof row.contenido==='string'?JSON.parse(row.contenido):row.contenido),read:Number(row.seen)===1
+  }))});
+ }catch(error){next(error);}
+});
+
+homeRouter.post('/notificaciones/revisadas',async(req,res,next)=>{
+ try{
+  const user=req.auth.user;
+  const scope=noticeScope(user,req.body?.role);
+  const ids=req.body?.ids;
+  if(!Array.isArray(ids)||!ids.length||ids.length>250||
+   ids.some(id=>typeof id!=='string'||!/^[-A-Za-z0-9]{1,120}$/.test(id)))
+    return res.status(400).json({error:'Identificadores de notificación inválidos'});
+  await pool.execute(`UPDATE usuario_notificaciones SET revisada_en=COALESCE(revisada_en,UTC_TIMESTAMP())
+   WHERE usuario_id=? AND contexto IN ('',?) AND clave IN (${ids.map(()=>'?').join(',')})`,[user.id,scope,...ids]);
+  res.json({ok:true});
+ }catch(error){next(error);}
+});
+
+homeRouter.post('/actividad-sesion',async(req,res,next)=>{
+ try{
+  if(!await recordSessionActivity(req.auth))return res.status(401).json({error:'La sesión ha expirado'});
+  res.status(204).end();
+ }catch(error){next(error);}
+});
+
+homeRouter.get('/actividad-sesion/:id',requireAdmin,async(req,res,next)=>{
+ try{
+  if(!/^[1-9]\d{0,19}$/.test(req.params.id))return res.status(400).json({error:'Usuario inválido'});
+  const [periods]=await pool.execute(`SELECT CAST(id AS CHAR) AS id,
+    DATE_FORMAT(inicio_utc - INTERVAL 7 HOUR,'%Y-%m-%d %H:%i:%s') AS startedAt,
+    DATE_FORMAT(ultima_actividad_utc - INTERVAL 7 HOUR,'%Y-%m-%d %H:%i:%s') AS lastActiveAt
+   FROM usuario_actividad_sesion WHERE usuario_id=? ORDER BY inicio_utc DESC,id DESC LIMIT 100`,[req.params.id]);
+  res.set('Cache-Control','private, no-store').json({periods});
  }catch(error){next(error);}
 });

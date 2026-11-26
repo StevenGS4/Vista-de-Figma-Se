@@ -31,6 +31,8 @@ try {
    console.error('Acción: ejecutar Backend/sql/004_concentracion_zona.sql en MySQL Workbench antes de arrancar los módulos.');
   if(errors.some(error=>/^Falta (propuestas_baja|propuesta_baja_expedientes)\./.test(error)))
    console.error('Acción: verificar Backend/sql/021_propuestas_baja_documental.sql.');
+  if(errors.some(error=>/^Falta usuario_(notificaciones|actividad_sesion)\./.test(error)))
+   console.error('Acción: verificar Backend/sql/022_notificaciones_actividad.sql.');
   exitCode=1;
  }else{
   console.log('OK: columnas, roles, procedimientos y vistas requeridas encontrados.');

@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, Bell, BriefcaseBusiness, Check, ChevronLeft, ChevronRight, Clock3, FileText, FolderArchive, Search, X } from "lucide-react";
-import { homeApi, type LoanNotice, type LoanSummary, type PersonalLoan } from "./api";
+import { homeApi, type PersonalLoan } from "./api";
 import type { Role, UserRecord } from "./data";
 import type { ArchivalRecord } from "./records";
 import type { DocumentaryTransfer } from "./transfers";
-import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
+import { type HomeModule } from "./HomeDashboard";
 import { assignedTransferTasks, homeToday, lastActiveInventory, personalLoanTiming } from "./homePending";
-import { mergeProfileNotices, noticeHistoryKey, useNoticeHistory, useReadNotices, type ProfileNotice } from "./profileNotices";
+import { useProfileNotices, type ProfileNotice } from "./profileNotices";
 
 export type ProfileActivityView = "notifications" | "pending" | "loans";
 const views = {
@@ -32,8 +32,8 @@ function PageControls({ page, pages, total, onChange }: {
   </nav>;
 }
 
-function Notifications({ notices, seen, markRead, loading, error }: {
-  notices: ProfileNotice[]; seen: Set<string>; markRead: (id: string) => void; loading: boolean; error: string;
+function Notifications({ notices, markRead, loading, error }: {
+  notices: ProfileNotice[]; markRead: (id: string) => Promise<boolean>; loading: boolean; error: string;
 }) {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -45,7 +45,7 @@ function Notifications({ notices, seen, markRead, loading, error }: {
   const filtered = notices.filter(notice => {
     const day = dateKey(notice.date);
     if ((from && (!day || day < from)) || (to && (!day || day > to))) return false;
-    if (status !== "all" && seen.has(notice.id) !== (status === "read")) return false;
+    if (status !== "all" && notice.read !== (status === "read")) return false;
     const content = searchable([notice.title, notice.detail, notice.report?.number, notice.report?.loanFolio].filter(Boolean).join(" "));
     return terms.every(term => content.includes(term));
   });
@@ -78,7 +78,7 @@ function Notifications({ notices, seen, markRead, loading, error }: {
     {Array.from(groups, ([day, items]) => <section className="profile-activity-group" key={day}>
       <h3>{displayDate(day)}</h3>
       {items.map(notice => {
-        const read = seen.has(notice.id);
+        const read = notice.read;
         const report = notice.report;
         const expanded = openReport === notice.id;
         const Icon = read ? Check : Bell;
@@ -87,9 +87,9 @@ function Notifications({ notices, seen, markRead, loading, error }: {
           <div><strong>{notice.title}</strong><small>{notice.detail}</small></div>
           <span className={read ? "profile-status" : "profile-status profile-status--pending"}>{read ? "Revisada" : "Pendiente"}</span>
           {report ? <button type="button" className="text-button" aria-expanded={expanded}
-            onClick={() => { markRead(notice.id); setOpenReport(expanded ? undefined : notice.id); }}>
+            onClick={async () => { if (read || await markRead(notice.id)) setOpenReport(expanded ? undefined : notice.id); }}>
             {expanded ? "Ocultar reporte" : "Ver reporte"}
-          </button> : !read && <button type="button" className="text-button" onClick={() => markRead(notice.id)}>Marcar revisada</button>}
+          </button> : !read && <button type="button" className="text-button" onClick={() => void markRead(notice.id)}>Marcar revisada</button>}
           {report && expanded && <div className="profile-notice-report">
             <strong>{report.number} · {report.loanFolio}</strong>
             <p>Devolución prevista: {displayDate(report.dueDate)}. {report.reason}</p>
@@ -150,34 +150,29 @@ function MyLoans({ loans, today, loading, error }: { loans: PersonalLoan[]; toda
   </>;
 }
 
-export default function ProfileActivityDialog({view,user,role,permissions,allowed,records,transfers,loans,onClose,onOpenTransfer,onOpenRecord}: {
+export default function ProfileActivityDialog({view,user,role,permissions,allowed,records,transfers,onClose,onOpenTransfer,onOpenRecord}: {
   view: ProfileActivityView; user: UserRecord; role: Role; permissions: string[]; allowed: HomeModule[];
-  records: ArchivalRecord[]; transfers: DocumentaryTransfer[]; loans: LoanSummary[];
+  records: ArchivalRecord[]; transfers: DocumentaryTransfer[];
   onClose: () => void; onOpenTransfer: (folio:string) => void; onOpenRecord: (record:ArchivalRecord) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [personalLoans,setLoans] = useState<PersonalLoan[]>([]);
-  const [personalNotices,setNotices] = useState<LoanNotice[]>([]);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState("");
   const [today,setToday] = useState(homeToday);
-  const { seen, markRead } = useReadNotices(user.id);
+  const serverNotices = useProfileNotices(user.id,role,user.roles,view === "notifications");
   useEffect(() => { dialog.current?.showModal(); },[]);
   useEffect(() => {
+    if (view === "notifications") return;
     let active = true;
     const refresh = async () => {
       setToday(homeToday());
       try {
-        if (view === "notifications") {
-          const notices = await homeApi.loanNotices();
-          if (active) setNotices(notices);
-        } else {
-          const data = await homeApi.personalLoans();
-          if (active) setLoans(data);
-        }
+        const data = await homeApi.personalLoans();
+        if (active) setLoans(data);
         if (active) setError("");
       } catch {
-        if (active) setError(view === "notifications" ? "No se pudieron actualizar tus notificaciones." : "No se pudieron consultar tus préstamos.");
+        if (active) setError("No se pudieron consultar tus préstamos.");
       } finally {
         if (active) setLoading(false);
       }
@@ -187,9 +182,8 @@ export default function ProfileActivityDialog({view,user,role,permissions,allowe
     return () => { active=false; window.clearInterval(timer); };
   },[user.id,view]);
 
-  const current = useMemo(() => mergeProfileNotices(personalNotices, buildHomeNotices(user,role,transfers,loans)
-    .filter(notice => allowed.includes(notice.module))), [personalNotices, user, role, transfers, loans, allowed]);
-  const history = useNoticeHistory(noticeHistoryKey(user.id,user.areaId,role), current);
+  const busy = view === "notifications" ? serverNotices.loading : loading;
+  const message = view === "notifications" ? serverNotices.error : error;
   const tasks = allowed.includes("transferencias") ? assignedTransferTasks(user,role,transfers,permissions) : [];
   const last = allowed.includes("tramite") ? lastActiveInventory(user,records) : undefined;
   const activeLoans = personalLoans.filter(loan => loan.status !== "DEVUELTO");
@@ -204,10 +198,10 @@ export default function ProfileActivityDialog({view,user,role,permissions,allowe
       <button type="button" className="header-icon" aria-label="Cerrar" onClick={() => dialog.current?.close()}><X size={20}/></button>
     </header>
     <div className="modal__body profile-activity-body">
-      {loading && <p role="status">Cargando…</p>}
-      {error && <p className="field-error" role="alert">{error}</p>}
-      {view === "notifications" && <Notifications notices={history.filter(notice => allowed.includes(notice.module))}
-        seen={seen} markRead={markRead} loading={loading} error={error} />}
+      {busy && <p role="status">Cargando…</p>}
+      {message && <p className="field-error" role="alert">{message}</p>}
+      {view === "notifications" && <Notifications notices={serverNotices.notices.filter(notice => allowed.includes(notice.module))}
+        markRead={serverNotices.markRead} loading={busy} error={message} />}
       {view === "pending" && <>
         {!loading && !error && !tasks.length && !last && !activeLoans.length && <p className="profile-activity-empty">No tienes pendientes.</p>}
         {tasks.map(({transfer,task}) => <article className="profile-activity-item home-pending--blue" key={transfer.id}>

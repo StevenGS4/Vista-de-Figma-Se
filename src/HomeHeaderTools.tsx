@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { homeApi, type LoanNotice, type LoanSummary, type OverdueLoanReport } from "./api";
+import { type LoanSummary, type OverdueLoanReport } from "./api";
 import { Bell, BookOpen, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
 import type { DocumentaryTransfer } from "./transfers";
-import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
+import { type HomeModule } from "./HomeDashboard";
 
-import { mergeProfileNotices, noticeHistoryKey, useNoticeHistory, useReadNotices } from "./profileNotices";
+import { useProfileNotices } from "./profileNotices";
 
 export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh,manualOpen,onManual}:{
  user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:LoanSummary[];
@@ -20,22 +20,8 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
  const [notificationsOpen,setNotificationsOpen]=useState(false);
  const [openReport,setOpenReport]=useState<OverdueLoanReport|null>(null);
  const [query,setQuery]=useState("");
- const {seen,markRead}=useReadNotices(user.id);
- const [personalLoanNotices,setPersonalLoanNotices]=useState<LoanNotice[]>([]);
- useEffect(()=>{
-  let active=true;
-  const load=()=>homeApi.loanNotices().then(items=>{if(active)setPersonalLoanNotices(items);})
-    .catch(error=>console.error("No se pudieron consultar avisos de préstamos:",error));
-  void load();
-  const timer=window.setInterval(load,30_000);
-  return ()=>{active=false;window.clearInterval(timer);};
- },[user.id]);
- const currentNotices=useMemo(() => mergeProfileNotices(
-   personalLoanNotices,
-   buildHomeNotices(user,role,transfers,loans).filter(notice=>allowed.includes(notice.module)),
- ),[user,role,transfers,loans,allowed,personalLoanNotices]);
- useNoticeHistory(noticeHistoryKey(user.id,user.areaId,role), currentNotices);
- const pendingNotices=currentNotices.filter(notice=>!seen.has(notice.id));
+ const {notices,markRead,reload,error}=useProfileNotices(user.id,role,user.roles);
+ const pendingNotices=notices.filter(notice=>!notice.read && allowed.includes(notice.module));
  const unread=pendingNotices.length;
  const results=useMemo(()=>{
   const q=query.trim().toLowerCase();
@@ -62,7 +48,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   <button aria-label="Búsqueda global" aria-expanded={searchOpen} className="header-icon" onClick={()=>{setSearchOpen(!searchOpen);setNotificationsOpen(false);}}><Search size={19}/></button>
   <button type="button" aria-label="Manual de usuario" title="Manual de usuario" aria-pressed={manualOpen} className="header-icon"
     onClick={()=>{setSearchOpen(false);setNotificationsOpen(false);onManual();}}><BookOpen size={19}/></button>
-  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen){void onRefresh();void homeApi.loanNotices().then(setPersonalLoanNotices).catch(error=>console.error("Avisos no disponibles:",error));}setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
+  <button aria-label={"Notificaciones"+(unread?" ("+unread+" sin leer)":"")} aria-expanded={notificationsOpen} className="header-icon" onClick={()=>{if(!notificationsOpen){void onRefresh();reload();}setNotificationsOpen(!notificationsOpen);setSearchOpen(false);}}>
    <Bell size={19}/>{unread>0 && <i/>}
   </button>
   {searchOpen && <div className="header-popover header-popover--search home-header-popover">
@@ -81,8 +67,9 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   {notificationsOpen && <div className="header-popover header-popover--notifications home-header-popover">
     <div className="home-notice-heading"><strong>Notificaciones</strong><small>{unread} sin leer</small></div>
     <div className="home-notice-items">
-      {!unread && <p className="home-no-notices">No tienes notificaciones pendientes.</p>}
-      {pendingNotices.slice(0,12).map(n=><button type="button" key={n.id} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
+      {error && <p className="home-no-notices" role="alert">{error}</p>}
+      {!unread && !error && <p className="home-no-notices">No tienes notificaciones pendientes.</p>}
+      {pendingNotices.slice(0,12).map(n=><button type="button" key={n.id} onClick={async()=>{if(!await markRead(n.id))return;setNotificationsOpen(false);if(n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
         <span className={"activity-item__icon activity-item__icon--"+n.color}><Bell size={15}/></span>
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}

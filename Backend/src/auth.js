@@ -1,8 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { pool } from './config/database.js';
 import { passwordValid, roleNames, hasRole } from './auth-policy.js';
+import { recordSessionActivity } from './profile-activity.js';
 
 export const authRouter = express.Router();
 const jwtSecret = process.env.JWT_SECRET;
@@ -49,7 +51,7 @@ export function requireAdmin(req,res,next) {
   next();
 }
 const sessionSeconds = 2*60*60;
-const createToken = (id) => jwt.sign({}, jwtSecret, { algorithm:'HS256', subject:String(id), issuer:'semarnat-backend', audience:'semarnat-web', expiresIn:sessionSeconds });
+const createToken = (id) => jwt.sign({}, jwtSecret, { algorithm:'HS256', subject:String(id), jwtid:randomUUID(), issuer:'semarnat-backend', audience:'semarnat-web', expiresIn:sessionSeconds });
 
 authRouter.post('/login',async(req,res,next)=>{
   try {
@@ -62,8 +64,10 @@ authRouter.post('/login',async(req,res,next)=>{
     const ok = await bcrypt.compare(password,rows[0]?.password_hash || dummy);
     if (!rows.length || rows[0].estado !== 'ACTIVO' || !ok) return res.status(401).json({error:credentialsError});
     const token = createToken(rows[0].id);
-    await pool.execute('INSERT INTO sesiones(usuario_id,token_hash,expira_en) VALUES (?,SHA2(?,256),DATE_ADD(NOW(), INTERVAL 2 HOUR))',[rows[0].id,token]);
-    res.cookie(cookieName,token,{...cookieOptions,maxAge:sessionSeconds*1000});
+    const [{insertId:sessionId}] = await pool.execute('INSERT INTO sesiones(usuario_id,token_hash,expira_en) VALUES (?,SHA2(?,256),DATE_ADD(NOW(), INTERVAL 2 HOUR))',[rows[0].id,token]);
+    try { await recordSessionActivity({user:{id:rows[0].id},sessionId}); }
+    catch(error) { console.error('No se pudo registrar el inicio de actividad:',error.code||error.message); }
+    res.cookie(cookieName,token,cookieOptions);
     res.json({user:await readUser(rows[0].id)});
   } catch(e){next(e);}
 });

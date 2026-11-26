@@ -1,118 +1,105 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { LoanNotice, OverdueLoanReport } from "./api";
-import type { HomeNotice } from "./HomeDashboard";
+import { useCallback, useEffect, useState } from "react";
+import { homeApi, type StoredNotice } from "./api";
+import type { Role } from "./data";
 
-export type ProfileNotice = HomeNotice & { report?: OverdueLoanReport };
-const readEvent = "semarnat-notice-read";
-const emptySeen = new Set<string>();
-const snapshots = new Map<string, { raw: string; seen: Set<string> }>();
+export type ProfileNotice = StoredNotice;
+const noticeRead = "semarnat-notice-reviewed";
+const migrations = new Map<string, Promise<string[]>>();
 
-function readSeen(key: string) {
-  let raw: string;
-  try { raw = window.localStorage.getItem(key) ?? ""; }
-  catch { return snapshots.get(key)?.seen ?? emptySeen; }
-  const cached = snapshots.get(key);
-  if (cached?.raw === raw) return cached.seen;
-  let seen = emptySeen;
-  try {
-    const value: unknown = JSON.parse(raw);
-    if (Array.isArray(value)) seen = new Set(value.filter((id): id is string => typeof id === "string"));
-  } catch { /* El almacenamiento anterior puede estar vacío. */ }
-  snapshots.set(key, { raw, seen });
-  return seen;
-}
-
-function subscribe(callback: () => void) {
-  window.addEventListener(readEvent, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(readEvent, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
-
-export function useReadNotices(userId: string) {
+async function migrateLegacyReads(userId: string, role: Role, roles: Role[], notices: StoredNotice[]) {
   const key = "semarnat-notices-read-" + userId;
-  const seen = useSyncExternalStore(subscribe, () => readSeen(key), () => emptySeen);
-  const markRead = (id: string) => {
-    const previous = readSeen(key);
-    if (previous.has(id)) return;
-    const next = new Set([...previous, id]);
-    const raw = JSON.stringify([...next]);
-    try { window.localStorage.setItem(key, raw); }
-    catch {
-      // Conserva las lecturas durante la sesión si no se puede escribir en el navegador.
-      snapshots.set(key, { raw: snapshots.get(key)?.raw ?? "", seen: next });
-      window.dispatchEvent(new Event(readEvent));
-      return;
-    }
-    snapshots.set(key, { raw, seen: next });
-    window.dispatchEvent(new Event(readEvent));
-  };
-  return { seen, markRead };
-}
-
-export function mergeProfileNotices(personal: LoanNotice[], staff: HomeNotice[]): ProfileNotice[] {
-  const unique = new Map<string, ProfileNotice>();
-  for (const notice of [...staff, ...personal]) unique.set(notice.id, notice);
-  return [...unique.values()].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-}
-
-const historyEvent = "semarnat-notice-history";
-const emptyHistory: ProfileNotice[] = [];
-const historySnapshots = new Map<string, { raw: string; notices: ProfileNotice[] }>();
-
-function loadHistory(key: string): ProfileNotice[] {
-  let raw: string;
-  try { raw = window.localStorage.getItem(key) ?? ""; }
-  catch { return historySnapshots.get(key)?.notices ?? emptyHistory; }
-  const cached = historySnapshots.get(key);
-  if (cached?.raw === raw) return cached.notices;
-  let notices = emptyHistory;
+  const prefix = 'semarnat-notice-history-["' + userId + '",';
+  let raw: string | null;
+  try { raw = window.localStorage.getItem(key); } catch { return []; }
+  let ids: string[] = [];
   try {
-    const value: unknown = JSON.parse(raw);
-    if (Array.isArray(value)) notices = value.filter(item =>
-      typeof item?.id === "string" && typeof item?.date === "string" &&
-      typeof item?.title === "string" && typeof item?.detail === "string");
-  } catch { /* Un historial local inválido se vuelve a formar con los avisos disponibles. */ }
-  historySnapshots.set(key, { raw, notices });
-  return notices;
-}
-
-export function useNoticeHistory(key: string, current: ProfileNotice[]) {
-  const history = useSyncExternalStore(subscribeHistory, () => loadHistory(key), () => emptyHistory);
-  useEffect(() => {
-    if (!current.length) return;
-    const prior = loadHistory(key);
-    const byId = new Map(prior.map(notice => [notice.id, notice]));
-    current.forEach(notice => byId.set(notice.id, notice));
-    const notices = [...byId.values()];
-    const raw = JSON.stringify(notices);
-    if (JSON.stringify(prior) === raw) return;
-    try {
-      window.localStorage.setItem(key, raw);
-      historySnapshots.set(key, { raw, notices });
-    } catch {
-      historySnapshots.set(key, { raw: historySnapshots.get(key)?.raw ?? "", notices });
+    const parsed: unknown = JSON.parse(raw ?? "[]");
+    if (Array.isArray(parsed)) ids = [...new Set(parsed.filter((id): id is string => typeof id === "string"))];
+  } catch { /* No hay marcas válidas que recuperar. */ }
+  const migrated = new Set<string>();
+  if (ids.length) {
+    for (const assigned of new Set([role,...roles])) {
+      const available = new Set((assigned === role ? notices : await homeApi.notifications(assigned)).map(notice => notice.id));
+      const visible = ids.filter(id => available.has(id));
+      for (let start = 0; start < visible.length; start += 250)
+        await homeApi.markNoticesRead(assigned,visible.slice(start,start + 250));
+      visible.forEach(id => migrated.add(id));
     }
-    window.dispatchEvent(new Event(historyEvent));
-  }, [current, key]);
-  return useMemo(() => {
-    const byId = new Map(history.map(notice => [notice.id, notice]));
-    current.forEach(notice => byId.set(notice.id, notice));
-    return [...byId.values()].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  }, [current, history]);
+  }
+  try {
+    window.localStorage.removeItem(key);
+    for (const candidate of Object.keys(window.localStorage))
+      if (candidate.startsWith(prefix)) window.localStorage.removeItem(candidate);
+  } catch { /* El sistema ya conserva en MySQL las marcas recuperadas. */ }
+  return [...migrated];
 }
 
-function subscribeHistory(callback: () => void) {
-  window.addEventListener(historyEvent, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(historyEvent, callback);
-    window.removeEventListener("storage", callback);
+export function useProfileNotices(userId: string, role: Role, roles: Role[], enabled = true) {
+  const scope = userId + "|" + role;
+  const [source, setSource] = useState<{scope:string;notices:StoredNotice[]}>();
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const reload = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => {
+    if (!enabled) return;
+    const onRead = (event: Event) => {
+      const detail = (event as CustomEvent<{userId: string; ids: string[]}>).detail;
+      if (detail?.userId !== userId) return;
+      const ids = new Set(detail.ids);
+      setSource(current => current && {...current,notices:current.notices.map(notice => ids.has(notice.id) ? {...notice,read:true} : notice)});
+      setRevision(value => value + 1);
+    };
+    window.addEventListener(noticeRead, onRead);
+    return () => window.removeEventListener(noticeRead, onRead);
+  }, [enabled,userId]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    let fetching = false;
+    const refresh = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const items = await homeApi.notifications(role);
+        if (!active) return;
+        let migration = migrations.get(userId);
+        if (!migration) {
+          migration = migrateLegacyReads(userId,role,roles,items).catch(error => {
+            migrations.delete(userId);
+            throw error;
+          });
+          migrations.set(userId,migration);
+        }
+        const migrated = new Set(await migration);
+        if (!active) return;
+        const notices = items.map(notice => migrated.has(notice.id) ? {...notice,read:true} : notice)
+          .sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+        setSource({scope,notices});
+        setError("");
+      } catch {
+        if (active) setError("No se pudieron consultar tus notificaciones.");
+      } finally {
+        fetching = false;
+        if (active) setLoading(false);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh,30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [enabled,userId,role,roles,scope,revision]);
+
+  const markRead = async (id: string) => {
+    try {
+      await homeApi.markNoticesRead(role,[id]);
+      window.dispatchEvent(new CustomEvent(noticeRead,{detail:{userId,ids:[id]}}));
+      setError("");
+      return true;
+    } catch {
+      setError("No se pudo guardar el estado de lectura. Inténtalo de nuevo.");
+      return false;
+    }
   };
-}
-
-export function noticeHistoryKey(userId: string, area: string, role: string) {
-  return "semarnat-notice-history-" + JSON.stringify([userId,area,role]);
+  return { notices:source?.scope===scope?source.notices:[], loading, error, markRead, reload };
 }

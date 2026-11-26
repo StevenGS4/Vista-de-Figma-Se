@@ -26,6 +26,8 @@ export const REQUIRED_COLUMNS = Object.freeze({
  propuestas_baja: ['id','area_codigo','area_nombre','solicitado_por','solicitante_nombre','creada_en',
   'estado','dictamen_folio','dictamen_fecha','observaciones','resuelto_por','responsable_resolucion','resuelta_en'],
  propuesta_baja_expedientes: ['propuesta_id','expediente_id','ficha'],
+ usuario_notificaciones: ['usuario_id','contexto','clave','contenido','registrada_en','revisada_en'],
+ usuario_actividad_sesion: ['id','usuario_id','sesion_id','inicio_utc','ultima_actividad_utc'],
  auditoria: ['id','actor_id','entidad','entidad_id','accion','fecha'],
 });
 export const REQUIRED_PROCEDURES = Object.freeze([
