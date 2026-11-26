@@ -70,13 +70,14 @@ concentrationRouter.put('/expedientes/:id/ubicacion',async(req,res,next)=>{
   if(!Number.isSafeInteger(id))throw fail('ID inválido');
   conn=await pool.getConnection();
   await conn.beginTransaction();
-  const [found]=await conn.execute(`SELECT e.id,e.etapa,i.estado AS inventory_state,t.estado AS transfer_state
+  const [found]=await conn.execute(`SELECT e.id,e.etapa,e.disponibilidad,i.estado AS inventory_state,t.estado AS transfer_state
     FROM expedientes e
     JOIN inventarios i ON i.id=e.inventario_id
     JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
     JOIN transferencias t ON t.id=ti.transferencia_id
     WHERE e.id=? FOR UPDATE`,[id]);
   if(!found.length)throw fail('Expediente transferido no encontrado',404);
+  if(found[0].disponibilidad==='PRESTADO')throw fail('La ubicación se puede editar después de registrar la devolución',409);
   if(found[0].etapa!=='CONCENTRACION'||
     found[0].transfer_state!=='ACEPTADA')
     throw fail('No se puede asignar ubicación antes de aceptar la transferencia',409);
@@ -125,11 +126,12 @@ concentrationRouter.put('/expedientes/:id/datos-inventario',requireAdmin,async(r
   const data=parseInventoryData(req.body);
   conn=await pool.getConnection();
   await conn.beginTransaction();
-  const [[record]]=await conn.execute(`SELECT e.id FROM expedientes e
+  const [[record]]=await conn.execute(`SELECT e.id,e.disponibilidad FROM expedientes e
    JOIN inventarios i ON i.id=e.inventario_id
    WHERE e.id=? AND e.etapa='CONCENTRACION'
      AND e.deleted_at IS NULL AND i.deleted_at IS NULL FOR UPDATE`,[id]);
   if(!record)throw fail('Expediente activo de Concentración no encontrado',404);
+  if(record.disponibilidad==='PRESTADO')throw fail('Los datos se pueden editar después de registrar la devolución',409);
   const [[receipt]]=await conn.execute(`SELECT r.estado FROM expedientes e
    JOIN transferencia_expedientes_v ti ON ti.expediente_id=e.id
    JOIN transferencias t ON t.id=ti.transferencia_id AND t.estado='ACEPTADA'

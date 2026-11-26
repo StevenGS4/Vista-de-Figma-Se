@@ -2,6 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { pool } from './config/database.js';
 import { requireAuth } from './auth.js';
+import { parseLocation } from './concentration-policy.js';
 import { canManageLoans, parseLoanSelection, parseReturnItems, validDate } from './loan-policy.js';
 
 export const loansRouter=express.Router();
@@ -231,62 +232,55 @@ loansRouter.post('/',async(req,res,next)=>{
   const currentDate=await mysqlToday(conn);
   if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<currentDate)
    throw fail('La devolución prevista debe ser el '+currentDate+' o posterior');
-  const multiple=ids.length>1;
-  if(multiple)await conn.beginTransaction();
+  await conn.beginTransaction();
   const [found]=await conn.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
    e.archivo_zona,e.lugar_resguardo,e.estante,e.nivel,e.seccion_fisica
    FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
    WHERE e.id IN (${placeholders}) AND e.deleted_at IS NULL AND i.deleted_at IS NULL
-   ORDER BY e.id${multiple?' FOR UPDATE':''}`,ids);
+   ORDER BY e.id FOR UPDATE`,ids);
   if(found.length!==ids.length)throw fail('Uno o más expedientes no existen',404);
   if(found.some(e=>e.etapa!=='CONCENTRACION'||e.disponibilidad!=='EN_ARCHIVO'))
    throw fail('Todos los expedientes deben estar disponibles en Concentración',409);
-  const [placed]=await conn.query(`SELECT e.id,
+  const [placed]=await conn.query(`SELECT e.id,e.numero_expediente,d.acceso,d.tradicion,
    (SELECT r.estado FROM recepciones r
      JOIN transferencia_expedientes_v ti ON ti.transferencia_id=r.transferencia_id
      WHERE ti.expediente_id=e.id ORDER BY r.id DESC LIMIT 1) AS recepcion_estado
-   FROM expedientes e WHERE e.id IN (${placeholders})`,ids);
-  if(placed.some(e=>e.recepcion_estado!=='RECIBIDA')||
-    found.some(e=>!e.archivo_zona||!e.lugar_resguardo||!e.estante||!e.nivel||!e.seccion_fisica))
-   throw fail('Los expedientes requieren recepción física completa y ubicación asignada',409);
-  const folio='PRE-'+currentDate.slice(0,4)+'-'+randomUUID().slice(0,14).toUpperCase();
-  let id;
-  if(multiple){
-   const [{insertId}]=await conn.execute(`INSERT INTO prestamos
-     (folio,modalidad,inventario_id,area_solicitante_id,solicitante_nombre,solicitante_usuario_id,
-      fecha_prestamo,fecha_prevista,autorizado_por,entregado_por,recibido_por_nombre,observaciones,estado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ACTIVO')`,
-     [folio,mode,found[0].inventario_id,areas[0].id,personName(requester),requesterId,
-      currentDate,data.expectedReturnDate,user.id,delivererId,recipient,notes||null]);
-   id=insertId;
-   await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
-    [ids.map(expId=>[id,expId])]);
-   // bu_expedientes permite el cambio solo en la sesión que registra el préstamo.
-   await conn.query('SET @prestamo_autorizado=1');
+   FROM expedientes e LEFT JOIN expedientes_datos_concentracion d ON d.expediente_id=e.id
+   WHERE e.id IN (${placeholders})`,ids);
+  const concentrationById=new Map(placed.map(row=>[String(row.id),row]));
+  for(const row of found){
+   const data=concentrationById.get(String(row.id));
+   if(data.recepcion_estado!=='RECIBIDA')
+    throw fail('Confirma la recepción física del expediente '+data.numero_expediente,409);
    try{
-    const [{affectedRows}]=await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO'
-     WHERE disponibilidad='EN_ARCHIVO' AND id IN (${placeholders})`,ids);
-    if(affectedRows!==ids.length)throw fail('Cambió la disponibilidad de uno o más expedientes',409);
-   }finally{
-    await conn.query('SET @prestamo_autorizado=NULL');
+    parseLocation({archiveZone:row.archivo_zona,room:row.lugar_resguardo,
+     shelf:row.estante,level:row.nivel,physicalSection:row.seccion_fisica});
+   }catch{
+    throw fail('Completa la ubicación física del expediente '+data.numero_expediente,409);
    }
-   await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
-    [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
-  }else{
-   // El procedimiento instalado aplica el cambio de disponibilidad protegido por MySQL.
-   await conn.query('CALL sp_registrar_prestamo(?,?,?,?,?,?,?,?)',[
-    folio,mode,found[0].inventario_id,ids[0],areas[0].id,personName(requester),user.id,data.expectedReturnDate
-   ]);
-   committedFolio=folio;
-   const [[created]]=await conn.execute('SELECT id FROM prestamos WHERE folio=?',[folio]);
-   if(!created)throw fail('No se encontró el préstamo recién creado',500);
-   id=created.id;
-   await conn.beginTransaction();
-   await conn.execute(`UPDATE prestamos SET solicitante_usuario_id=?,entregado_por=?,
-     recibido_por_nombre=?,observaciones=? WHERE id=?`,[requesterId,delivererId,recipient,notes||null,id]);
-   await conn.execute(`UPDATE prestamo_historial SET detalle=? WHERE prestamo_id=? AND accion='ENTREGA'`,
-    ['Estado al entregar: '+conditionLabel.GOOD+'.',id]);
+   if(!['P','C','R'].includes(data.acceso)||!['ORIGINAL','COPIA','AMBAS'].includes(data.tradicion))
+    throw fail('Completa las condiciones de acceso y la tradición documental del expediente '+data.numero_expediente,409);
   }
+  const folio='PRE-'+currentDate.slice(0,4)+'-'+randomUUID().slice(0,14).toUpperCase();
+  const [{insertId:id}]=await conn.execute(`INSERT INTO prestamos
+    (folio,modalidad,inventario_id,area_solicitante_id,solicitante_nombre,solicitante_usuario_id,
+     fecha_prestamo,fecha_prevista,autorizado_por,entregado_por,recibido_por_nombre,observaciones,estado)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ACTIVO')`,
+    [folio,mode,found[0].inventario_id,areas[0].id,personName(requester),requesterId,
+     currentDate,data.expectedReturnDate,user.id,delivererId,recipient,notes||null]);
+  await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
+   [ids.map(expId=>[id,expId])]);
+  // bu_expedientes permite el cambio solo en la sesión que registra el préstamo.
+  await conn.query('SET @prestamo_autorizado=1');
+  try{
+   const [{affectedRows}]=await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO'
+    WHERE disponibilidad='EN_ARCHIVO' AND id IN (${placeholders})`,ids);
+   if(affectedRows!==ids.length)throw fail('Cambió la disponibilidad de uno o más expedientes',409);
+  }finally{
+   await conn.query('SET @prestamo_autorizado=NULL');
+  }
+  await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
+   [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
   await conn.execute('INSERT INTO auditoria(actor_id,entidad,entidad_id,accion,detalle) VALUES (?,?,?,?,?)',
     [user.id,'prestamos',id,'ENTREGA',JSON.stringify({folio,mode,count:ids.length,requesterUserId:String(requesterId),
      delivererUserId:String(delivererId),conditions:Object.fromEntries(ids.map(expId=>['REG-'+expId,'GOOD']))})]);

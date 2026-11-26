@@ -464,8 +464,18 @@ function RecordSelector({
     return active;
   }, [loans]);
   const concentration = records.filter(record => record.stage === "Archivo de concentración");
+  const missingLoanData = (record: ArchivalRecord) => {
+    if (!record.receptionConfirmed) return "Recepción física pendiente";
+    const validIndex = (value: string, max: number) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= max;
+    if (!record.archiveZone.trim() || !record.room.trim() ||
+      !validIndex(record.shelf, 25) || !validIndex(record.level, 4) || !validIndex(record.physicalSection, 4))
+      return "Ubicación física incompleta";
+    if (!record.concentrationData?.access || !record.concentrationData?.tradition)
+      return "Completa las condiciones de acceso y la tradición documental";
+    return "";
+  };
   const isAvailable = (record: ArchivalRecord) => record.availability === "En archivo" &&
-    record.receptionConfirmed && Boolean(record.archiveZone && record.room && record.shelf && record.level && record.physicalSection) && !loansByRecord.has(record.id);
+    !loansByRecord.has(record.id) && !missingLoanData(record);
   const removeSelection = (id: string) => setSelected(current => new Set([...current].filter(item => item !== id)));
   const remainingTime = (date?: string) => {
     const days = (Date.parse(date ?? "") - Date.parse(today)) / 86_400_000;
@@ -559,7 +569,7 @@ function RecordSelector({
                             <span>{remainingTime(activeLoan?.expectedReturnDate)}</span>
                             {activeLoan?.expectedReturnDate && <span>Fecha prevista: {formatDate(activeLoan.expectedReturnDate)}</span>}
                           </span>
-                        ) : !available && <small>No disponible</small>}
+                        ) : !available && <small>{missingLoanData(record) || "No disponible"}</small>}
                       </label>
                     </li>
                   );

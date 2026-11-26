@@ -448,12 +448,12 @@ function ConcentrationList({
                                                     icon: <Files size={16}/>,
                                                     onSelect: () => onView(record),
                                                   }] : []),
-                                                  ...(canEditLocation && record.receptionConfirmed ? [{
+                                                  ...(canEditLocation && record.availability !== "Prestado" && record.receptionConfirmed ? [{
                                                     label: "Completar datos del inventario",
                                                     icon: <Pencil size={15}/>,
                                                     onSelect: () => onEditInventoryData(record),
                                                   }] : []),
-                                                  ...(canEditLocation ? [{
+                                                  ...(canEditLocation && record.availability !== "Prestado" ? [{
                                                     label: "Editar ubicación",
                                                     icon: <MapPin size={15}/>,
                                                     onSelect: () => onEditLocation(record),
@@ -883,7 +883,8 @@ export default function ConcentrationPanel({
   role: Role;
 }) {
   const [view, setView] = useState<PanelView>("list");
-  const [selected, setSelected] = useState<ArchivalRecord | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = records.find(record => record.id === selectedId);
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!message) return;
@@ -909,7 +910,6 @@ export default function ConcentrationPanel({
     try {
       const saved=await concentrationApi.saveLocation(record);
       onRecordsChange(records.map(item=>item.id===saved.id?saved:item));
-      setSelected(saved);
       setView("detail");
       setMessage("Ubicación física actualizada correctamente.");
     } catch(error) {
@@ -920,29 +920,30 @@ export default function ConcentrationPanel({
   };
 
   const openInventoryData = (record: ArchivalRecord) => {
-    setSelected(record);
+    setSelectedId(record.id);
     setView("inventory-data");
   };
 
-  if (view === "inventory-data" && selected && canEditLocation)
+  const canEditSelected = canEditLocation && selected?.availability !== "Prestado";
+
+  if (view === "inventory-data" && selected && canEditSelected)
     return (
       <EditInventoryData key={selected.id} record={selected} onCancel={() => setView("detail")}
         onSave={async data => {
           const concentrationData = await concentrationApi.saveInventoryData(selected.id, data);
           const updated = { ...selected, concentrationData };
           onRecordsChange(records.map(record => record.id === updated.id ? { ...record, concentrationData } : record));
-          setSelected(updated);
           setMessage("Datos del inventario actualizados.");
           setView("detail");
         }} />
     );
 
-  if (view === "location" && selected)
+  if (view === "location" && selected && canEditSelected)
     return (
       <EditLocation onCancel={() => setView("detail")} onSave={saveLocation} record={selected} />
     );
 
-  if (view === "detail" && selected)
+  if (selected && (view === "detail" || view === "location" || view === "inventory-data"))
     return (
       <>
         {message && (
@@ -953,9 +954,9 @@ export default function ConcentrationPanel({
         )}
         <ConcentrationDetail
           canViewSketch={role === "Administrador / Coordinador" || role === "Encargado de préstamos / Control archivístico"}
-          canEditLocation={canEditLocation}
+          canEditLocation={canEditSelected}
           onBack={() => {
-            setSelected(null);
+            setSelectedId(null);
             setView("list");
           }}
           onEditLocation={() => setView("location")}
@@ -972,12 +973,12 @@ export default function ConcentrationPanel({
       canEditLocation={canEditLocation}
       canViewDetail={canViewDetail}
       onEditLocation={(record) => {
-        setSelected(record);
+        setSelectedId(record.id);
         setView("location");
       }}
       onView={(record) => {
         if (!canViewDetail) return;
-        setSelected(record);
+        setSelectedId(record.id);
         setView("detail");
       }}
       records={concentrationRecords}
