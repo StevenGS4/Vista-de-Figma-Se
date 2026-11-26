@@ -133,7 +133,7 @@ export const loanApi={
 export type ExportType='tramite'|'concentracion'|'transferencia';
 export type SeriesInventoryType = Exclude<ExportType, 'transferencia'>;
 export type SeriesInventoryFilters = {
- section:string;series:string;from:string;to:string;areas:string[];users:string[];
+ section:string;series:string;from:string;to:string;areas:string[];users:string[];includePhysicalLocation:boolean;
 };
 export type SeriesInventoryHeader = {
  administrativeUnit:string;areaName:string;responsible:string;responsiblePosition:string;fund:string;

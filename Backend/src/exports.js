@@ -130,12 +130,13 @@ exportsRouter.post('/:type/series.xlsx',async(req,res,next)=>{
   const records=await seriesRows(req.auth.user,type,req.body);
   if(!records.length)throw fail('No hay expedientes que coincidan con los filtros',404);
   const header=seriesInventoryHeader(records);
+  const includePhysicalLocation=type==='concentracion'&&req.body.includePhysicalLocation===true;
   const book=type==='tramite'
    ? await makeOfficialTemplateWorkbook(records,type,undefined,header)
-   : makeConcentrationInventoryWorkbook(records,header);
+   : makeConcentrationInventoryWorkbook(records,header,{includePhysicalLocation});
   const code=req.body.series.replace(/[^a-zA-Z0-9._-]/g,'_');
   await sendXlsx(book,res,`inventario_${type}_${code}.xlsx`,req.auth.user.id,{
-   type,section:req.body.section,series:req.body.series,recordCount:records.length
+   type,section:req.body.section,series:req.body.series,recordCount:records.length,includePhysicalLocation
   });
  }catch(error){next(error);}
 });

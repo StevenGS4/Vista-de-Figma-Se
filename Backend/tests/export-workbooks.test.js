@@ -123,3 +123,19 @@ test('una serie reúne expedientes de distintos inventarios en una sola hoja por
  assert.equal(sheet.getCell('C29').value,'DECRETO-20');
  assert.deepEqual(sheet.getRow(29).values.slice(16,24),['X','','','X','X','M-1','N-1','P-1']);
 });
+
+test('concentración incluye la ubicación física solo cuando se solicita',async()=>{
+ const located={...sample,locationNotes:'Colocada al frente'};
+ const unlocated={...sample,recordNumber:'EXP-0002',archiveZone:'',room:'',shelf:'',level:'',physicalSection:'',position:'',locationNotes:''};
+ const records=[located,unlocated];
+ const header=seriesInventoryHeader(records);
+ const normal=(await reload(makeConcentrationInventoryWorkbook(records,header))).worksheets[0];
+ assert.equal(normal.columnCount,24);
+ const book=await reload(makeConcentrationInventoryWorkbook(records,header,{includePhysicalLocation:true}));
+ assert.equal(book.worksheets.length,1);
+ const sheet=book.worksheets[0];
+ assert.equal(sheet.getCell('AE8').value,'Observaciones de ubicación');
+ assert.equal(sheet.getCell('B10').value,'CAJA-1');
+ assert.deepEqual(sheet.getRow(10).values.slice(25,32),['Bodega A','Sala 1','2','1','3','C-01','Colocada al frente']);
+ assert.equal(sheet.getCell('AE11').value,'');
+});

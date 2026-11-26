@@ -119,7 +119,7 @@ const openingPeriods = [
   { value: "12m", label: "Último año", months: 12 },
 ] as const;
 
-const emptyFilters: SeriesInventoryFilters = { section: "", series: "", from: "", to: "", areas: [], users: [] };
+const emptyFilters: SeriesInventoryFilters = { section: "", series: "", from: "", to: "", areas: [], users: [], includePhysicalLocation: false };
 
 function MultiFilter({ label, options, selected, onChange }: {
   label: string; options: { id: string; name: string }[]; selected: string[]; onChange: (ids: string[]) => void;
@@ -250,6 +250,13 @@ function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; ro
             {options && role !== "Personal de área" && <MultiFilter label="Usuarios" options={userOptions(filters.areas)}
               selected={filters.users} onChange={users => setFilters({ ...filters, users })} />}
           </div>
+          {type === "concentracion" && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="size-4 accent-[#205b4d]" checked={filters.includePhysicalLocation}
+                onChange={event => setFilters({ ...filters, includePhysicalLocation: event.target.checked })} />
+              Incluir ubicación física
+            </label>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button className="button--secondary" onClick={() => { setFilters(emptyFilters); setPeriod(""); setError(""); }}>Limpiar filtros</Button>
             <button type="submit" className="button button--primary" disabled={!filters.series}>Ver vista previa</button>
@@ -320,7 +327,10 @@ function Preview({
   },[downloaded]);
   const h = group.header;
   const concentration = type === "concentracion";
-  const previewColumns = concentration ? [...columns, "Condiciones de acceso", "Tradición documental", "Ubicación M", "Ubicación N", "Ubicación P"] : columns;
+  const includePhysicalLocation = concentration && group.filters.includePhysicalLocation;
+  const previewColumns: string[] = [...columns];
+  if (concentration) previewColumns.push("Condiciones de acceso", "Tradición documental", "Ubicación M", "Ubicación N", "Ubicación P");
+  if (includePhysicalLocation) previewColumns.push("Archivo o zona", "Sala", "Estante", "Nivel", "Sección física", "Posición alfanumérica", "Observaciones de ubicación");
   const displayCells = (record: ArchivalRecord, index: number) => {
     const row = cells(record);
     row[0] = String(index + 1);
@@ -329,6 +339,8 @@ function Preview({
       row[1] = record.locationBox || record.boxNumber;
       row.push(data?.access || "", data?.tradition || "", data?.m || "", data?.n || "", data?.p || "");
     }
+    if (includePhysicalLocation) row.push(record.archiveZone, record.room, record.shelf, record.level,
+      record.physicalSection, record.position, record.locationNotes);
     return row;
   };
   const [error,setError]=useState("");

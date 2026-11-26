@@ -45,7 +45,7 @@ function details(row){
  });
 }
 
-export function makeConcentrationInventoryWorkbook(records,seriesHeader){
+export function makeConcentrationInventoryWorkbook(records,seriesHeader,{includePhysicalLocation=false}={}){
  const book=new ExcelJS.Workbook();
  const groups=new Map();
  for(const record of records){
@@ -54,11 +54,22 @@ export function makeConcentrationInventoryWorkbook(records,seriesHeader){
   groups.get(id).push(record);
  }
  if(!groups.size)groups.set('',[]);
+ const widths=[12,9,20,22,44,13,13,9,6,6,6,6,8,8,10,7,7,7,11,11,10,10,10,33];
+ const locationColumns=includePhysicalLocation?[
+  ['Archivo o zona','archiveZone',26],
+  ['Sala','room',20],
+  ['Estante','shelf',10],
+  ['Nivel','level',10],
+  ['Sección física','physicalSection',14],
+  ['Posición alfanumérica','position',22],
+  ['Observaciones de ubicación','locationNotes',34],
+ ]:[];
+ widths.push(...locationColumns.map(([, , width])=>width));
  let sheetIndex=0;
  for(const [folio,rows] of groups){
   const sheet=setup(book,groups.size===1?'INVENTARIO A.C.':'A.C. '+String(++sheetIndex).padStart(3,'0'),
-   [12,9,20,22,44,13,13,9,6,6,6,6,8,8,10,7,7,7,11,11,10,10,10,33],9);
-  title(sheet,'INVENTARIO DOCUMENTAL ARCHIVO DE CONCENTRACIÓN',24);
+   widths,9);
+  title(sheet,'INVENTARIO DOCUMENTAL ARCHIVO DE CONCENTRACIÓN',widths.length);
   const first=seriesHeader||rows[0]||{};
   cellRow(sheet,['Unidad administrativa',first.administrativeUnit]);
   cellRow(sheet,['Área generadora',first.areaName||first.areaId]);
@@ -68,10 +79,12 @@ export function makeConcentrationInventoryWorkbook(records,seriesHeader){
   for(const [row,last] of [[3,12],[4,12],[5,3],[6,12],[7,3]])sheet.mergeCells(row,2,row,last);
   cellRow(sheet,['Consecutivo','Caja','Número de expediente','Clasificación archivística','Descripción o asunto',
    'Periodo de trámite','','Folios','Valor documental','','','','Vigencia documental','','',
-   'Condiciones de acceso','','','Tradición documental','','Ubicación topográfica','','','Observaciones']);
+   'Condiciones de acceso','','','Tradición documental','','Ubicación topográfica','','','Observaciones',
+   ...locationColumns.map(([label])=>label)]);
   cellRow(sheet,['','','','','','Apertura','Cierre','','A','L','F','C','AT','AC','Total','P','C','R','Original','Copia','M','N','P','']);
   for(const [start,end] of [[6,7],[9,12],[13,15],[16,18],[19,20],[21,23]])sheet.mergeCells(8,start,8,end);
   for(const column of [1,2,3,4,5,8,24])sheet.mergeCells(8,column,9,column);
+  for(let column=25;column<=widths.length;column++)sheet.mergeCells(8,column,9,column);
   styleHeaders(sheet,8,9);
   rows.forEach((record,i)=>{
    const values=new Set((record.documentaryValues||[]).map(value=>String(value).toUpperCase()));
@@ -84,7 +97,7 @@ export function makeConcentrationInventoryWorkbook(records,seriesHeader){
     record.currentValidity,record.concentrationValidity,record.totalValidity,
     ...['P','C','R'].map(access=>mark(data.access===access)),
     mark(['ORIGINAL','AMBAS'].includes(data.tradition)),mark(['COPIA','AMBAS'].includes(data.tradition)),
-    data.m,data.n,data.p,record.observations]);
+    data.m,data.n,data.p,record.observations,...locationColumns.map(([, field])=>record[field])]);
    details(row);
   });
  }
