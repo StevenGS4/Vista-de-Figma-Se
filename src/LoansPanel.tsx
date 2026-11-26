@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useId, useMemo, useState } from "react";
 import {
   AlertCircle,
   Archive,
@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -26,6 +27,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import LocationShelf from "./LocationShelf";
 import RowActionsMenu from "./RowActionsMenu";
 import { Role, UserRecord, areaName, areas, fullName } from "./data";
 import { loanApi, concentrationApi, type LoanEligibleUser, type OverdueLoanReport } from "./api";
@@ -788,14 +790,6 @@ function LoanForm({
               </strong>
             </div>
             <div>
-              <span>Número de expediente</span>
-              <strong>{record.recordNumber}</strong>
-            </div>
-            <div>
-              <span>Título o asunto</span>
-              <strong>{record.title}</strong>
-            </div>
-            <div>
               <span>Área generadora</span>
               <strong>{areaName(record.areaId)}</strong>
             </div>
@@ -803,25 +797,14 @@ function LoanForm({
               <span>Código CADIDO</span>
               <strong>{record.cadidoCode}</strong>
             </div>
-            <div className="loan-location-readonly">
-              <MapPin size={16} />
-              <span>
-                <small>Ubicación física</small>
-                <strong>{locationSummary(record)}</strong>
-              </span>
-            </div>
             <span className="record-badge record-badge--green">
               <span />
               En archivo
             </span>
           </div>}
-          {records.length > 1 && <ul className="grid gap-2">
-            {records.map(item => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8d4cc] bg-[#fbfaf6] p-3">
-                <span><strong className="block">{item.title}</strong><small className="text-[#687570]">{item.recordNumber}</small></span>
-              </li>
-            ))}
-          </ul>}
+          <ul className="grid gap-2">
+            {records.map(item => <SelectedLoanRecord key={item.id} record={item} />)}
+          </ul>
         </section>
         <section className="form-section">
           <div className="form-section__title">
@@ -927,6 +910,56 @@ function LoanForm({
         />
       )}
     </div>
+  );
+}
+
+function SelectedLoanRecord({ record }: { record: ArchivalRecord }) {
+  const [showLocation, setShowLocation] = useState(false);
+  const locationId = useId();
+  const locationTitleId = useId();
+  const hasShelf = [record.shelf, record.level, record.physicalSection].every(value => value?.trim());
+  const location = [record.archiveZone, record.room, locationSummary(record)].filter(Boolean).join(" · ");
+
+  return (
+    <li className="min-w-0 rounded-md border border-[#c8d4cc] bg-[#fbfaf6] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 break-words">
+          <strong className="block">{record.title || "Sin título"}</strong>
+          <small className="text-[#687570]">{record.recordNumber}</small>
+        </div>
+        <button
+          type="button"
+          className="button button--secondary ml-auto shrink-0"
+          aria-expanded={showLocation}
+          aria-controls={locationId}
+          aria-label={`${showLocation ? "Ocultar" : "Ver"} ubicación de ${record.title || record.recordNumber}`}
+          onClick={() => setShowLocation(open => !open)}
+        >
+          <MapPin size={16} />
+          {showLocation ? "Ocultar ubicación" : "Ver ubicación"}
+          <ChevronDown size={15} className={showLocation ? "rotate-180" : ""} />
+        </button>
+      </div>
+      <div id={locationId} hidden={!showLocation} className="loan-record-location mt-3">
+        <section className="record-detail-group" aria-labelledby={locationTitleId}>
+          <h3 id={locationTitleId}><MapPin size={17} /> Croquis de ubicación</h3>
+          <div>
+            <div className="col-span-full grid min-w-0 gap-2">
+              <p className="text-sm">{location}</p>
+              {hasShelf ? <LocationShelf level={record.level} section={record.physicalSection} /> : (
+                <p className="text-sm text-[#61726b]">Faltan datos de estante, nivel o sección para mostrar el croquis.</p>
+              )}
+            </div>
+            {record.position?.trim() && <DetailField label="Posición alfanumérica" value={record.position} />}
+            {record.locationNotes?.trim() && (
+              <div className="col-span-full whitespace-pre-wrap break-words">
+                <DetailField label="Observaciones de ubicación" value={record.locationNotes} />
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </li>
   );
 }
 

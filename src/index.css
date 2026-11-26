@@ -7975,29 +7975,29 @@
 .concentration-archive-summary td:last-child { border-right: 0; }
 
 /* Paneles de detalle de Concentración y Préstamos. */
-:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .record-detail-group {
   border: 1px solid #b4c4bb;
   background: #f4f5f0;
   box-shadow: 0 4px 14px rgb(7 45 36 / 8%);
 }
-:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > h3 {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .record-detail-group > h3 {
   background: linear-gradient(105deg, #123f36 0%, #205b4d 100%);
   color: #fffdf6;
   border-bottom: 2px solid #b49a57;
   font-weight: 700;
   letter-spacing: .01em;
 }
-:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > h3 svg {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .record-detail-group > h3 svg {
   color: #e2c881;
   flex-shrink: 0;
 }
-:is(.concentration-detail-grid, .loan-detail-page) .record-detail-group > div {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .record-detail-group > div {
   background: #f4f5f0;
 }
-:is(.concentration-detail-grid, .loan-detail-page) .detail-field span {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .detail-field span {
   color: #61726b;
 }
-:is(.concentration-detail-grid, .loan-detail-page) .detail-field strong {
+:is(.concentration-detail-grid, .loan-detail-page, .loan-record-location) .detail-field strong {
   color: #173c34;
 }
 
