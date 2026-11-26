@@ -1069,12 +1069,7 @@ function Application({
             </Suspense>
           ) : active === "inventarios" ? (
             <Suspense fallback={moduleFallback}>
-              <InventoriesPanel
-                currentUser={currentUser}
-                records={archivalRecords}
-                role={role}
-                transfers={transfers}
-              />
+              <InventoriesPanel currentUser={currentUser} role={role} />
             </Suspense>
           ) : active === "control-area" && role === "Encargado de área" ? (
             <Suspense fallback={moduleFallback}><AreaControlPanel mode="area"/></Suspense>

@@ -131,13 +131,30 @@ export const loanApi={
 };
 
 export type ExportType='tramite'|'concentracion'|'transferencia';
+export type SeriesInventoryType = Exclude<ExportType, 'transferencia'>;
+export type SeriesInventoryFilters = {
+ section:string;series:string;from:string;to:string;areas:string[];users:string[];
+};
+export type SeriesInventoryHeader = {
+ administrativeUnit:string;areaName:string;responsible:string;responsiblePosition:string;fund:string;
+ cadidoSectionId:string;cadidoSectionName:string;cadidoCode:string;cadidoSeriesName:string;inventoryDate:string;
+};
+export type SeriesInventoryOptions = {
+ series:{section:string;sectionName:string;code:string;name:string}[];
+ areas:{id:string;name:string}[];
+ users:{id:string;name:string;areaId:string}[];
+};
 export const inventoriesApi={
- async download(type:ExportType,folio?:string){
-  const suffix=folio?'/'+encodeURIComponent(type)+'/'+encodeURIComponent(folio)+'.xlsx'
-    :'/'+encodeURIComponent(type)+'.xlsx';
-  const url=API_BASE+'/api/inventarios'+suffix;
+ seriesOptions:(type:SeriesInventoryType)=>request<SeriesInventoryOptions>('/api/inventarios/'+type+'/series/opciones'),
+ seriesPreview:(type:SeriesInventoryType,filters:SeriesInventoryFilters)=>
+  request<{header:SeriesInventoryHeader|null;records:ArchivalRecord[]}>('/api/inventarios/'+type+'/series/vista-previa',{
+   method:'POST',body:JSON.stringify(filters)
+  }),
+ async downloadSeries(type:SeriesInventoryType,filters:SeriesInventoryFilters){
+  const url=API_BASE+'/api/inventarios/'+type+'/series.xlsx';
   let response:Response;
-  try{response=await fetch(url,{credentials:'include'});}
+  try{response=await fetch(url,{method:'POST',credentials:'include',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify(filters)});}
   catch{throw new Error('No se pudo conectar con Node.js para generar Excel.');}
   if(!response.ok){
    const payload=await response.json().catch(()=>({})) as {error?:string};

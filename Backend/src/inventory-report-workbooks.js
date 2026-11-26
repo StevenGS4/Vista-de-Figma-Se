@@ -45,11 +45,11 @@ function details(row){
  });
 }
 
-export function makeConcentrationInventoryWorkbook(records){
+export function makeConcentrationInventoryWorkbook(records,seriesHeader){
  const book=new ExcelJS.Workbook();
  const groups=new Map();
  for(const record of records){
-  const id=record.inventoryId;
+  const id=seriesHeader?seriesHeader.cadidoCode:record.inventoryId;
   if(!groups.has(id))groups.set(id,[]);
   groups.get(id).push(record);
  }
@@ -59,12 +59,12 @@ export function makeConcentrationInventoryWorkbook(records){
   const sheet=setup(book,groups.size===1?'INVENTARIO A.C.':'A.C. '+String(++sheetIndex).padStart(3,'0'),
    [12,9,20,22,44,13,13,9,6,6,6,6,8,8,10,7,7,7,11,11,10,10,10,33],9);
   title(sheet,'INVENTARIO DOCUMENTAL ARCHIVO DE CONCENTRACIÓN',24);
-  const first=rows[0]||{};
+  const first=seriesHeader||rows[0]||{};
   cellRow(sheet,['Unidad administrativa',first.administrativeUnit]);
   cellRow(sheet,['Área generadora',first.areaName||first.areaId]);
   cellRow(sheet,['Fondo',first.fund,'','Sección',first.cadidoSectionName||first.cadidoSectionId]);
   cellRow(sheet,['Serie',[first.cadidoCode,first.cadidoSeriesName].filter(Boolean).join(' · ')]);
-  cellRow(sheet,['Folio de inventario',folio,'','Fecha de elaboración',date(first.inventoryDate)]);
+  cellRow(sheet,[seriesHeader?'Código de serie':'Folio de inventario',folio,'','Fecha de elaboración',date(first.inventoryDate)]);
   for(const [row,last] of [[3,12],[4,12],[5,3],[6,12],[7,3]])sheet.mergeCells(row,2,row,last);
   cellRow(sheet,['Consecutivo','Caja','Número de expediente','Clasificación archivística','Descripción o asunto',
    'Periodo de trámite','','Folios','Valor documental','','','','Vigencia documental','','',

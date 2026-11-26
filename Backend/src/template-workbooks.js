@@ -257,7 +257,7 @@ function sheetName(kind,index,total){
   return kind==='transferencia'?'INVENTARIO A.TP.':
     kind==='concentracion'?'INVENTARIO A.C.':'INVENTARIO A.T.';
 }
-export async function makeOfficialTemplateWorkbook(records,kind,transfer){
+export async function makeOfficialTemplateWorkbook(records,kind,transfer,seriesHeader){
   const templateName=TEMPLATES[kind];
   if(!templateName)throw new Error('Tipo de plantilla no soportado: '+kind);
   if(records.length>MAX_ROWS)throw new Error('El inventario supera el límite de exportación');
@@ -327,7 +327,7 @@ export async function makeOfficialTemplateWorkbook(records,kind,transfer){
   }
   const groups=new Map();
   for(const record of records){
-    const k=record.inventoryId||'SIN INVENTARIO';
+    const k=seriesHeader?'SERIE':record.inventoryId||'SIN INVENTARIO';
     if(!groups.has(k))groups.set(k,[]);
     groups.get(k).push(record);
   }
@@ -341,7 +341,7 @@ export async function makeOfficialTemplateWorkbook(records,kind,transfer){
     const sheet=sheets[i];
     const layout=locate(sheet);
     const rows=entries[i];
-    fillHeader(sheet,rows[0],layout,kind);
+    fillHeader(sheet,seriesHeader||rows[0],layout,kind);
     fillRecords(sheet,rows,layout,kind);
     fillSummary(sheet,rows,layout,kind);
     if(kind==='tramite'){
@@ -355,6 +355,11 @@ export async function makeOfficialTemplateWorkbook(records,kind,transfer){
     sheet.pageSetup={...sheet.pageSetup,printArea:print||(kind==='tramite'?'B2:W'+sheet.rowCount:undefined),
       printTitlesRow:'1:'+String(layout.start-1),
       fitToPage:true,fitToWidth:1,fitToHeight:0};
+  }
+  if(seriesHeader){
+    for(const sheet of [...book.worksheets]){
+      if(sheet!==source)book.removeWorksheet(sheet.id);
+    }
   }
   return book;
 }

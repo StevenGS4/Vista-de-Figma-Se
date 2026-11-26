@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
+import { seriesInventoryHeader } from '../src/series-inventory-header.js';
+import { makeOfficialTemplateWorkbook } from '../src/template-workbooks.js';
+import { makeConcentrationInventoryWorkbook } from '../src/inventory-report-workbooks.js';
 import { makeInventoryWorkbook,makeTransferWorkbook } from '../src/export-workbooks.js';
 
 const sample={
@@ -92,4 +95,31 @@ test('exporta por separado el número de expediente y su clave de clasificación
  const sheet=wb.worksheets[0];
  assert.equal(sheet.getCell('D23').value,'EXP-2026-018');
  assert.equal(sheet.getCell('E23').value,'SEMARNAT.1C.15.001.2026');
+});
+
+test('una serie reúne expedientes de distintos inventarios en una sola hoja por etapa',async()=>{
+ const records=Array.from({length:20},(_,index)=>({
+  ...sample,
+  inventoryId:index<10?'INV-A':'INV-B',
+  areaName:index<10?'Área A':'Área B',
+  cadidoCode:'1C.6',
+  cadidoSeriesName:'Decretos',
+  archiveClassificationCode:'SEMARNAT.1C.6.'+String(index+1).padStart(3,'0')+'.2026',
+  recordNumber:'DECRETO-'+(index+1),
+  title:'Decreto '+(index+1),
+  concentrationData:{access:'P',tradition:'AMBAS',m:'M-1',n:'N-1',p:'P-1'},
+ }));
+ const header=seriesInventoryHeader(records);
+ assert.equal(header.areaName,'Área A · Área B');
+ const tramite=await reload(await makeOfficialTemplateWorkbook(records,'tramite',undefined,header));
+ assert.equal(tramite.worksheets.length,1);
+ const values=tramite.worksheets[0].getColumn('E').values;
+ assert.ok(values.includes(records[0].archiveClassificationCode));
+ assert.ok(values.includes(records[19].archiveClassificationCode));
+ const concentration=await reload(makeConcentrationInventoryWorkbook(records,header));
+ assert.equal(concentration.worksheets.length,1);
+ const sheet=concentration.worksheets[0];
+ assert.equal(sheet.getCell('C10').value,'DECRETO-1');
+ assert.equal(sheet.getCell('C29').value,'DECRETO-20');
+ assert.deepEqual(sheet.getRow(29).values.slice(16,24),['X','','','X','X','M-1','N-1','P-1']);
 });

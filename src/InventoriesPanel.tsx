@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -8,17 +8,15 @@ import {
   FileSpreadsheet,
   Files,
   FolderArchive,
-  Search,
   ShieldCheck,
 } from "lucide-react";
-import { Role, UserRecord, areaName, areas } from "./data";
-import { ArchivalRecord, cadidoSections, cadidoSeries } from "./records";
-import { DocumentaryTransfer } from "./transfers";
-import { inventoriesApi } from "./api";
+import type { Role, UserRecord } from "./data";
+import type { ArchivalRecord } from "./records";
+import { inventoriesApi, type SeriesInventoryFilters, type SeriesInventoryHeader, type SeriesInventoryOptions, type SeriesInventoryType } from "./api";
+import { homeToday } from "./homePending";
 import PrimaryTransferBuilder from "./PrimaryTransferBuilder";
 
 type InventoryType = "tramite" | "concentracion" | "transferencia";
-type View = "select" | "list" | "preview";
 
 const types = {
   tramite: {
@@ -41,8 +39,6 @@ const types = {
   },
 } as const;
 
-const sectionName = (id: string) => cadidoSections.find((item) => item.id === id)?.name ?? "";
-const seriesName = (id: string) => cadidoSeries.find((item) => item.id === id)?.name ?? "";
 const formatDate = (value: string) =>
   value ? new Date(`${value}T12:00:00`).toLocaleDateString("es-MX") : "Pendiente";
 
@@ -64,7 +60,9 @@ function Button({
   );
 }
 
-function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }) {
+function TypeSelection({ onSelect, role }: { onSelect: (type: InventoryType) => void; role: Role }) {
+  const choices = role === "Encargado de préstamos / Control archivístico" ? ["concentracion"] as const
+    : Object.keys(types) as InventoryType[];
   return (
     <>
       <div className="records-page-heading inventory-page-heading">
@@ -78,7 +76,7 @@ function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }
         </span>
       </div>
       <div className="inventory-type-grid">
-        {(Object.keys(types) as InventoryType[]).map((type) => {
+        {choices.map((type) => {
           const item = types[type];
           const Icon = item.icon;
           return (
@@ -105,209 +103,149 @@ function TypeSelection({ onSelect }: { onSelect: (type: InventoryType) => void }
 }
 
 type InventoryGroup = {
-  id: string;
-  header: ArchivalRecord;
+  header: SeriesInventoryHeader;
   records: ArchivalRecord[];
-  transfer?: DocumentaryTransfer;
+  filters: SeriesInventoryFilters;
 };
 
-function groupRecords(
-  records: ArchivalRecord[],
-  transfers: DocumentaryTransfer[],
-  type: InventoryType,
-): InventoryGroup[] {
-  if (type === "transferencia") {
-    const linkedRecordIds=new Set(transfers.flatMap(transfer=>transfer.recordIds));
-    const map = new Map<string, ArchivalRecord[]>();
-    records
-      .filter((record) => record.stage === "Archivo de trámite" && !linkedRecordIds.has(record.id))
-      .forEach((record) =>
-        map.set(record.inventoryId, [...(map.get(record.inventoryId) ?? []), record]),
-      );
-    return [...map.entries()].map(([id, rows]) => ({ id, header: rows[0], records: rows }));
-  }
-  const stage = type === "tramite" ? "Archivo de trámite" : "Archivo de concentración";
-  const map = new Map<string, ArchivalRecord[]>();
-  records
-    .filter((record) => record.stage === stage)
-    .forEach((record) =>
-      map.set(record.inventoryId, [...(map.get(record.inventoryId) ?? []), record]),
-    );
-  return [...map.entries()].map(([id, rows]) => ({ id, header: rows[0], records: rows }));
+const emptyFilters: SeriesInventoryFilters = { section: "", series: "", from: "", to: "", areas: [], users: [] };
+
+function MultiFilter({ label, options, selected, onChange }: {
+  label: string; options: { id: string; name: string }[]; selected: string[]; onChange: (ids: string[]) => void;
+}) {
+  return (
+    <fieldset className="min-w-0 rounded-lg border border-[#b4c4bb] bg-[#f8f8f3] p-3">
+      <legend className="px-1 text-sm font-semibold">{label}</legend>
+      <label className="flex items-center gap-2 pb-2 text-sm">
+        <input type="checkbox" checked={!selected.length} onChange={() => onChange([])} />
+        {label === "Áreas" ? "Todas las áreas" : "Todos los usuarios"}
+      </label>
+      <div className="grid max-h-36 gap-2 overflow-auto">
+        {options.map(option => (
+          <label key={option.id} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={selected.includes(option.id)} onChange={event =>
+              onChange(event.target.checked ? [...selected, option.id] : selected.filter(id => id !== option.id))
+            } />
+            {option.name}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
 }
 
-function InventoryList({
-  canAllAreas,
-  currentUser,
-  groups,
-  onBack,
-  onOpen,
-  type,
-}: {
-  canAllAreas: boolean;
-  currentUser: UserRecord;
-  groups: InventoryGroup[];
-  onBack: () => void;
-  onOpen: (id: string) => void;
-  type: InventoryType;
-}) {
-  const [allExportError,setAllExportError]=useState("");
-  const [allExportLoading,setAllExportLoading]=useState(false);
-  const exportAll=async()=>{
-    if(allExportLoading)return;
-    setAllExportLoading(true);setAllExportError("");
-    try{await inventoriesApi.download(type);}
-    catch(error){setAllExportError(error instanceof Error?error.message:"No se pudo exportar.");}
-    finally{setAllExportLoading(false);}
+function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; role: Role; onBack: () => void }) {
+  const [options, setOptions] = useState<SeriesInventoryOptions>();
+  const [filters, setFilters] = useState(emptyFilters);
+  const [period, setPeriod] = useState("");
+  const [group, setGroup] = useState<InventoryGroup>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    inventoriesApi.seriesOptions(type).then(data => { if (active) setOptions(data); })
+      .catch(cause => { if (active) setError(cause.message); });
+    return () => { active = false; };
+  }, [type]);
+
+  const sections = new Map(options?.series.map(item => [item.section, item.sectionName]));
+  const series = options?.series.filter(item => item.section === filters.section) ?? [];
+  const userOptions = (areaIds: string[]) => [...new Map(options?.users
+    .filter(user => !areaIds.length || areaIds.includes(user.areaId))
+    .map(user => [user.id, user])).values()];
+  const updateAreas = (areaIds: string[]) => {
+    const allowed = new Set(userOptions(areaIds).map(user => user.id));
+    setFilters(current => ({ ...current, areas: areaIds, users: current.users.filter(id => allowed.has(id)) }));
   };
-  const [search, setSearch] = useState("");
-  const [area, setArea] = useState(canAllAreas ? "" : currentUser.areaId);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [fund, setFund] = useState("");
-  const visible = groups.filter(({ header, id, transfer }) => {
-    const query = search.toLowerCase();
-    return (
-      (!area || header.areaId === area) &&
-      (!dateFrom || header.inventoryDate >= dateFrom) &&
-      (!dateTo || header.inventoryDate <= dateTo) &&
-      (!fund || header.fund.toLowerCase().includes(fund.toLowerCase())) &&
-      (!query ||
-        id.toLowerCase().includes(query) ||
-        transfer?.folio.toLowerCase().includes(query) ||
-        areaName(header.areaId).toLowerCase().includes(query) ||
-        header.responsible.toLowerCase().includes(query))
-    );
-  });
+
+  const changePeriod = (value: string) => {
+    setPeriod(value);
+    if (value === "custom") return;
+    if (!value) {
+      setFilters(current => ({ ...current, from: "", to: "" }));
+      return;
+    }
+    const to = homeToday();
+    const start = new Date(`${to}T00:00:00Z`);
+    if (value === "15") start.setUTCDate(start.getUTCDate() - 14);
+    else {
+      const day = start.getUTCDate();
+      start.setUTCDate(1);
+      start.setUTCMonth(start.getUTCMonth() - 6);
+      const last = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+      start.setUTCDate(Math.min(day, last));
+    }
+    setFilters(current => ({ ...current, from: start.toISOString().slice(0, 10), to }));
+  };
+
+  if (group) return <Preview group={group} onBack={() => setGroup(undefined)} type={type} />;
+
   return (
     <div className="inventory-config-page">
       <div className="record-form-top">
         <div>
-          <button className="text-button" onClick={onBack}>
-            <ArrowLeft size={17} />
-            Cambiar tipo de inventario
-          </button>
-          <h2>Inventarios disponibles</h2>
-          <p>{types[type].name} · primero selecciona un encabezado.</p>
+          <button type="button" className="text-button" onClick={onBack}><ArrowLeft size={17} /> Cambiar tipo de inventario</button>
+          <h2>{types[type].name}</h2>
+          <p>Selecciona la serie documental que quieres exportar.</p>
         </div>
-        <span className="record-mode">
-          <FileSpreadsheet size={16} />
-          Inventario Excel
-        </span>
       </div>
-      <section className="surface records-table-card">
-        <div className="records-filters">
-          <label className="search-box records-search">
-            <Search size={17} />
-            <input
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar inventario, responsable o área..."
-              value={search}
-            />
-          </label>
-          <label className="filter-select">
-            <select
-              disabled={!canAllAreas}
-              onChange={(event) => setArea(event.target.value)}
-              value={area}
-            >
-              {canAllAreas && <option value="">Todas las áreas</option>}
-              {areas.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>Fecha inicial</span>
-            <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Fecha final</span>
-            <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Fondo</span>
-            <input
-              placeholder="Filtrar fondo..."
-              value={fund}
-              onChange={(event) => setFund(event.target.value)}
-            />
-          </label>
-        </div>
-        {type === "transferencia" && (
-          <div className="inventory-info">
-            <FileSpreadsheet size={18} />
-            <span>
-              <strong>Reporte de consulta</strong>
-              Esta consulta sirve para preparar la selección. El formato vinculado a una solicitud se descarga desde su folio en Transferencias.
-            </span>
-            <Button className="button--primary" disabled={allExportLoading} onClick={exportAll}>
-              <Download size={15} /> Descargar concentrado XLSX
-            </Button>
+      <form className="surface grid gap-4 p-4 sm:p-6" onSubmit={async event => {
+        event.preventDefault();
+        if (busy || !filters.series) return;
+        setBusy(true);
+        setError("");
+        try {
+          const result = await inventoriesApi.seriesPreview(type, filters);
+          if (result.header) setGroup({ ...result, header: result.header, filters });
+          else setError("No hay expedientes que coincidan con los filtros.");
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "No se pudo cargar la vista previa.");
+        } finally { setBusy(false); }
+      }}>
+        <fieldset disabled={busy || !options} className="grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <label className="form-field"><span>Sección</span>
+              <select required value={filters.section} onChange={event => setFilters({ ...filters, section: event.target.value, series: "" })}>
+                <option value="">Selecciona una sección</option>
+                {[...sections].map(([code, name]) => <option key={code} value={code}>{code} · {name}</option>)}
+              </select>
+            </label>
+            <label className="form-field"><span>Serie documental</span>
+              <select required disabled={!filters.section} value={filters.series} onChange={event => setFilters({ ...filters, series: event.target.value })}>
+                <option value="">Selecciona una serie</option>
+                {series.map(item => <option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}
+              </select>
+            </label>
+            <label className="form-field"><span>Periodo de apertura</span>
+              <select value={period} onChange={event => changePeriod(event.target.value)}>
+                <option value="">Todas las fechas</option><option value="15">Últimos 15 días</option>
+                <option value="6">Últimos seis meses</option><option value="custom">Personalizado</option>
+              </select>
+            </label>
+            {period === "custom" && <>
+              <label className="form-field"><span>Desde</span>
+                <input type="date" max={filters.to || undefined} value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} />
+              </label>
+              <label className="form-field"><span>Hasta</span>
+                <input type="date" min={filters.from || undefined} value={filters.to} onChange={event => setFilters({ ...filters, to: event.target.value })} />
+              </label>
+            </>}
           </div>
-        )}
-        {allExportError && <div className="validation-summary" role="alert">{allExportError}</div>}
-        {type === "transferencia" && (
-          <div className="inventory-info">
-            <FileSpreadsheet size={18} />
-            <span>
-              <strong>{visible.length} inventarios · {visible.reduce((sum, group) => sum + group.records.length, 0)} expedientes</strong>
-              Consulta el concentrado de expedientes seleccionados.
-            </span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {options && (role === "Administrador / Coordinador" || role === "Encargado de préstamos / Control archivístico") &&
+              <MultiFilter label="Áreas" options={options.areas} selected={filters.areas} onChange={updateAreas} />}
+            {options && role !== "Personal de área" && <MultiFilter label="Usuarios" options={userOptions(filters.areas)}
+              selected={filters.users} onChange={users => setFilters({ ...filters, users })} />}
           </div>
-        )}
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Identificador</th>
-                <th>Unidad administrativa</th>
-                <th>Área generadora</th>
-                <th>Responsable</th>
-                <th>Fondo</th>
-                <th>Sección</th>
-                <th>Serie</th>
-                <th>Hoja</th>
-                <th>Fecha</th>
-                <th>Expedientes</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((group) => (
-                <tr key={group.id}>
-                  <td>
-                    <strong>{group.transfer?.folio ?? group.id}</strong>
-                  </td>
-                  <td>{group.header.administrativeUnit}</td>
-                  <td>{areaName(group.header.areaId)}</td>
-                  <td>{group.header.responsible}</td>
-                  <td>{group.header.fund}</td>
-                  <td>{sectionName(group.header.cadidoSectionId)}</td>
-                  <td>{seriesName(group.header.cadidoSeriesId)}</td>
-                  <td>Hoja {group.header.initialSheetNumber} de N</td>
-                  <td>{formatDate(group.header.inventoryDate)}</td>
-                  <td>{group.records.length}</td>
-                  <td>
-                    <Button className="button--secondary" onClick={() => onOpen(group.id)}>
-                      Vista previa <ArrowRight size={15} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!visible.length && (
-            <div className="empty-state">
-              <Files size={28} />
-              <strong>No hay inventarios disponibles</strong>
-              <p>Ajusta la búsqueda o el área seleccionada.</p>
-            </div>
-          )}
-        </div>
-      </section>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button className="button--secondary" onClick={() => { setFilters(emptyFilters); setPeriod(""); setError(""); }}>Limpiar filtros</Button>
+            <button type="submit" className="button button--primary" disabled={!filters.series}>Ver vista previa</button>
+          </div>
+        </fieldset>
+        {(!options && !error || busy) && <p role="status">Cargando…</p>}
+        {options && !options.series.length && <p>No hay series con expedientes disponibles para este inventario.</p>}
+        {error && <p className="validation-summary" role="alert">{error}</p>}
+      </form>
     </div>
   );
 }
@@ -359,7 +297,7 @@ function Preview({
 }: {
   group: InventoryGroup;
   onBack: () => void;
-  type: InventoryType;
+  type: SeriesInventoryType;
 }) {
   const [downloaded, setDownloaded] = useState(false);
   useEffect(() => {
@@ -368,13 +306,25 @@ function Preview({
     return ()=>window.clearTimeout(timer);
   },[downloaded]);
   const h = group.header;
+  const concentration = type === "concentracion";
+  const previewColumns = concentration ? [...columns, "Condiciones de acceso", "Tradición documental", "Ubicación M", "Ubicación N", "Ubicación P"] : columns;
+  const displayCells = (record: ArchivalRecord, index: number) => {
+    const row = cells(record);
+    row[0] = String(index + 1);
+    if (concentration) {
+      const data = record.concentrationData;
+      row[1] = record.locationBox || record.boxNumber;
+      row.push(data?.access || "", data?.tradition || "", data?.m || "", data?.n || "", data?.p || "");
+    }
+    return row;
+  };
   const [error,setError]=useState("");
   const [isDownloading,setIsDownloading]=useState(false);
   const download=async()=>{
     if(isDownloading)return;
     setIsDownloading(true);setError("");
     try{
-      await inventoriesApi.download(type,group.id);
+      await inventoriesApi.downloadSeries(type,group.filters);
       setDownloaded(true);
     }catch(error){
       setDownloaded(false);
@@ -387,11 +337,11 @@ function Preview({
         <div>
           <button className="text-button" onClick={onBack}>
             <ArrowLeft size={17} />
-            Volver a inventarios disponibles
+            Volver a filtros
           </button>
           <h2>Vista previa completa</h2>
           <p>
-            {types[type].name} · {group.transfer?.folio ?? group.id}
+            {types[type].name} · {[h.cadidoCode, h.cadidoSeriesName].filter(Boolean).join(" · ")}
           </p>
         </div>
         <Button className="button--primary" disabled={isDownloading} onClick={download}>
@@ -414,7 +364,7 @@ function Preview({
           </div>
           <div>
             <span>{types[type].name}</span>
-            <strong>{group.transfer?.folio ?? group.id}</strong>
+            <strong>{[h.cadidoCode, h.cadidoSeriesName].filter(Boolean).join(" · ")}</strong>
           </div>
         </div>
         <div className="inventory-header-sheet">
@@ -424,7 +374,7 @@ function Preview({
           </div>
           <div>
             <span>Área generadora</span>
-            <strong>{areaName(h.areaId)}</strong>
+            <strong>{h.areaName}</strong>
           </div>
           <div>
             <span>Responsable</span>
@@ -440,16 +390,16 @@ function Preview({
           </div>
           <div>
             <span>Sección</span>
-            <strong>{sectionName(h.cadidoSectionId)}</strong>
+            <strong>{h.cadidoSectionName || h.cadidoSectionId}</strong>
           </div>
           <div>
             <span>Serie</span>
-            <strong>{seriesName(h.cadidoSeriesId)}</strong>
+            <strong>{h.cadidoSeriesName}</strong>
           </div>
           <div>
             <span>Número de hoja</span>
             <strong>
-              Hoja {h.initialSheetNumber} de {Math.max(1, Math.ceil(group.records.length / 20))}
+              Hoja 1 de 1
             </strong>
           </div>
           <div>
@@ -462,7 +412,7 @@ function Preview({
             <FileSpreadsheet size={20} />
             <span>
               <strong>{group.records.length} expedientes</strong>
-              <small>Tabla documental del inventario seleccionado</small>
+              <small>Expedientes de la serie seleccionada</small>
             </span>
           </div>
         </div>
@@ -470,16 +420,16 @@ function Preview({
           <table className="inventory-wide-table">
             <thead>
               <tr>
-                {columns.map((column) => (
+                {previewColumns.map((column) => (
                   <th key={column}>{column}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {group.records.map((record) => (
+              {group.records.map((record, rowIndex) => (
                 <tr key={record.id}>
-                  {cells(record).map((cell, index) => (
-                    <td key={`${record.id}-${columns[index]}`}>{cell || <span>Sin dato</span>}</td>
+                  {displayCells(record, rowIndex).map((cell, index) => (
+                    <td key={`${record.id}-${previewColumns[index]}`}>{cell || <span>Sin dato</span>}</td>
                   ))}
                 </tr>
               ))}
@@ -491,63 +441,11 @@ function Preview({
   );
 }
 
-export default function InventoriesPanel({
-  currentUser,
-  records,
-  role,
-  transfers,
-}: {
-  currentUser: UserRecord;
-  records: ArchivalRecord[];
-  role: Role;
-  transfers: DocumentaryTransfer[];
-}) {
-  const [view, setView] = useState<View>("select");
-  const [type, setType] = useState<InventoryType>("tramite");
-  const [selectedId, setSelectedId] = useState("");
-  const canAllAreas =
-    role === "Administrador / Coordinador" ||
-    role === "Encargado de préstamos / Control archivístico";
-  const groups = useMemo(() => {
-    const all = groupRecords(records, transfers, type);
-    if (role === "Administrador / Coordinador") return all;
-    if (role === "Encargado de préstamos / Control archivístico")
-      return type === "tramite"
-        ? []
-        : all.filter((group) => !group.transfer || group.transfer.status === "Aceptada");
-    if (role === "Encargado de área")
-      return all.filter((group) => group.header.areaId === currentUser.areaId);
-    return all.filter(
-      (group) =>
-        group.header.areaId === currentUser.areaId &&
-        group.records.every((record) => record.createdBy === currentUser.id),
-    );
-  }, [currentUser.areaId, currentUser.id, records, role, transfers, type]);
-  const selected = groups.find((group) => group.id === selectedId);
-  if (view === "select")
-    return (
-      <TypeSelection
-        onSelect={(value) => {
-          setType(value);
-          setView("list");
-        }}
-      />
-    );
+export default function InventoriesPanel({ currentUser, role }: { currentUser: UserRecord; role: Role }) {
+  const [type, setType] = useState<InventoryType>();
+  const back = () => setType(undefined);
+  if (!type) return <TypeSelection onSelect={setType} role={role} />;
   if (type === "transferencia")
-    return <PrimaryTransferBuilder currentUser={currentUser} role={role} onBack={() => setView("select")} />;
-  if (view === "preview" && selected)
-    return <Preview group={selected} onBack={() => setView("list")} type={type} />;
-  return (
-    <InventoryList
-      canAllAreas={canAllAreas}
-      currentUser={currentUser}
-      groups={groups}
-      onBack={() => setView("select")}
-      onOpen={(id) => {
-        setSelectedId(id);
-        setView("preview");
-      }}
-      type={type}
-    />
-  );
+    return <PrimaryTransferBuilder currentUser={currentUser} role={role} onBack={back} />;
+  return <SeriesInventory key={`${type}-${currentUser.id}-${role}`} type={type} role={role} onBack={back} />;
 }

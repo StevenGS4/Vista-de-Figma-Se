@@ -6,6 +6,8 @@ import { exportTypes, exportScope, stageForType } from './export-policy.js';
 import { enrichConcentrationRecords } from './concentration.js';
 import { makeConcentrationInventoryWorkbook, makeDocumentaryReportWorkbook } from './inventory-report-workbooks.js';
 import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
+import { seriesInventoryHeader } from './series-inventory-header.js';
+import { validDate } from './loan-policy.js';
 import { selectPrimaryRecords } from './primary-inventory-selection.js';
 async function workbookFor(records,type){
  if(type==='concentracion')return makeConcentrationInventoryWorkbook(await enrichConcentrationRecords(records));
@@ -22,13 +24,17 @@ const oneType=(value)=>{
  if(!Object.hasOwn(exportTypes,value))throw fail('Tipo de inventario inválido');
  return value;
 };
-async function scopedRows(user,type,folio){
+function inventoryScope(user,type,{bySeries=false}={}){
  const scope=exportScope(user,type);
  if(!scope)throw fail('No tienes permiso para exportar este inventario',403);
  const filters=['e.etapa=?','e.deleted_at IS NULL','i.deleted_at IS NULL'];
  const params=[stageForType(type)];
  if(scope!=='GLOBAL'){filters.push('a.codigo=?');params.push(user.areaId);}
- if(scope==='PROPIO'){filters.push('i.creado_por=?');params.push(user.id);}
+ if(scope==='PROPIO'){filters.push(bySeries?'e.creado_por=?':'i.creado_por=?');params.push(user.id);}
+ return {filters,params};
+}
+async function scopedRows(user,type,folio){
+ const {filters,params}=inventoryScope(user,type);
  if(folio){filters.push('i.folio=?');params.push(folio);}
  if(type==='transferencia')filters.push("i.estado='TRAMITE'");
  const [count]=await pool.execute(`SELECT COUNT(*) AS n
@@ -51,6 +57,89 @@ async function sendXlsx(book,res,filename,actorId,detail){
  res.set('Cache-Control','private, no-store');
  res.send(Buffer.from(bytes));
 }
+const seriesJoins=`FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
+ JOIN areas a ON a.id=i.area_id JOIN secciones_cadido sc ON sc.id=i.seccion_id
+ JOIN series_cadido sr ON sr.id=e.serie_id`;
+function seriesType(value){
+ if(value!=='tramite'&&value!=='concentracion')throw fail('Tipo de inventario inválido');
+ return value;
+}
+function filterValues(values,valid){
+ if(!Array.isArray(values)||values.length>5000||values.some(value=>typeof value!=='string'||!valid(value)))
+  throw fail('Selección de filtros inválida');
+ return [...new Set(values)];
+}
+async function seriesRows(user,type,body){
+ const {filters,params}=inventoryScope(user,type,{bySeries:true});
+ const {section,series,from,to}=body??{};
+ if(typeof section!=='string'||!section.trim()||section.length>100||
+    typeof series!=='string'||!series.trim()||series.length>100)throw fail('Selecciona una sección y una serie documental');
+ if((from!==''&&!validDate(from))||(to!==''&&!validDate(to))||(from&&to&&from>to))
+  throw fail('El intervalo de fechas no es válido');
+ filters.push('sc.codigo=?','sr.codigo=?');
+ params.push(section,series);
+ if(from){filters.push('e.apertura>=?');params.push(from);}
+ if(to){filters.push('e.apertura<=?');params.push(to);}
+ const areas=filterValues(body.areas,value=>value.length>0&&value.length<=100);
+ const users=filterValues(body.users,value=>/^[1-9]\d{0,19}$/.test(value));
+ for(const [column,values] of [['a.codigo',areas],['e.creado_por',users]]){
+  if(values.length){
+   filters.push(column+' IN ('+values.map(()=>'?').join(',')+')');
+   params.push(...values);
+  }
+ }
+ const where='WHERE '+filters.join(' AND ');
+ const [[count]]=await pool.execute('SELECT COUNT(*) AS n '+seriesJoins+' '+where,params);
+ if(Number(count.n)>limitRows)throw fail('Exportación demasiado grande; reduce los filtros',413);
+ const records=await readRecords(pool,where,params);
+ return records.sort((a,b)=>(a.openDate||'').localeCompare(b.openDate||'')||a.id.localeCompare(b.id,'es',{numeric:true}));
+}
+
+exportsRouter.get('/:type/series/opciones',async(req,res,next)=>{
+ try{
+  const {filters,params}=inventoryScope(req.auth.user,seriesType(req.params.type),{bySeries:true});
+  const [rows]=await pool.execute(`SELECT DISTINCT sc.codigo AS section,sc.nombre AS sectionName,
+   sr.codigo AS series,sr.nombre AS seriesName,a.codigo AS areaId,a.nombre AS areaName,
+   CAST(e.creado_por AS CHAR) AS userId,CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS userName
+   ${seriesJoins} LEFT JOIN usuarios u ON u.id=e.creado_por
+   WHERE ${filters.join(' AND ')} ORDER BY sc.codigo,sr.codigo,a.nombre,userName`,params);
+  const series=new Map(),areas=new Map(),users=new Map();
+  for(const row of rows){
+   series.set(JSON.stringify([row.section,row.series]),{
+    section:row.section,sectionName:row.sectionName,code:row.series,name:row.seriesName
+   });
+   areas.set(row.areaId,{id:row.areaId,name:row.areaName});
+   if(row.userId)users.set(JSON.stringify([row.userId,row.areaId]),{
+    id:row.userId,name:row.userName||'Usuario '+row.userId,areaId:row.areaId
+   });
+  }
+  res.set('Cache-Control','private, no-store');
+  res.json({series:[...series.values()],areas:[...areas.values()],users:[...users.values()]});
+ }catch(error){next(error);}
+});
+exportsRouter.post('/:type/series/vista-previa',async(req,res,next)=>{
+ try{
+  const records=await seriesRows(req.auth.user,seriesType(req.params.type),req.body);
+  res.set('Cache-Control','private, no-store');
+  res.json({header:seriesInventoryHeader(records),records});
+ }catch(error){next(error);}
+});
+exportsRouter.post('/:type/series.xlsx',async(req,res,next)=>{
+ try{
+  const type=seriesType(req.params.type);
+  const records=await seriesRows(req.auth.user,type,req.body);
+  if(!records.length)throw fail('No hay expedientes que coincidan con los filtros',404);
+  const header=seriesInventoryHeader(records);
+  const book=type==='tramite'
+   ? await makeOfficialTemplateWorkbook(records,type,undefined,header)
+   : makeConcentrationInventoryWorkbook(records,header);
+  const code=req.body.series.replace(/[^a-zA-Z0-9._-]/g,'_');
+  await sendXlsx(book,res,`inventario_${type}_${code}.xlsx`,req.auth.user.id,{
+   type,section:req.body.section,series:req.body.series,recordCount:records.length
+  });
+ }catch(error){next(error);}
+});
+
 // Consultas y selecciones personalizadas: sin cambios de etapa ni operaciones de transferencia.
 // En cada ruta se valida el alcance del usuario antes de filtrar identificadores.
 exportsRouter.post('/transferencia/opciones',async(req,res,next)=>{
