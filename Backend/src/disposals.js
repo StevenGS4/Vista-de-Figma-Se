@@ -177,16 +177,18 @@ disposalsRouter.post('/:id/resolucion',async(req,res,next)=>{
   const id=parseId(req.params.id);
   const {status,date}=req.body??{};
   const reference=text(req.body?.reference),notes=text(req.body?.notes);
-  if(!['BAJA','NO_PROCEDE'].includes(status)||!validDate(date)||date>localDate()||
-     !reference||reference.length>160||notes.length>2000)
-   throw fail('Captura el resultado, el folio y la fecha válida del dictamen');
+  if(!['BAJA','NO_PROCEDE'].includes(status)||!reference||reference.length>160||notes.length>2000)
+   throw fail('Captura el resultado y el folio del dictamen');
+  const today=localDate();
+  const earliest=new Date(today+'T00:00:00Z');
+  earliest.setUTCDate(earliest.getUTCDate()-90);
+  if(!validDate(date)||date>today||date<earliest.toISOString().slice(0,10))
+   throw fail('La fecha del dictamen debe ser hoy o de hasta 90 días atrás');
   conn=await pool.getConnection();
   await conn.beginTransaction();
-  const [[proposal]]=await conn.execute(`SELECT estado,DATE_FORMAT(creada_en,'%Y-%m-%d') AS created
-   FROM propuestas_baja WHERE id=? FOR UPDATE`,[id]);
+  const [[proposal]]=await conn.execute('SELECT estado FROM propuestas_baja WHERE id=? FOR UPDATE',[id]);
   if(!proposal)throw fail('Propuesta no encontrada',404);
   if(proposal.estado!=='PROPUESTA')throw fail('La propuesta ya fue resuelta',409);
-  if(date<proposal.created)throw fail('La fecha del dictamen debe ser igual o posterior a la propuesta');
   if(status==='BAJA'){
    const [records]=await conn.execute(`SELECT e.etapa,e.disponibilidad,e.deleted_at,i.deleted_at AS inventory_deleted
     FROM propuesta_baja_expedientes be JOIN expedientes e ON e.id=be.expediente_id

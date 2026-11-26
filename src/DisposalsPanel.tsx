@@ -114,8 +114,8 @@ function NewProposal({ records, busy, onSubmit, onBack }: {
   </>;
 }
 
-function ResolutionForm({ proposal, busy, onResolve }: {
-  proposal: DisposalDetail; busy: boolean;
+function ResolutionForm({ busy, onResolve }: {
+  busy: boolean;
   onResolve: (decision: {status:"BAJA"|"NO_PROCEDE";date:string;reference:string;notes:string}) => void;
 }) {
   const [status, setStatus] = useState<"" | "BAJA" | "NO_PROCEDE">("");
@@ -123,6 +123,9 @@ function ResolutionForm({ proposal, busy, onResolve }: {
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const today = homeToday();
+  const earliest = new Date(today + "T00:00:00Z");
+  earliest.setUTCDate(earliest.getUTCDate() - 90);
   return <form className="surface grid gap-3 p-4" onSubmit={event => {
     event.preventDefault();
     if (status && confirmed && !busy) onResolve({status, reference, date, notes});
@@ -138,7 +141,8 @@ function ResolutionForm({ proposal, busy, onResolve }: {
         <input required maxLength={160} value={reference} onChange={event => setReference(event.target.value)} />
       </label>
       <label className="form-field"><span>Fecha del dictamen</span>
-        <input type="date" required min={proposal.createdDate} max={homeToday()} value={date} onChange={event => setDate(event.target.value)} />
+        <input type="date" required min={earliest.toISOString().slice(0, 10)} max={today} value={date} onChange={event => setDate(event.target.value)} />
+        <small>Hasta 90 días anteriores a hoy.</small>
       </label>
       <label className="form-field sm:col-span-3"><span>Observaciones</span>
         <textarea rows={2} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} />
@@ -246,7 +250,7 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
             {detail.notes && <p className="whitespace-pre-wrap">{detail.notes}</p>}
           </div>}
         </section>
-        {canResolve && detail.status === "PROPUESTA" && <ResolutionForm key={detail.id} proposal={detail} busy={busy}
+        {canResolve && detail.status === "PROPUESTA" && <ResolutionForm key={detail.id} busy={busy}
           onResolve={decision => void run(async () => {
             await disposalApi.resolve(detail.id, decision);
             if (decision.status === "BAJA") onDischarged(detail.records.map(record => record.id));
