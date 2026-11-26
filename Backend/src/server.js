@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import { pool } from './config/database.js';
@@ -19,6 +20,11 @@ import { startTrashRetention } from './trash-retention.js';
 
 const app=express();
 const port=Number(process.env.PORT||3001);
+const isProduction = process.env.NODE_ENV === 'production';
+const host = isProduction ? '0.0.0.0' : '127.0.0.1';
+if (isProduction && !process.env.FRONTEND_ORIGIN && process.env.RENDER_EXTERNAL_URL) {
+  process.env.FRONTEND_ORIGIN = new URL(process.env.RENDER_EXTERNAL_URL).origin;
+}
 const origin=process.env.FRONTEND_ORIGIN||'http://localhost:8443';
 
 app.disable('x-powered-by');
@@ -43,11 +49,14 @@ app.use('/api/admin-catalog',adminCatalogRouter);
 app.use('/api/inventarios',exportsRouter);
 app.use('/api/inicio',homeRouter);
 app.use('/api/control-area',areaControlRouter);
+if (isProduction) {
+  app.use(express.static(fileURLToPath(new URL('../../dist/', import.meta.url))));
+}
 app.use((err,_req,res,_next)=>{
  console.error('Error de API:',err.code||err.message);
  res.status(err.status||500).json({error:err.status?err.message:'Error interno del servidor'});
 });
-const server=app.listen(port,'127.0.0.1',()=>console.log(`Backend SEMARNAT escuchando en http://localhost:${port}`));
+const server=app.listen(port,host,()=>console.log(`Backend SEMARNAT escuchando en http://${host}:${port}`));
 const stopRetention=startTrashRetention();
 const close=()=>{stopRetention();server.close(async()=>{await pool.end();process.exit(0);});};
 process.on('SIGINT',close);
