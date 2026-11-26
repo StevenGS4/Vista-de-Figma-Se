@@ -216,26 +216,31 @@ function InventoryList({
   ]));
   const [search, setSearch] = useState(initialSearch);
   const [cadidoYear, setCadidoYear] = useState("");
-  const [cadidoCodeFilter, setCadidoCodeFilter] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [seriesFilter, setSeriesFilter] = useState("");
+  const catalogRecords = records.filter(record => !cadidoYear || record.cadidoYear === cadidoYear);
+  const sectionOptions = [...new Set(catalogRecords.map(record => record.cadidoSectionId).filter(Boolean))]
+    .sort((a, b) => sectionName(a).localeCompare(sectionName(b), "es"));
+  const seriesOf = (record: ArchivalRecord) => record.cadidoSeriesId || record.cadidoCode;
+  const seriesOptions = new Map(
+    catalogRecords.filter(record => (!sectionFilter || record.cadidoSectionId === sectionFilter) && seriesOf(record))
+      .map(record => [seriesOf(record), [record.cadidoCode, record.cadidoSeriesName || seriesName(record.cadidoSeriesId)].filter(Boolean).join(" · ")]),
+  );
   const [quickView, setQuickView] = useState<
-    "Recientes activos" | "Todos los activos" | "Transferidos" | "Todos"
-  >(supervisionTitle ? "Todos los activos" : initialSearch ? "Todos" : "Recientes activos");
+    "Recientes activos" | "Todos los activos"
+  >(supervisionTitle || initialSearch ? "Todos los activos" : "Recientes activos");
   const inventories = useMemo(
     () =>
       groupInventories(records).filter(({ header, id, records: rows }) => {
         const query = search.trim().toLowerCase();
         const transferred = rows.every((record) => record.stage === "Archivo de concentración");
-        const matchesView =
-          quickView === "Todos" ||
-          (quickView === "Transferidos" && transferred) ||
-          (quickView === "Todos los activos" && !transferred) ||
-          (quickView === "Recientes activos" && !transferred);
         return (
-          matchesView &&
+          !transferred &&
           (!areaFilter || header.areaId === areaFilter) &&
           (!ownerFilter || ownerOf(header) === ownerFilter) &&
           (!cadidoYear || header.cadidoYear === cadidoYear) &&
-          (!cadidoCodeFilter || header.cadidoCode === cadidoCodeFilter) &&
+          (!sectionFilter || header.cadidoSectionId === sectionFilter) &&
+          (!seriesFilter || seriesOf(header) === seriesFilter) &&
           (!query ||
             id.toLowerCase().includes(query) ||
             areaName(header.areaId).toLowerCase().includes(query) ||
@@ -249,7 +254,7 @@ function InventoryList({
             ))
         );
       }),
-    [quickView, records, search, cadidoYear, cadidoCodeFilter, areaFilter, ownerFilter],
+    [records, search, cadidoYear, sectionFilter, seriesFilter, areaFilter, ownerFilter],
   );
   const listed = quickView === "Recientes activos" && !search.trim()
     ? [...inventories].sort((a, b) => b.header.inventoryDate.localeCompare(a.header.inventoryDate)).slice(0, 5)
@@ -317,18 +322,23 @@ function InventoryList({
             >
               <option>Recientes activos</option>
               <option>Todos los activos</option>
-              <option>Transferidos</option>
-              <option>Todos</option>
             </select>
           </label>
           )}
-          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={e=>{setCadidoYear(e.target.value);}}>
+          <label className="filter-select"><select aria-label="Filtrar edición CADIDO" value={cadidoYear} onChange={event => { setCadidoYear(event.target.value); setSectionFilter(""); setSeriesFilter(""); }}>
             <option value="">Todas las ediciones CADIDO</option>
             {[...new Set(records.map(r=>r.cadidoYear||"Sin versión"))].sort().map(v=><option key={v} value={v==="Sin versión"?"":v}>{v}</option>)}
           </select></label>
-          <label className="filter-select"><select aria-label="Filtrar código CADIDO histórico" value={cadidoCodeFilter} onChange={e=>{setCadidoCodeFilter(e.target.value);}}>
-            <option value="">Todos los códigos</option>
-            {[...new Set(records.filter(r=>!cadidoYear||r.cadidoYear===cadidoYear).map(r=>r.cadidoCode))].sort().map(code=><option key={code} value={code}>{code}</option>)}
+          <label className="filter-select"><select aria-label="Filtrar por sección CADIDO" value={sectionFilter}
+            onChange={event => { setSectionFilter(event.target.value); setSeriesFilter(""); }}>
+            <option value="">Todas las secciones</option>
+            {sectionOptions.map(id => <option key={id} value={id}>{sectionName(id)}</option>)}
+          </select></label>
+          <label className="filter-select"><select aria-label="Filtrar por serie CADIDO" value={seriesFilter}
+            onChange={event => setSeriesFilter(event.target.value)}>
+            <option value="">Todas las series</option>
+            {[...seriesOptions].sort(([, a], [, b]) => a.localeCompare(b, "es", { numeric: true }))
+              .map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select></label>
           <Button className="button--primary" onClick={() => { if (search.trim() && quickView === "Recientes activos") setQuickView("Todos los activos"); }}>
             <Search size={16} /> Buscar
