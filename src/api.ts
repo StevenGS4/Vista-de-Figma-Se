@@ -5,14 +5,19 @@ async function request<T>(path:string,options:RequestInit={}):Promise<T>{
  let response:Response;
  try{
   response=await fetch(API_BASE+path,{...options,credentials:'include',headers:{'Content-Type':'application/json',...(options.headers||{})}});
- }catch{throw new Error('No se pudo conectar con Node.js. Verifica que el backend esté encendido.');}
+ }catch(error){
+  if (error instanceof Error && error.name === 'TimeoutError') {
+   throw new Error('El servidor tardó demasiado en responder al inicio de sesión. Intenta nuevamente.');
+  }
+  throw new Error('No se pudo conectar con Node.js. Verifica que el backend esté encendido.');
+ }
  const data=await response.json().catch(()=>({})) as JsonObject;
  if(!response.ok) throw new Error(typeof data.error==='string'?data.error:'Error del servidor');
  return data as T;
 }
 export const toUiUser=(u:UserRecord):UserRecord=>({...u,id:String(u.id),areaId:String(u.areaId),password:''});
 export const authApi={
- login:async(email:string,password:string)=>toUiUser((await request<{user:UserRecord}>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})})).user),
+ login:async(email:string,password:string)=>toUiUser((await request<{user:UserRecord}>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password}),signal:AbortSignal.timeout(15000)})).user),
  me:async()=>toUiUser((await request<{user:UserRecord}>('/api/auth/me')).user),
  logout:()=>request<{ok:boolean}>('/api/auth/logout',{method:'POST',body:'{}'}),
  changePassword:async(currentPassword:string,newPassword:string)=>toUiUser((await request<{user:UserRecord}>('/api/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})})).user),
