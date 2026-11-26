@@ -8318,34 +8318,41 @@
 .transfer-reception-location { padding: 16px; margin-block: 16px; }
 
 .profile-activity-dialog {
-  width: min(42rem, calc(100% - 2rem));
-  max-height: 85dvh;
+  width: min(52rem, calc(100% - 24px));
+  max-height: min(88dvh, calc(100dvh - 24px));
   margin: auto;
   padding: 0;
-  overflow: auto;
   border: 1px solid var(--gray-200);
-  border-radius: 16px;
-  background: var(--white);
   color: var(--green-950);
-  box-shadow: var(--shadow-lg);
 }
-.profile-activity-dialog::backdrop { background: rgb(15 43 35 / 48%); }
-.profile-activity-dialog > header {
+.profile-activity-dialog::backdrop { background: rgb(0 31 27 / 52%); backdrop-filter: blur(2px); }
+.profile-activity-dialog > .profile-activity-header {
   position: sticky;
   top: 0;
-  display: flex;
+  z-index: 2;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
   background: var(--white);
-  border-bottom: 1px solid var(--gray-200);
 }
-.profile-activity-dialog h2 { font-size: 18px; font-weight: 700; }
-.profile-activity-body { display: grid; gap: 10px; padding: 16px 20px; }
+.profile-activity-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.profile-activity-heading > .activity-item__icon { width: 40px; height: 40px; flex: 0 0 40px; }
+.profile-activity-heading p { color: var(--gray-600); font-size: 12px; margin-top: 3px; }
+.profile-activity-body { display: grid; gap: 14px; }
+.profile-activity-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  background: var(--gray-50);
+}
+.profile-activity-filters input, .profile-activity-filters select { min-width: 0; width: 100%; }
+.profile-activity-group { display: grid; gap: 8px; }
+.profile-activity-group h3 { font-size: 12px; color: var(--green-800); font-weight: 700; }
 .profile-activity-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 12px;
   border: 1px solid var(--gray-200);
@@ -8354,9 +8361,49 @@
   font-size: 13px;
   background: var(--gray-50);
 }
-.profile-activity-item > div { flex: 1; min-width: min(12rem, 100%); overflow-wrap: anywhere; }
-.profile-activity-item small { display: block; color: var(--gray-600); }
+.profile-activity-item > div { flex: 1; min-width: min(11rem, 100%); overflow-wrap: anywhere; }
+.profile-activity-item > .profile-notice-report {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--gray-200);
+}
+.profile-activity-item small { display: block; color: var(--gray-600); margin-top: 3px; }
 .profile-activity-item.home-pending--blue, .pending-list > button.home-pending--blue { background: #eaf3fb; border-color: #abc9e2; }
 .profile-activity-item.home-pending--amber, .pending-list > button.home-pending--amber { background: #fff3dc; border-color: #dfbd81; }
+.profile-activity-empty { color: var(--gray-600); padding: 12px; font-size: 13px; }
+.profile-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #e7eee8;
+  color: #234d3e;
+  font-size: 11px;
+  font-weight: 700;
+}
+.profile-status--pending { background: #fff0ce; color: #725014; }
+.profile-loan-card { overflow: hidden; border: 1px solid var(--gray-200); border-radius: 10px; }
+.profile-loan-card > header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px;
+  background: #edf2ed;
+  border-bottom: 1px solid var(--gray-200);
+}
+.profile-loan-card > header > div { flex: 1; min-width: min(12rem, 100%); overflow-wrap: anywhere; }
+.profile-loan-card h3 { font-weight: 700; font-size: 14px; }
+.profile-loan-card header p { color: var(--gray-600); font-size: 12px; }
+.profile-loan-table { min-width: 31rem; }
+.profile-record-title { display: inline-flex; align-items: center; gap: 8px; color: var(--green-950); font-weight: 600; }
+.profile-record-title svg { color: var(--green-800); flex-shrink: 0; }
+.profile-activity-pagination { padding: 4px 0; }
+@media (max-width: 640px) {
+  .profile-activity-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-activity-dialog > .modal__header, .profile-activity-dialog > .modal__body { padding: 14px; }
+}
 .pending-list > button.home-pending--blue > span { background: #d4e7f6; color: #22567c; }
 .pending-list > button.home-pending--amber > span { background: #ffe3af; color: #805310; }

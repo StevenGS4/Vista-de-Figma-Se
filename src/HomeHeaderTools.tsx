@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { homeApi, type LoanNotice, type LoanSummary, type OverdueLoanReport } from "./api";
-import { Bell, BookOpen, Check, FileText, Search } from "lucide-react";
+import { Bell, BookOpen, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
 import type { DocumentaryTransfer } from "./transfers";
-import { buildHomeNotices, type HomeModule, type HomeNotice } from "./HomeDashboard";
+import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
+
+import { mergeProfileNotices, noticeHistoryKey, useNoticeHistory, useReadNotices } from "./profileNotices";
 
 export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh,manualOpen,onManual}:{
  user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:LoanSummary[];
@@ -18,13 +20,8 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
  const [notificationsOpen,setNotificationsOpen]=useState(false);
  const [openReport,setOpenReport]=useState<OverdueLoanReport|null>(null);
  const [query,setQuery]=useState("");
- const key="semarnat-notices-read-"+user.id;
- const [seen,setSeen]=useState<string[]>([]);
+ const {seen,markRead}=useReadNotices(user.id);
  const [personalLoanNotices,setPersonalLoanNotices]=useState<LoanNotice[]>([]);
- useEffect(()=>{
-  try{const stored=JSON.parse(window.localStorage.getItem(key)||"[]");setSeen(Array.isArray(stored)?stored.filter(x=>typeof x==="string"):[]);}
-  catch{setSeen([]);}
- },[key]);
  useEffect(()=>{
   let active=true;
   const load=()=>homeApi.loanNotices().then(items=>{if(active)setPersonalLoanNotices(items);})
@@ -33,19 +30,13 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   const timer=window.setInterval(load,30_000);
   return ()=>{active=false;window.clearInterval(timer);};
  },[user.id]);
- const notices=useMemo<(HomeNotice & { report?: OverdueLoanReport })[]>(()=>{
-   const staff=buildHomeNotices(user,role,transfers,loans).filter(n=>allowed.includes(n.module));
-   const merged=[...personalLoanNotices,...staff];
-   return merged.filter((n,i)=>merged.findIndex(x=>x.id===n.id)===i).slice(0,40);
- },[user,role,transfers,loans,allowed,personalLoanNotices]);
- const unread=notices.filter(n=>!seen.includes(n.id)).length;
- const markRead=(id:string)=>{
-  setSeen(old=>{
-   const next=[...new Set([...old,id])].slice(-250);
-   try{window.localStorage.setItem(key,JSON.stringify(next));}catch{/* almacenamiento local no disponible */}
-   return next;
-  });
- };
+ const currentNotices=useMemo(() => mergeProfileNotices(
+   personalLoanNotices,
+   buildHomeNotices(user,role,transfers,loans).filter(notice=>allowed.includes(notice.module)),
+ ),[user,role,transfers,loans,allowed,personalLoanNotices]);
+ useNoticeHistory(noticeHistoryKey(user.id,user.areaId,role), currentNotices);
+ const pendingNotices=currentNotices.filter(notice=>!seen.has(notice.id));
+ const unread=pendingNotices.length;
  const results=useMemo(()=>{
   const q=query.trim().toLowerCase();
   if(q.length<2)return [];
@@ -90,13 +81,13 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   {notificationsOpen && <div className="header-popover header-popover--notifications home-header-popover">
     <div className="home-notice-heading"><strong>Notificaciones</strong><small>{unread} sin leer</small></div>
     <div className="home-notice-items">
-      {notices.length===0 && <p className="home-no-notices">No hay avisos registrados para tus funciones.</p>}
-      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
-        <span className={"activity-item__icon activity-item__icon--"+n.color}>{seen.includes(n.id)?<Check size={15}/>:<Bell size={15}/>}</span>
+      {!unread && <p className="home-no-notices">No tienes notificaciones pendientes.</p>}
+      {pendingNotices.slice(0,12).map(n=><button type="button" key={n.id} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
+        <span className={"activity-item__icon activity-item__icon--"+n.color}><Bell size={15}/></span>
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}
     </div>
-    <small>Notificaciones de movimientos y asuntos pendientes.</small>
+    <small>Consulta el historial en Perfil → Mis notificaciones.</small>
   </div>}
   {openReport && createPortal(
     <div className="modal-backdrop">
