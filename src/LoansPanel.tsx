@@ -39,8 +39,8 @@ const formatDate = (value: string) =>
   value ? new Date(`${value}T12:00:00`).toLocaleDateString("es-MX") : "Sin registro";
 
 const offsetDate = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
+  const date = new Date(`${todayIso()}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 };
 
@@ -866,7 +866,7 @@ function LoanForm({
               <input
                 type="date"
                 value={form.loanDate}
-                onChange={(event) => update("loanDate", event.target.value)}
+                readOnly
               />
             </LoanField>
             <LoanField
@@ -1152,7 +1152,7 @@ function ReturnForm({
   onSave: (date: string, receivedBy: string, notes: string, returnedIds: string[], conditions: Record<string, LoanReturnCondition>) => Promise<void>;
   record?: ArchivalRecord;
 }) {
-  const [date, setDate] = useState(todayIso());
+  const date = todayIso();
   const [receivedBy, setReceivedBy] = useState(fullName(currentUser));
   const [notes, setNotes] = useState("");
   const inventoryLoan = loan.mode === "Inventario completo";
@@ -1211,7 +1211,7 @@ function ReturnForm({
                 min={loan.loanDate}
                 type="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                readOnly
               />
             </LoanField>
             <LoanField error={errors.receivedBy} label="Persona que recibe la devolución" required>

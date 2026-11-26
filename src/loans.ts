@@ -113,7 +113,20 @@ export const initialLoans: ArchivalLoan[] = [
   },
 ];
 
-export const todayIso = () => new Date().toISOString().slice(0, 10);
+const loanDateFormatter = new Intl.DateTimeFormat("es-MX", {
+  timeZone: "America/Mazatlan",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export const todayIso = () => {
+  const parts = loanDateFormatter.formatToParts(new Date());
+  const year = parts.find(part => part.type === "year")?.value;
+  const month = parts.find(part => part.type === "month")?.value;
+  const day = parts.find(part => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+};
 
 export const effectiveLoanStatus = (loan: ArchivalLoan): "Activo" | "Vencido" | "Devuelto" => {
   if (loan.status === "Devuelto") return "Devuelto";

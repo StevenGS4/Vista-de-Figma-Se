@@ -8,9 +8,31 @@ export const loansRouter=express.Router();
 loansRouter.use(requireAuth);
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const name=(v,max=200)=>typeof v==='string'?v.trim().slice(0,max):'';
-const mysqlToday=async()=>{
- const [[row]]=await pool.query("SELECT DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today");
+const mysqlToday=async(conn)=>{
+ const [[row]]=await conn.query("SELECT DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today");
  return row.today;
+};
+// Nayarit: la fecha del procedimiento y la del API usan el mismo día civil.
+const loanConnection=async()=>{
+ const conn=await pool.getConnection();
+ try{
+  const [[{timeZone}]]=await conn.query('SELECT @@session.time_zone AS timeZone');
+  await conn.query("SET SESSION time_zone='-07:00'");
+  return {conn,timeZone};
+ }catch(error){
+  conn.destroy();
+  throw error;
+ }
+};
+const releaseLoanConnection=async(conn,timeZone)=>{
+ if(!conn)return;
+ try{
+  await conn.query('SET SESSION time_zone=?',[timeZone]);
+  conn.release();
+ }catch(error){
+  conn.destroy();
+  console.error('No se pudo restaurar la zona horaria de MySQL:',error.code||error.message);
+ }
 };
 const shortDate=value=>value?String(value).slice(0,10):'';
 const userNumber=value=>/^\d+$/.test(String(value??'')) && Number.isSafeInteger(Number(value)) && Number(value)>0
@@ -132,7 +154,8 @@ loansRouter.post('/:id/reportes',async(req,res,next)=>{
   conn=await pool.getConnection();
   await conn.beginTransaction();
   const [[loan]]=await conn.execute(`SELECT folio,estado,solicitante_usuario_id,
-   fecha_prevista < CURDATE() AS overdue, DATE_FORMAT(CURDATE(),'%Y-%m-%d') AS today
+   fecha_prevista < DATE(UTC_TIMESTAMP() - INTERVAL 7 HOUR) AS overdue,
+   DATE_FORMAT(UTC_TIMESTAMP() - INTERVAL 7 HOUR,'%Y-%m-%d') AS today
    FROM prestamos WHERE id=? FOR UPDATE`,[id]);
   if(!loan)throw fail('Préstamo no encontrado',404);
   if(loan.estado!=='ACTIVO'||!loan.overdue)throw fail('Solo se pueden reportar préstamos vencidos que siguen activos',409);
@@ -177,6 +200,7 @@ loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{
 });
 loansRouter.post('/',async(req,res,next)=>{
  let conn;
+ let timeZone;
  let committedFolio;
  try{
   const user=req.auth.user;guard(user);
@@ -189,11 +213,6 @@ loansRouter.post('/',async(req,res,next)=>{
   try{selected=parseLoanSelection(req.body);}catch(e){throw fail(e.message);}
   const {mode,ids}=selected;
   const data=req.body||{};
-  const currentDate=await mysqlToday();
-  if(!validDate(data.loanDate)||data.loanDate!==currentDate)
-   throw fail('La fecha del préstamo debe ser la fecha actual de registro');
-  if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<currentDate)
-   throw fail('Fecha prevista de devolución inválida');
   const recipient=name(data.receivedBy),notes=name(data.observations,2000);
   if(!recipient)throw fail('Nombre de la persona que recibe obligatorio');
   if(typeof data.requestingAreaId!=='string'||!data.requestingAreaId.trim())throw fail('Área solicitante obligatoria');
@@ -208,7 +227,10 @@ loansRouter.post('/',async(req,res,next)=>{
   if(!deliverer || !await isLoanStaff(delivererId))
    throw fail('La persona que entrega debe ser personal autorizado del archivo de concentración',400);
   const placeholders=ids.map(()=>'?').join(',');
-  conn=await pool.getConnection();
+  ({conn,timeZone}=await loanConnection());
+  const currentDate=await mysqlToday(conn);
+  if(!validDate(data.expectedReturnDate)||data.expectedReturnDate<currentDate)
+   throw fail('La devolución prevista debe ser el '+currentDate+' o posterior');
   const multiple=ids.length>1;
   if(multiple)await conn.beginTransaction();
   const [found]=await conn.query(`SELECT e.id,e.inventario_id,e.etapa,e.disponibilidad,
@@ -227,7 +249,7 @@ loansRouter.post('/',async(req,res,next)=>{
   if(placed.some(e=>e.recepcion_estado!=='RECIBIDA')||
     found.some(e=>!e.archivo_zona||!e.lugar_resguardo||!e.estante||!e.nivel||!e.seccion_fisica))
    throw fail('Los expedientes requieren recepción física completa y ubicación asignada',409);
-  const folio='PRE-'+new Date().getFullYear()+'-'+randomUUID().slice(0,14).toUpperCase();
+  const folio='PRE-'+currentDate.slice(0,4)+'-'+randomUUID().slice(0,14).toUpperCase();
   let id;
   if(multiple){
    const [{insertId}]=await conn.execute(`INSERT INTO prestamos
@@ -272,11 +294,12 @@ loansRouter.post('/',async(req,res,next)=>{
   if(e.sqlState==='45000'||e.code==='ER_DUP_ENTRY'||e.code==='ER_SIGNAL_EXCEPTION')
    return res.status(409).json({error:'MySQL rechazó el registro del préstamo. Motivo: '+e.message});
   next(e);
- }finally{conn?.release();}
+ }finally{await releaseLoanConnection(conn,timeZone);}
 });
 
 loansRouter.post('/:id/returns',async(req,res,next)=>{
  let conn;
+ let timeZone;
  const completed=[];
  try{
   const user=req.auth.user;guard(user);
@@ -286,15 +309,14 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   if(!Number.isSafeInteger(id))throw fail('ID de préstamo inválido');
   let ids;
   try{ids=parseReturnItems(req.body?.recordIds);}catch(e){throw fail(e.message);}
-  const date=req.body?.date;
-  if(!validDate(date)||date!==await mysqlToday())throw fail('La devolución se registra con la fecha real actual');
   const receiver=name(req.body?.receivedBy),notes=name(req.body?.notes,2000);
   if(!receiver)throw fail('Indica quién recibe físicamente la devolución');
   const conditions=req.body?.conditions;
   if(ids.some(expId=>!returnConditions.has(conditions?.['REG-'+expId])))
    throw fail('Indica el estado de cada expediente recibido');
 
-  conn=await pool.getConnection();
+  ({conn,timeZone}=await loanConnection());
+  const date=await mysqlToday(conn);
   const [[loan]]=await conn.execute(`SELECT estado,DATE_FORMAT(fecha_prestamo,'%Y-%m-%d') AS loanDate
    FROM prestamos WHERE id=?`,[id]);
   if(!loan)throw fail('Préstamo no encontrado',404);
@@ -331,5 +353,5 @@ loansRouter.post('/:id/returns',async(req,res,next)=>{
   if(e.sqlState==='45000'||e.code==='ER_SIGNAL_EXCEPTION')
    return res.status(409).json({error:'MySQL no pudo registrar la devolución. Motivo: '+e.message});
   next(e);
- }finally{conn?.release();}
+ }finally{await releaseLoanConnection(conn,timeZone);}
 });
