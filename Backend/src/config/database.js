@@ -24,4 +24,6 @@ export const pool = mysql.createPool({
   decimalNumbers: false,
   timezone: 'Z',
   dateStrings: true,
+  // MySQL 8.0.24 supports query attributes only for non-prepared statements.
+  flags: ['-CLIENT_QUERY_ATTRIBUTES'],
 });
