@@ -286,7 +286,7 @@ function TransferTray({
           <table className="data-table transfer-table">
             <thead>
               <tr>
-                <th>Transferencia</th>
+                <th className="min-w-[240px] w-[27%]">Transferencia</th>
                 <th>Usuario solicitante</th>
                 <th>Fecha</th>
                 <th>Inventarios / expedientes</th>
@@ -299,13 +299,18 @@ function TransferTray({
               {visible.map((transfer) => {
                 const task = transferTask(transfer, currentUser, role, permissions);
                 const canContinue = task.mine && task.step === 0 && !("kind" in task);
+                const series = transfer.seriesNames?.join(", ") || "Sin serie registrada";
+                const title = `Transferencia primaria · ${areaName(transfer.areaId)}`;
                 return (
                   <tr key={transfer.id}>
                     <td>
-                      <button className="record-number-link" onClick={() => onOpen(transfer)}>
-                        Transferencia primaria · {areaName(transfer.areaId)}
-                      </button>
-                      <span className="block break-words text-xs font-normal text-[#52605a]">{transfer.folio}</span>
+                      <div className="grid gap-0.5 [contain:inline-size]">
+                        <strong className="truncate text-xs text-[#173c34]" title={series}>{series}</strong>
+                        <button type="button" className="record-number-link max-w-none!" title={title} onClick={() => onOpen(transfer)}>
+                          {title}
+                        </button>
+                        <span className="truncate text-xs text-[#52605a]" title={transfer.folio}>{transfer.folio}</span>
+                      </div>
                     </td>
                     <td>
                       <div className="requester-cell">

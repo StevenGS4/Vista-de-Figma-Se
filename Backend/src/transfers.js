@@ -80,8 +80,9 @@ async function readTransfer(conn,t,user){
   LEFT JOIN usuarios um ON um.id=ar.encargado_usuario_id
   WHERE tr.id=?`,[t.id]);
  const actorNames=actors[0]||{};
- const [records]=await conn.execute(`SELECT e.id FROM transferencia_expedientes_v ti
+ const [records]=await conn.execute(`SELECT e.id,sr.nombre AS seriesName FROM transferencia_expedientes_v ti
  JOIN expedientes e ON e.id=ti.expediente_id
+ LEFT JOIN series_cadido sr ON sr.id=e.serie_id
  WHERE ti.transferencia_id=? AND e.deleted_at IS NULL ORDER BY ti.inventario_id,e.consecutivo`,[t.id]);
  const [receptions]=await conn.execute(`SELECT r.estado,DATE_FORMAT(r.fecha,'%Y-%m-%d') AS date,
  r.responsable_id,r.observaciones,
@@ -99,6 +100,7 @@ async function readTransfer(conn,t,user){
  assignedAreaManagerName:actorNames.assignedAreaManagerName||'',
  createdAt:isoDate(t.creada_en),submittedAt:isoDate(t.enviada_en),
  status:documents.some(d=>d.kind==='CANCELACION')?'Cancelada':transferStates[t.estado],recordIds:records.map(r=>'REG-'+r.id),
+ seriesNames:[...new Set(records.map(record=>record.seriesName?.trim()).filter(Boolean))],
  reviewerId:t.aceptada_por?String(t.aceptada_por):'',
  areaApproverId:t.visto_bueno_por?String(t.visto_bueno_por):'',
  areaApprovedAt:isoDate(t.visto_bueno_en),reviewedAt:isoDate(t.aceptada_en),

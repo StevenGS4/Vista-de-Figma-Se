@@ -37,6 +37,7 @@ export type DocumentaryTransfer = {
   submittedAt: string;
   status: TransferStatus;
   recordIds: string[];
+  seriesNames?: string[];
   reviewerId: string;
   areaApproverId?: string;
   areaApprovedAt?: string;
