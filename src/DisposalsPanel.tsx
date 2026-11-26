@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Plus, Search } from "lucide-react";
+import { ArrowLeft, Download, Plus, Search, X } from "lucide-react";
 import { disposalApi, type DisposalDetail, type DisposalProposal, type DisposalRecord } from "./api";
 import type { Role } from "./data";
 import { homeToday } from "./homePending";
@@ -73,6 +73,27 @@ function NewProposal({ records, busy, onSubmit, onBack }: {
           </summary>
           <RecordsTable records={group} selection={selected} toggle={toggle} />
         </details>)}
+        {chosen.length > 0 && (
+          <section className="overflow-hidden rounded-lg border border-[#b4c4bb]" aria-labelledby="disposal-selection-heading">
+            <h4 id="disposal-selection-heading" className="bg-[#edf0ec] px-4 py-3 text-sm font-semibold text-[#243931]">
+              Expedientes seleccionados
+            </h4>
+            <ul className="divide-y divide-[#d6dfd9]">
+              {chosen.map(record => (
+                <li key={record.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                  <div className="min-w-0 break-words">
+                    <strong className="block text-sm">{record.title || record.number}</strong>
+                    <small className="text-[#526760]">{[record.number, record.code, record.series].filter(Boolean).join(" · ")}</small>
+                  </div>
+                  <button type="button" className="text-button" aria-label={`Quitar ${record.number} de la selección`}
+                    onClick={() => toggle(record.id)}>
+                    <X size={14} aria-hidden="true" /> Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" className="text-button" onClick={review ? () => setReview(false) : onBack}><ArrowLeft size={16} /> {review ? "Cambiar selección" : "Volver a Bajas"}</button>
