@@ -143,8 +143,8 @@ function TransferTray({
   transfers: DocumentaryTransfer[];
   users: UserRecord[];
 }) {
-  const views = ["Seguimiento", "Todas", "Pendiente", "Con observaciones", "Aceptadas", "Mis transferencias"] as const;
-  const [view, setView] = useState<(typeof views)[number]>("Seguimiento");
+  const views = ["Pendiente", "Todas", "Con observaciones", "Aceptadas", "Mis transferencias"] as const;
+  const [view, setView] = useState<(typeof views)[number]>("Pendiente");
   const [mineOnly, setMineOnly] = useState(false);
   const [area, setArea] = useState("");
   const [requester, setRequester] = useState("");
@@ -164,7 +164,6 @@ function TransferTray({
   const matchesView = (transfer: DocumentaryTransfer, currentView: typeof view) => {
     switch (currentView) {
       case "Mis transferencias": return transfer.requestedBy === currentUser.id;
-      case "Seguimiento": return transfer.status !== "Cancelada" && transfer.receptionStatus !== "Recibida";
       case "Pendiente": return ["En preparación", "Pendiente de visto bueno del área", "Pendiente de revisión administrativa"].includes(transfer.status);
       case "Con observaciones": return transfer.status === "Con observaciones";
       case "Aceptadas": return transfer.status === "Aceptada";
@@ -219,9 +218,9 @@ function TransferTray({
         <div className="records-filter-head">
           <div>
             <h3>Bandeja de transferencias</h3>
-            <p>{visibleByRole.filter(item => matchesView(item, "Seguimiento")).length} solicitudes en curso</p>
+            <p>{visibleByRole.filter(item => item.status !== "Cancelada" && item.receptionStatus !== "Recibida").length} solicitudes en curso</p>
           </div>
-          {pending > 0 && <button type="button" className="button button--secondary" onClick={() => { setView("Seguimiento"); setMineOnly(true); setPage(1); }}>
+          {pending > 0 && <button type="button" className="button button--secondary" onClick={() => { setView("Todas"); setMineOnly(true); setPage(1); }}>
             <Clock3 size={16} /> {pending} {pending === 1 ? "acción pendiente" : "acciones pendientes"}
           </button>}
         </div>
