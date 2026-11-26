@@ -54,6 +54,8 @@ const sessionSeconds = 2*60*60;
 const createToken = (id) => jwt.sign({}, jwtSecret, { algorithm:'HS256', subject:String(id), jwtid:randomUUID(), issuer:'semarnat-backend', audience:'semarnat-web', expiresIn:sessionSeconds });
 
 authRouter.post('/login',async(req,res,next)=>{
+  let stage = 'consulta de usuario';
+  const slowLogin = setTimeout(() => console.warn('Inicio de sesión lento:', stage), 8000);
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = req.body?.password;
@@ -61,15 +63,20 @@ authRouter.post('/login',async(req,res,next)=>{
     const [rows] = await pool.execute('SELECT id,password_hash,estado FROM usuarios WHERE correo=? LIMIT 1',[email]);
     // Evitar respuesta distinta para cuentas inexistentes.
     const dummy = '$2b$12$9gQhQGmOwTuGd5Y9QTXxMu08oMRoBXLPotK1to59nHqOrF5CqC4Hu';
+    stage = 'validación de contraseña';
     const ok = await bcrypt.compare(password,rows[0]?.password_hash || dummy);
     if (!rows.length || rows[0].estado !== 'ACTIVO' || !ok) return res.status(401).json({error:credentialsError});
     const token = createToken(rows[0].id);
+    stage = 'creación de sesión';
     const [{insertId:sessionId}] = await pool.execute('INSERT INTO sesiones(usuario_id,token_hash,expira_en) VALUES (?,SHA2(?,256),DATE_ADD(NOW(), INTERVAL 2 HOUR))',[rows[0].id,token]);
+    stage = 'registro de actividad';
     try { await recordSessionActivity({user:{id:rows[0].id},sessionId}); }
     catch(error) { console.error('No se pudo registrar el inicio de actividad:',error.code||error.message); }
+    stage = 'lectura de perfil';
+    const user = await readUser(rows[0].id);
     res.cookie(cookieName,token,cookieOptions);
-    res.json({user:await readUser(rows[0].id)});
-  } catch(e){next(e);}
+    res.json({user});
+  } catch(e){next(e);} finally { clearTimeout(slowLogin); }
 });
 authRouter.get('/me',requireAuth,(req,res)=>res.json({user:req.auth.user}));
 authRouter.post('/logout',requireAuth,async(req,res,next)=>{
