@@ -27,11 +27,11 @@ const loanConnection=async()=>{
 const releaseLoanConnection=async(conn,timeZone)=>{
  if(!conn)return;
  try{
-  await conn.query('SET SESSION time_zone=?',[timeZone]);
+  await conn.query('SET @@session.time_zone=?, @prestamo_autorizado=NULL',[timeZone]);
   conn.release();
  }catch(error){
   conn.destroy();
-  console.error('No se pudo restaurar la zona horaria de MySQL:',error.code||error.message);
+  console.error('No se pudo limpiar la sesión de préstamos de MySQL:',error.code||error.message);
  }
 };
 const shortDate=value=>value?String(value).slice(0,10):'';
@@ -261,7 +261,15 @@ loansRouter.post('/',async(req,res,next)=>{
    id=insertId;
    await conn.query('INSERT INTO prestamo_expedientes (prestamo_id,expediente_id) VALUES ?',
     [ids.map(expId=>[id,expId])]);
-   await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO' WHERE id IN (${placeholders})`,ids);
+   // bu_expedientes permite el cambio solo en la sesión que registra el préstamo.
+   await conn.query('SET @prestamo_autorizado=1');
+   try{
+    const [{affectedRows}]=await conn.query(`UPDATE expedientes SET disponibilidad='PRESTADO'
+     WHERE disponibilidad='EN_ARCHIVO' AND id IN (${placeholders})`,ids);
+    if(affectedRows!==ids.length)throw fail('Cambió la disponibilidad de uno o más expedientes',409);
+   }finally{
+    await conn.query('SET @prestamo_autorizado=NULL');
+   }
    await conn.query('INSERT INTO prestamo_historial (prestamo_id,expediente_id,actor_id,accion,detalle) VALUES ?',
     [ids.map(expId=>[id,expId,user.id,'ENTREGA','Estado al entregar: '+conditionLabel.GOOD+'.'])]);
   }else{
