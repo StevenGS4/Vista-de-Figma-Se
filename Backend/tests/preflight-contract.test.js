@@ -20,3 +20,16 @@ test('detecta específicamente migración pendiente de ubicación, vistas y proc
  assert.ok(errors.includes('Falta procedimiento sp_aceptar_transferencia'));
  assert.ok(errors.includes('Falta vista vw_prestamos_vencimiento'));
 });
+
+test('detecta la falta de las tablas de Bajas y de su ficha documental',()=>{
+ const missing=good();
+ delete missing.columns.propuestas_baja;
+ delete missing.columns.propuesta_baja_expedientes;
+ const errors=compareSchema(missing);
+ assert.ok(errors.includes('Falta propuestas_baja.id'));
+ assert.ok(errors.includes('Falta propuesta_baja_expedientes.ficha'));
+
+ const incomplete=good();
+ incomplete.columns.propuesta_baja_expedientes=['propuesta_id','expediente_id'];
+ assert.deepEqual(compareSchema(incomplete),['Falta propuesta_baja_expedientes.ficha']);
+});

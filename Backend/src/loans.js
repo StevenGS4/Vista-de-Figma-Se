@@ -62,7 +62,7 @@ const conditionFromNotes = (notes, prefix='Estado al recibir') => (
  notes?.startsWith(prefix+': Con incidencias.') ? 'ISSUE' : ''
 );
 
-async function oneLoan(id, db=pool) {
+export async function readLoans(db, id) {
  const [rows]=await db.execute(`SELECT p.id,p.folio,p.modalidad,i.folio AS inventoryFolio,a.codigo AS areaCode,
   p.solicitante_nombre,p.solicitante_usuario_id,p.fecha_prestamo,p.fecha_prevista,p.cerrado_en,p.estado,p.observaciones,
   p.recibido_por_nombre,
@@ -71,22 +71,44 @@ async function oneLoan(id, db=pool) {
   FROM prestamos p JOIN areas a ON a.id=p.area_solicitante_id
   LEFT JOIN inventarios i ON i.id=p.inventario_id
   JOIN usuarios ua ON ua.id=p.autorizado_por JOIN usuarios ue ON ue.id=p.entregado_por
-  WHERE p.id=?`,[id]);
- if(!rows.length)return null;
- const p=rows[0];
- const [items]=await db.execute(`SELECT pe.expediente_id,e.numero_expediente,e.titulo_asunto,e.codigo_clasificacion,
+  ${id===undefined?'ORDER BY p.id DESC LIMIT 2000':'WHERE p.id=?'}`,id===undefined?[]:[id]);
+ if(!rows.length)return [];
+ const ids=rows.map(row=>row.id);
+ const placeholders=ids.map(()=>'?').join(',');
+ const [items]=await db.execute(`SELECT pe.prestamo_id,pe.expediente_id,e.numero_expediente,e.titulo_asunto,e.codigo_clasificacion,
   DATE_FORMAT(pe.devuelto_en,'%Y-%m-%d') AS returnedDate,
   pe.observaciones_devolucion,
   CONCAT_WS(' ',ud.nombres,ud.apellido_paterno,ud.apellido_materno) AS returnedBy
   FROM prestamo_expedientes pe
   JOIN expedientes e ON e.id=pe.expediente_id
   LEFT JOIN usuarios ud ON ud.id=pe.recibido_devolucion_por
-  WHERE pe.prestamo_id=? ORDER BY pe.expediente_id`,[id]);
- const [movements]=await db.execute(`SELECT ph.id,ph.expediente_id,ph.accion,ph.detalle,
+  WHERE pe.prestamo_id IN (${placeholders}) ORDER BY pe.prestamo_id,pe.expediente_id`,ids);
+ const [movements]=await db.execute(`SELECT ph.prestamo_id,ph.id,ph.expediente_id,ph.accion,ph.detalle,
   DATE_FORMAT(ph.fecha,'%Y-%m-%d') AS moveDate,
   CONCAT_WS(' ',u.nombres,u.apellido_paterno,u.apellido_materno) AS actor
   FROM prestamo_historial ph JOIN usuarios u ON u.id=ph.actor_id
-  WHERE ph.prestamo_id=? ORDER BY ph.id`,[id]);
+  WHERE ph.prestamo_id IN (${placeholders}) ORDER BY ph.prestamo_id,ph.id`,ids);
+ const byLoan=entries=>{
+  const groups=new Map();
+  for(const entry of entries){
+   const key=String(entry.prestamo_id);
+   if(!groups.has(key))groups.set(key,[]);
+   groups.get(key).push(entry);
+  }
+  return groups;
+ };
+ const itemGroups=byLoan(items),movementGroups=byLoan(movements);
+ return rows.map(row=>formatLoan(row,itemGroups.get(String(row.id))??[],movementGroups.get(String(row.id))??[]));
+}
+
+async function oneLoan(id,db=pool){
+ const [loan]=await readLoans(db,id);
+ return loan??null;
+}
+
+const loanStatus=state=>state==='DEVUELTO'?'Devuelto':'Activo';
+
+function formatLoan(p,items,movements){
  const deliveryConditions=new Map(movements.filter(m=>m.accion==='ENTREGA').map(m=>[
   String(m.expediente_id),conditionFromNotes(m.detalle,'Estado al entregar')
  ]));
@@ -109,7 +131,7 @@ async function oneLoan(id, db=pool) {
   loanDate:shortDate(p.fecha_prestamo),expectedReturnDate:shortDate(p.fecha_prevista),
   authorizedBy:p.autorizado_nombre,deliveredBy:p.entregado_nombre,
   receivedBy:p.recibido_por_nombre,observations:p.observaciones||'',
-  status:p.estado==='DEVUELTO'?'Devuelto':'Activo',
+  status:loanStatus(p.estado),
   actualReturnDate:shortDate(p.cerrado_en),
   returnReceivedBy:latestReturn?.returnedBy||'',
   returnObservations:latestReturn?.observaciones_devolucion||'',
@@ -177,10 +199,18 @@ loansRouter.post('/:id/reportes',async(req,res,next)=>{
 loansRouter.get('/',async(req,res,next)=>{
  try{
   guard(req.auth.user);
-  const [ids]=await pool.query('SELECT id FROM prestamos ORDER BY id DESC LIMIT 2000');
-  const loans=[];
-  for(const item of ids){const loan=await oneLoan(item.id);if(loan)loans.push(loan);}
-  res.json({loans});
+  res.json({loans:await readLoans(pool)});
+ }catch(e){next(e);}
+});
+loansRouter.get('/resumen',async(req,res,next)=>{
+ try{
+  guard(req.auth.user);
+  const [rows]=await pool.execute(`SELECT id,folio,estado,DATE_FORMAT(fecha_prevista,'%Y-%m-%d') AS expectedReturnDate
+   FROM prestamos ORDER BY id DESC LIMIT 2000`);
+  res.set('Cache-Control','private, no-store');
+  res.json({loans:rows.map(row=>({
+   id:'LOAN-'+row.id,folio:row.folio,status:loanStatus(row.estado),expectedReturnDate:row.expectedReturnDate||''
+  }))});
  }catch(e){next(e);}
 });
 loansRouter.get('/usuarios-elegibles',async(req,res,next)=>{

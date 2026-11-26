@@ -1,5 +1,5 @@
 import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi, homeApi, type PersonalLoan } from "./api";
+import { authApi, usersApi, tramiteApi, transferApi, concentrationApi, loanApi, areasApi, homeApi, type LoanSummary, type PersonalLoan } from "./api";
 import {
   Archive,
   ArrowRight,
@@ -657,7 +657,7 @@ function Header({
   onProfileActivity: (view: ProfileActivityView) => void;
   records: ArchivalRecord[];
   transfers: DocumentaryTransfer[];
-  loans: ArchivalLoan[];
+  loans: LoanSummary[];
   allowed: ModuleId[];
   onNavigate: (id: ModuleId) => void;
   onSearchRecord: (record: ArchivalRecord) => void;
@@ -907,13 +907,41 @@ function Application({
     if (!allowed.includes(active)) setActive("inicio");
   }, [active, allowed, currentUser.roles, role]);
 
+  const [loanSummaries, setLoanSummaries] = useState<LoanSummary[]>([]);
+  const [loansLoading, setLoansLoading] = useState(false);
+  const [loansError, setLoansError] = useState("");
+  const [loanRetry, setLoanRetry] = useState(0);
+  const canListLoans = allowed.includes("prestamos") && !currentUser.mustChangePassword;
+  const homeLoans = active === "prestamos" && !loansLoading && !loansError ? loans : loanSummaries;
+
+  useEffect(() => {
+    if (!canListLoans) {
+      setLoanSummaries([]);
+      return;
+    }
+    let current = true;
+    loanApi.summaries().then(items => { if (current) setLoanSummaries(items); })
+      .catch(error => { if (current) console.error("No se pudo cargar el resumen de préstamos:", error); });
+    return () => { current = false; };
+  }, [canListLoans, currentUser.id]);
+
+  useEffect(() => {
+    if (active !== "prestamos" || !canListLoans) return;
+    let current = true;
+    setLoansLoading(true);
+    setLoansError("");
+    loanApi.list().then(items => { if (current) onLoansChange(items); })
+      .catch(error => { if (current) setLoansError(error instanceof Error ? error.message : "No se pudieron cargar los préstamos."); })
+      .finally(() => { if (current) setLoansLoading(false); });
+    return () => { current = false; };
+  }, [active, canListLoans, currentUser.id, loanRetry, onLoansChange]);
+
   const refreshHomeEvents = async () => {
     if (currentUser.mustChangePassword) return;
     const operations: Promise<unknown>[] = [];
     if (currentUser.roles.some(r => r === "Personal de área" || r === "Encargado de área" || r === "Administrador / Coordinador"))
       operations.push(transferApi.list().then(onTransfersChange));
-    if (currentUser.roles.some(r => r === "Encargado de préstamos / Control archivístico" || r === "Administrador / Coordinador"))
-      operations.push(loanApi.list().then(onLoansChange));
+    if (canListLoans) operations.push(loanApi.summaries().then(setLoanSummaries));
     const results = await Promise.allSettled(operations);
     results.forEach(result => { if (result.status === "rejected") console.error("No fue posible actualizar avisos:", result.reason); });
   };
@@ -964,7 +992,7 @@ function Application({
         onNavigate={navigate}
       />
       {profileActivity && <ProfileActivityDialog view={profileActivity} user={currentUser} role={role}
-        permissions={currentPermissions} allowed={allowed} records={archivalRecords} transfers={transfers} loans={loans}
+        permissions={currentPermissions} allowed={allowed} records={archivalRecords} transfers={transfers} loans={homeLoans}
         onClose={() => setProfileActivity(null)}
         onOpenTransfer={folio => { setProfileActivity(null); openFolio("transferencias",folio); }}
         onOpenRecord={record => { setProfileActivity(null); openSearchResult(record); }} />}
@@ -983,7 +1011,7 @@ function Application({
           user={currentUser}
           records={archivalRecords}
           transfers={transfers}
-          loans={loans}
+          loans={homeLoans}
           allowed={allowed}
           onNavigate={navigate}
           onSearchRecord={openSearchResult}
@@ -1064,14 +1092,22 @@ function Application({
                 users={users}
               />
             </Suspense>
-          ) : active === "prestamos" ? (
+          ) : active === "prestamos" ? loansLoading ? moduleFallback : loansError ? (
+            <div className="surface p-4">
+              <p role="alert">{loansError}</p>
+              <button type="button" className="button button--secondary" onClick={() => setLoanRetry(value => value + 1)}>Reintentar</button>
+            </div>
+          ) : (
             <Suspense fallback={moduleFallback}>
               <LoansPanel
                 key={"prestamos-"+globalQuery}
                 initialSearch={globalQuery}
                 currentUser={currentUser}
                 loans={loans}
-                onLoansChange={onLoansChange}
+                onLoansChange={items => {
+                  onLoansChange(items);
+                  setLoanSummaries(items.map(({id,folio,status,expectedReturnDate}) => ({id,folio,status,expectedReturnDate})));
+                }}
                 onRecordsChange={onRecordsChange}
                 records={archivalRecords}
                 role={role}
@@ -1187,15 +1223,6 @@ export default function App() {
     transferApi.list().then((list)=>{if(active)setTransfers(list);})
      .catch(error=>{if(active){setTransfers([]);console.error("No fue posible consultar transferencias en MySQL:",error);}});
     return ()=>{active=false;};
-  },[currentUser?.id,currentUser?.mustChangePassword]);
-
-  useEffect(()=>{
-    if(!currentUser||currentUser.mustChangePassword)return;
-    if(!currentUser.roles.some(r=>r==="Encargado de préstamos / Control archivístico"||r==="Administrador / Coordinador"))return;
-    let alive=true;
-    loanApi.list().then(list=>{if(alive)setLoans(list);})
-      .catch(error=>{if(alive){setLoans([]);console.error("No se pudieron cargar préstamos en MySQL:",error);}});
-    return ()=>{alive=false;};
   },[currentUser?.id,currentUser?.mustChangePassword]);
 
   const logout = async () => {

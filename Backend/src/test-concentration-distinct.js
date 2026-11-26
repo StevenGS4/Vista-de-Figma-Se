@@ -20,7 +20,7 @@ const fakeDb={
   execute:async(sql)=>{
     assert.match(sql,/LEFT JOIN transferencias t ON t\.id=\(\s*SELECT ti_hist\.transferencia_id/s);
     assert.doesNotMatch(sql,/LEFT JOIN transferencia_inventarios ti ON ti\.inventario_id=i\.id/);
-    assert.match(sql,/ti_hist\.inventario_id=i\.id/);
+    assert.match(sql,/ti_hist\.expediente_id=e\.id/);
     assert.match(sql,/LIMIT 1/);
     checked=true;
     return [[record,{...record,dbId:102,recordNumber:'EXP-02',consecutive:'2'}]];
@@ -32,4 +32,4 @@ assert.equal(checked,true);
 assert.equal(rows.length,2);
 assert.deepEqual(rows.map(r=>r.id),['REG-101','REG-102']);
 assert.equal(rows[0].inventoryId,rows[1].inventoryId);
-console.log('OK: consulta selecciona una sola transferencia por inventario y conserva expedientes distintos.');
+console.log('OK: consulta selecciona una sola transferencia por expediente y conserva expedientes distintos.');

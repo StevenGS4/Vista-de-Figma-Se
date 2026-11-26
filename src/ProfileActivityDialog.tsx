@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
-import { homeApi, type LoanNotice, type PersonalLoan } from "./api";
+import { homeApi, type LoanNotice, type LoanSummary, type PersonalLoan } from "./api";
 import type { Role, UserRecord } from "./data";
 import type { ArchivalRecord } from "./records";
-import type { ArchivalLoan } from "./loans";
 import type { DocumentaryTransfer } from "./transfers";
 import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
 import { assignedTransferTasks, homeToday, lastActiveInventory, personalLoanTiming } from "./homePending";
@@ -13,7 +12,7 @@ const titles = { notifications: "Mis notificaciones", pending: "Mis pendientes",
 
 export default function ProfileActivityDialog({view,user,role,permissions,allowed,records,transfers,loans,onClose,onOpenTransfer,onOpenRecord}: {
   view: ProfileActivityView; user: UserRecord; role: Role; permissions: string[]; allowed: HomeModule[];
-  records: ArchivalRecord[]; transfers: DocumentaryTransfer[]; loans: ArchivalLoan[];
+  records: ArchivalRecord[]; transfers: DocumentaryTransfer[]; loans: LoanSummary[];
   onClose: () => void; onOpenTransfer: (folio:string) => void; onOpenRecord: (record:ArchivalRecord) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);

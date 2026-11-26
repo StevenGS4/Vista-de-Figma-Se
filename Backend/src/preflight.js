@@ -29,6 +29,8 @@ try {
   for(const e of errors)console.error('ERROR:',e);
   if(errors.includes('Falta expedientes.archivo_zona'))
    console.error('Acción: ejecutar Backend/sql/004_concentracion_zona.sql en MySQL Workbench antes de arrancar los módulos.');
+  if(errors.some(error=>/^Falta (propuestas_baja|propuesta_baja_expedientes)\./.test(error)))
+   console.error('Acción: verificar Backend/sql/021_propuestas_baja_documental.sql.');
   exitCode=1;
  }else{
   console.log('OK: columnas, roles, procedimientos y vistas requeridas encontrados.');

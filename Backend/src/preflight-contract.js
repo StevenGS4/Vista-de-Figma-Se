@@ -23,6 +23,9 @@ export const REQUIRED_COLUMNS = Object.freeze({
  prestamos: ['id','folio','modalidad','inventario_id','area_solicitante_id','fecha_prevista','estado'],
  prestamo_expedientes: ['prestamo_id','expediente_id','devuelto_en','recibido_devolucion_por'],
  prestamo_historial: ['id','prestamo_id','actor_id','accion','fecha'],
+ propuestas_baja: ['id','area_codigo','area_nombre','solicitado_por','solicitante_nombre','creada_en',
+  'estado','dictamen_folio','dictamen_fecha','observaciones','resuelto_por','responsable_resolucion','resuelta_en'],
+ propuesta_baja_expedientes: ['propuesta_id','expediente_id','ficha'],
  auditoria: ['id','actor_id','entidad','entidad_id','accion','fecha'],
 });
 export const REQUIRED_PROCEDURES = Object.freeze([

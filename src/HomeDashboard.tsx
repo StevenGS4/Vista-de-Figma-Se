@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Archive, Check, ChevronRight, Clock3, Download, FileCheck2, FilePlus2, FolderArchive, PackageCheck, RotateCcw } from "lucide-react";
-import { homeApi, type HomeActivity, type PersonalLoan } from "./api";
+import { homeApi, type HomeActivity, type LoanSummary, type PersonalLoan } from "./api";
 import { type UserRecord, type Role } from "./data";
 import type { DocumentaryTransfer } from "./transfers";
-import type { ArchivalLoan } from "./loans";
 import { assignedTransferTasks, homeToday, lastActiveInventory, personalLoanTiming } from "./homePending";
 import type { ArchivalRecord } from "./records";
 
@@ -20,7 +19,7 @@ export const greetingForHour = (hour: number) =>
   hour >= 13 && hour < 18 ? "Buenas tardes" :
   "Buenas noches";
 
-export function buildHomeNotices(user: UserRecord, role: Role, transfers: DocumentaryTransfer[], loans: ArchivalLoan[]): HomeNotice[] {
+export function buildHomeNotices(user: UserRecord, role: Role, transfers: DocumentaryTransfer[], loans: LoanSummary[]): HomeNotice[] {
   const notices: HomeNotice[] = [];
   const canTransfer = role === "Administrador / Coordinador" || role === "Encargado de área" || role === "Personal de área";
   if (canTransfer) for (const t of transfers) {

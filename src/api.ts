@@ -116,7 +116,9 @@ export type OverdueLoanReport = {
  id:string; number:string; loanFolio:string; requesterId:string; requesterName:string;
  areaId:string; loanStatus:"ACTIVO"|"DEVUELTO"; dueDate:string; date:string; reason:string;
 };
+export type LoanSummary = Pick<ArchivalLoan, "id" | "folio" | "status" | "expectedReturnDate">;
 export const loanApi={
+ summaries:async()=>((await request<{loans:LoanSummary[]}>("/api/prestamos/resumen")).loans),
  reports:async()=>((await request<{reports:OverdueLoanReport[]}>('/api/prestamos/reportes')).reports),
  reportOverdue:async(id:string)=>(await request<{number:string}>('/api/prestamos/'+encodeURIComponent(id)+'/reportes',{method:'POST'})).number,
  eligibleUsers:async()=>((await request<{users:LoanEligibleUser[]}>('/api/prestamos/usuarios-elegibles')).users),

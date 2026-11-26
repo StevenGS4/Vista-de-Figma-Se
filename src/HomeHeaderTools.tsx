@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { homeApi, type LoanNotice, type OverdueLoanReport } from "./api";
+import { homeApi, type LoanNotice, type LoanSummary, type OverdueLoanReport } from "./api";
 import { Bell, BookOpen, Check, FileText, Search } from "lucide-react";
 import type { UserRecord, Role } from "./data";
 import type { ArchivalRecord } from "./records";
 import type { DocumentaryTransfer } from "./transfers";
-import type { ArchivalLoan } from "./loans";
-import { buildHomeNotices, type HomeModule } from "./HomeDashboard";
+import { buildHomeNotices, type HomeModule, type HomeNotice } from "./HomeDashboard";
 
 export default function HomeHeaderTools({user,role,records,transfers,loans,allowed,onNavigate,onSearchRecord,onSearchFolio,onRefresh,manualOpen,onManual}:{
- user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:ArchivalLoan[];
+ user:UserRecord;role:Role;records:ArchivalRecord[];transfers:DocumentaryTransfer[];loans:LoanSummary[];
  allowed:HomeModule[];onNavigate:(id:HomeModule)=>void;onSearchRecord:(record:ArchivalRecord)=>void;
  onSearchFolio:(module:"transferencias"|"prestamos",folio:string)=>void;
  onRefresh:()=>Promise<void>;
@@ -34,7 +33,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
   const timer=window.setInterval(load,30_000);
   return ()=>{active=false;window.clearInterval(timer);};
  },[user.id]);
- const notices=useMemo(()=>{
+ const notices=useMemo<(HomeNotice & { report?: OverdueLoanReport })[]>(()=>{
    const staff=buildHomeNotices(user,role,transfers,loans).filter(n=>allowed.includes(n.module));
    const merged=[...personalLoanNotices,...staff];
    return merged.filter((n,i)=>merged.findIndex(x=>x.id===n.id)===i).slice(0,40);
@@ -92,7 +91,7 @@ export default function HomeHeaderTools({user,role,records,transfers,loans,allow
     <div className="home-notice-heading"><strong>Notificaciones</strong><small>{unread} sin leer</small></div>
     <div className="home-notice-items">
       {notices.length===0 && <p className="home-no-notices">No hay avisos registrados para tus funciones.</p>}
-      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if("report" in n && n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
+      {notices.slice(0,12).map(n=><button type="button" key={n.id} className={seen.includes(n.id)?"is-seen":""} onClick={()=>{markRead(n.id);setNotificationsOpen(false);if(n.report)setOpenReport(n.report);else if(n.module==="transferencias"||n.module==="prestamos")onSearchFolio(n.module,n.detail.split(" · ")[0]);else onNavigate(n.module);}}>
         <span className={"activity-item__icon activity-item__icon--"+n.color}>{seen.includes(n.id)?<Check size={15}/>:<Bell size={15}/>}</span>
         <span><b>{n.title}</b><small>{n.detail}</small></span>
       </button>)}
