@@ -321,7 +321,7 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
         <section className="surface primary-builder__panel">
           <div className="primary-builder__heading">
             <div className="grow">
-              <h3>{detail.folio} · {statuses[detail.status]}</h3>
+              <h3 data-tour-context="Detalle de propuesta de baja">{detail.folio} · {statuses[detail.status]}</h3>
               <p>{detail.area} · {detail.requester} · {dateLabel(detail.createdDate)}</p>
             </div>
             <button type="button" className="button button--secondary" disabled={busy} onClick={() => void run(() => disposalApi.download(detail))}><Download size={16} /> Descargar listado Excel</button>

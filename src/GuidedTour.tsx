@@ -13,6 +13,13 @@ function isVisible(node: HTMLElement) {
   return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility === "visible";
 }
 
+function activeModal() {
+  const dialogs = document.querySelectorAll<HTMLElement>(
+    'dialog[open]:not(.guided-tour), .modal-backdrop > .modal, .archive-confirm-dialog, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]'
+  );
+  return [...dialogs].filter(isVisible).at(-1) ?? null;
+}
+
 function collectSteps(module: string): Step[] {
   const steps: Step[] = [];
   const used = new Set<HTMLElement>();
@@ -22,10 +29,8 @@ function collectSteps(module: string): Step[] {
     steps.push({ target, title, description });
   };
 
-  const modals = [...document.querySelectorAll<HTMLElement>(
-    'dialog[open]:not(.guided-tour), .modal-backdrop > .modal, .archive-confirm-dialog, [role="dialog"][aria-modal="true"]'
-  )].filter(isVisible);
-  const modal = modals.at(-1);
+  const modal = activeModal();
+
   if (module === "inicio" && !modal) {
     for (const [selector, title, description] of homeTour) {
       const nodes = [...document.querySelectorAll<HTMLElement>(selector)];
@@ -43,13 +48,15 @@ function collectSteps(module: string): Step[] {
 
   const root = modal ?? document.querySelector<HTMLElement>(".workspace");
   if (!root) return steps;
-  const heading = (!modal && [...root.querySelectorAll<HTMLElement>(".step-heading h3")].find(isVisible))
+  const declaredHeading = modal?.getAttribute("aria-labelledby")?.split(/\s+/)
+    .map(id => document.getElementById(id)).find((node): node is HTMLElement => Boolean(node && root.contains(node) && isVisible(node)));
+  const heading = declaredHeading || (!modal && [...root.querySelectorAll<HTMLElement>(".step-heading h3")].find(isVisible))
     || [...root.querySelectorAll<HTMLElement>("h2,h3")].find(isVisible);
   const [title, description] = moduleTour[module] ?? ["Ayuda de la pantalla", "Revisa el encabezado para identificar el registro que tienes abierto. El recorrido señala los campos y acciones visibles. Avanza para entender qué dato se usa en cada control y regresa a la pantalla cuando estés listo para capturarlo. Puedes abrir la ayuda de nuevo en el paso siguiente."];
   const headingText = cleanText(heading?.textContent);
   const stepHeading = heading?.closest<HTMLElement>(".step-heading");
   const stepDescription = cleanText(stepHeading?.querySelector("p")?.textContent);
-  const screenDescription = contextDescription(headingText) || actionDescription(headingText)?.[1]
+  const screenDescription = contextDescription(heading?.dataset.tourContext ?? headingText) || actionDescription(headingText)?.[1]
     || (stepDescription ? `${stepDescription} Revisa el folio y los datos que aparecen en este paso antes de continuar. Los siguientes puntos explican qué debes verificar en los campos y cómo se usa lo que captures. Si necesitas revisar otro paso, cierra la ayuda y ábrela de nuevo en esa pantalla.` : description);
   add(stepHeading ?? heading ?? root, headingText || title, screenDescription);
 
@@ -84,7 +91,7 @@ function collectSteps(module: string): Step[] {
   for (const node of root.querySelectorAll<HTMLElement>("h3, h2")) {
     if (node === heading) continue;
     const text = cleanText(node.textContent);
-    const help = contextDescription(text);
+    const help = contextDescription(node.dataset.tourContext ?? text);
     if (help) add(node, text, help);
   }
 
@@ -121,7 +128,7 @@ function collectSteps(module: string): Step[] {
 export default function GuidedTour({ module }: { module: string }) {
   const [steps, setSteps] = useState<Step[]>([]);
   const [index, setIndex] = useState(0);
-  const [nativeModal, setNativeModal] = useState<HTMLDialogElement | null>(null);
+  const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   const [spot, setSpot] = useState<Rect | null>(null);
   const [position, setPosition] = useState({ top: 16, left: 16 });
   const dialog = useRef<HTMLDialogElement>(null);
@@ -131,12 +138,9 @@ export default function GuidedTour({ module }: { module: string }) {
   const isOpen = Boolean(active);
 
   useEffect(() => {
-    const trackModal = () => {
-      const open = [...document.querySelectorAll<HTMLDialogElement>("dialog[open]:not(.guided-tour)")].filter(isVisible);
-      setNativeModal(open.at(-1) ?? null);
-    };
+    const trackModal = () => setModalTarget(activeModal());
     const observer = new MutationObserver(trackModal);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open"] });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open", "hidden", "aria-hidden", "aria-modal"] });
     trackModal();
     return () => observer.disconnect();
   }, []);
@@ -199,14 +203,14 @@ export default function GuidedTour({ module }: { module: string }) {
   };
 
   const helpButton = (
-    <button type="button" className="guided-tour-help" title="Ayuda guiada" aria-label="Abrir ayuda guiada" onClick={start}>
+    <button type="button" className={modalTarget ? "guided-tour-help guided-tour-help--modal" : "guided-tour-help"} title="Ayuda guiada" aria-label="Abrir ayuda guiada" onClick={start}>
       <CircleHelp size={22} aria-hidden="true" />
     </button>
   );
 
   return (
     <>
-      {nativeModal ? createPortal(helpButton, nativeModal) : helpButton}
+      {modalTarget ? createPortal(helpButton, modalTarget) : helpButton}
       {active && createPortal(
         <dialog ref={dialog} className="guided-tour" aria-labelledby="guided-tour-title" aria-describedby="guided-tour-description"
           onCancel={event => { event.preventDefault(); close(); }}

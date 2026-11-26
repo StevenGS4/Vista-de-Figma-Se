@@ -412,7 +412,7 @@ function UserDetail({
           </div>
           <div>
             <span className="record-id">{user.id}</span>
-            <h2>{fullName(user)}</h2>
+            <h2 data-tour-context="Detalle de usuario">{fullName(user)}</h2>
             <p>{user.email}</p>
           </div>
           <StatusBadge status={user.status} />
@@ -484,7 +484,7 @@ function PermissionsDialog({
         <div className="modal__header">
           <div>
             <span>Permisos de usuario</span>
-            <h2 id="permissions-title">{fullName(user)}</h2>
+            <h2 id="permissions-title" data-tour-context="Permisos del usuario">{fullName(user)}</h2>
           </div>
           <button aria-label="Cerrar" className="icon-action" onClick={onClose}>
             <X size={19} />

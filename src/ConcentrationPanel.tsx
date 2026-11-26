@@ -577,7 +577,7 @@ function ConcentrationDetail({
           <Archive size={24} />
         </div>
         <div>
-          <h2>{record.title}</h2>
+          <h2 data-tour-context="Detalle de expediente en Concentración">{record.title}</h2>
           <span className="block break-words text-xs font-normal text-[#52605a]">{[record.archiveClassificationCode, record.recordNumber].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ")}</span>
           <p>
             {areaName(record.areaId)} · Transferencia {record.transferReference}

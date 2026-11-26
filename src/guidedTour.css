@@ -17,8 +17,10 @@
 .guided-tour-help:hover {
   background: var(--green-800, #1e5b4f);
 }
-dialog[open] > .guided-tour-help {
-  margin: 12px;
+.guided-tour-help--modal {
+  position: static;
+  flex-shrink: 0;
+  margin: 8px 12px 12px;
 }
 .guided-tour {
   position: fixed;

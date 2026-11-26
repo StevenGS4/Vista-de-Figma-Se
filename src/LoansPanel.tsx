@@ -1015,7 +1015,7 @@ function LoanDetail({
         </div>
         <div>
           <span>Préstamo físico</span>
-          <h2>{loan.folio}</h2>
+          <h2 data-tour-context="Detalle de préstamo">{loan.folio}</h2>
           <p>
             {inventoryLoan ? loan.inventoryFolio || "Inventario completo" : multiple ? `${loan.items?.length} expedientes` : loan.items?.[0]?.title || record?.title || "Expediente"}
           </p>
@@ -1538,7 +1538,7 @@ export default function LoansPanel({
         aria-labelledby="loan-error-title" aria-describedby="loan-error-detail"
         onKeyDown={event => { if (event.key === "Escape") setLoanError(null); }}>
         <div className="modal__header">
-          <h2 id="loan-error-title">{loanError.title}</h2>
+          <h2 id="loan-error-title" data-tour-context="Operación de préstamo rechazada">{loanError.title}</h2>
           <AlertCircle size={20} className="text-[#75163c]" aria-hidden="true" />
         </div>
         <div className="modal__body">

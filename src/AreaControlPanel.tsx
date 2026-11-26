@@ -58,7 +58,7 @@ export default function AreaControlPanel({ mode }: {mode:"area"|"admin"}) {
           <div className="area-control__avatar"><Users size={24}/></div>
           <div className="area-control__identity">
             <small>Expediente de actividad del personal</small>
-            <h2>{chosen.user.name}</h2>
+            <h2 data-tour-context="Detalle de seguimiento de personal">{chosen.user.name}</h2>
             <p>{chosen.user.email} · {chosen.user.areaName}</p>
             <span>{chosen.user.status}</span>
           </div>
