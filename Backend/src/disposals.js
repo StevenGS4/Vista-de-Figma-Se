@@ -60,6 +60,7 @@ async function proposalFor(user,id){
  const {sql,args}=scope(user);
  const [[row]]=await pool.execute(proposalSelect+' WHERE b.id=?'+sql,[id,...args]);
  if(!row)throw fail('Propuesta no encontrada',404);
+ if(row.status==='BAJA'&&!admin(user))throw fail('Solo Administración puede consultar los expedientes dados de baja',403);
  const [items]=await pool.execute(`SELECT be.ficha,e.archivo_zona AS archiveZone,e.lugar_resguardo AS room,
   e.estante AS shelf,e.nivel AS level,e.seccion_fisica AS physicalSection,e.posicion AS position,
   e.caja_ubicacion AS locationBox,e.notas_ubicacion AS locationNotes
@@ -81,10 +82,10 @@ disposalsRouter.get('/',async(req,res,next)=>{
 
 disposalsRouter.get('/archivo',async(req,res,next)=>{
  try{
-  const {sql,args}=scope(req.auth.user);
+  if(!admin(req.auth.user))throw fail('Solo Administración puede consultar los expedientes dados de baja',403);
   const records=await readRecords(pool,`WHERE e.etapa='CONCENTRACION' AND e.deleted_at IS NOT NULL
    AND EXISTS (SELECT 1 FROM propuesta_baja_expedientes be JOIN propuestas_baja b ON b.id=be.propuesta_id
-    WHERE be.expediente_id=e.id AND b.estado='BAJA'${sql})`,args,true);
+    WHERE be.expediente_id=e.id AND b.estado='BAJA')`,[],true);
   res.json({records:await enrichConcentrationRecords(records)});
  }catch(error){next(error);}
 });

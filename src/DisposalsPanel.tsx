@@ -183,7 +183,7 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
     setCandidates(undefined);
   };
 
-  if (archive) return <>
+  if (canResolve && archive) return <>
     <button type="button" className="text-button mb-3" onClick={() => setArchive(undefined)}>
       <ArrowLeft size={16} /> Volver a propuestas
     </button>
@@ -198,10 +198,10 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
         <p>Propón expedientes de Concentración y consulta la resolución de cada solicitud.</p>
       </div>
       {!candidates && !detail && <div className="flex flex-wrap gap-2">
-        <button type="button" className="button button--secondary" disabled={busy}
+        {canResolve && <button type="button" className="button button--secondary" disabled={busy}
           onClick={() => void run(async () => setArchive((await disposalApi.archive()).records))}>
           Expedientes dados de baja
-        </button>
+        </button>}
         {canPropose && (
           <button type="button" className="button button--primary" disabled={busy}
             onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
@@ -263,8 +263,8 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
           <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
           <tbody>{proposals.filter(item => !status || item.status === status).map(item => <tr key={item.id}>
             <td><strong>{item.folio}</strong></td><td>{item.area}</td><td>{item.requester}</td><td>{dateLabel(item.createdDate)}</td>
-            <td>{statuses[item.status]}</td><td><button type="button" className="button button--secondary" disabled={busy}
-              onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button></td>
+            <td>{statuses[item.status]}</td><td>{(canResolve || item.status !== "BAJA") && <button type="button" className="button button--secondary" disabled={busy}
+              onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button>}</td>
           </tr>)}</tbody>
         </table></div>
         {!busy && !proposals.some(item => !status || item.status === status) && <p className="p-4">No hay propuestas en este estado.</p>}
