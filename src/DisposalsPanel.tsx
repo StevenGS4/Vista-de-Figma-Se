@@ -159,66 +159,78 @@ export default function DisposalsPanel({ role, onDischarged }: {
     setCandidates(undefined);
   };
 
-  return <div className="primary-builder grid gap-4">
-    {error && <p className="validation-summary" role="alert">{error}</p>}
-    {notice && <p className="success-banner" role="status">{notice}</p>}
-    {busy && <p role="status">Procesando…</p>}
-    {candidates ? <NewProposal records={candidates} busy={busy} onBack={() => setCandidates(undefined)}
-      onSubmit={ids => void run(async () => {
-        const created = await disposalApi.create(ids);
-        setNotice(`Propuesta ${created.folio} registrada.`);
-        setCandidates(undefined);
-        await open(created.id);
-        await refresh();
-      })} /> : detail ? <>
-      <section className="surface primary-builder__panel">
-        <div className="primary-builder__heading">
-          <div className="grow">
-            <button type="button" className="text-button" disabled={busy} onClick={() => { setDetail(undefined); void run(refresh); }}><ArrowLeft size={16} /> Volver a Bajas</button>
-            <h3>{detail.folio} · {statuses[detail.status]}</h3>
-            <p>{detail.area} · {detail.requester} · {dateLabel(detail.createdDate)}</p>
-          </div>
-          <button type="button" className="button button--secondary" disabled={busy} onClick={() => void run(() => disposalApi.download(detail))}><Download size={16} /> Descargar listado Excel</button>
-        </div>
-        <RecordsTable records={detail.records} />
-        {detail.status !== "PROPUESTA" && <div className="grid gap-1 p-4 text-sm">
-          <strong>Dictamen {detail.decisionReference} · {dateLabel(detail.decisionDate)}</strong>
-          <p>Registró {detail.resolvedBy} · {dateLabel(detail.resolvedDate)}</p>
-          {detail.notes && <p className="whitespace-pre-wrap">{detail.notes}</p>}
-        </div>}
-      </section>
-      {canResolve && detail.status === "PROPUESTA" && <ResolutionForm key={detail.id} proposal={detail} busy={busy}
-        onResolve={decision => void run(async () => {
-          await disposalApi.resolve(detail.id, decision);
-          if (decision.status === "BAJA") onDischarged(detail.records.map(record => record.id));
-          setDetail(current => current && {...current,status:decision.status});
-          setNotice(`Resolución de ${detail.folio} registrada.`);
-          await open(detail.id);
+  return <>
+    <div className="records-page-heading">
+      <div>
+        <h2>Bajas</h2>
+        <p>Propón expedientes de Concentración y consulta la resolución de cada solicitud.</p>
+      </div>
+      {canPropose && !candidates && !detail && (
+        <button type="button" className="button button--primary" disabled={busy}
+          onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
+          <Plus size={17} /> Nueva propuesta
+        </button>
+      )}
+    </div>
+    <div className="primary-builder grid gap-4">
+      {error && <p className="validation-summary" role="alert">{error}</p>}
+      {notice && <p className="success-banner" role="status">{notice}</p>}
+      {busy && <p role="status">Procesando…</p>}
+      {candidates ? <NewProposal records={candidates} busy={busy} onBack={() => setCandidates(undefined)}
+        onSubmit={ids => void run(async () => {
+          const created = await disposalApi.create(ids);
+          setNotice(`Propuesta ${created.folio} registrada.`);
+          setCandidates(undefined);
+          await open(created.id);
           await refresh();
-        })} />}
-    </> : <section className="surface primary-builder__panel">
-      <div className="primary-builder__heading flex-wrap">
-        <div className="grow"><h3>Propuestas y resoluciones</h3><p>Consulta el estado y descarga la relación de expedientes de cada propuesta.</p></div>
-        {canPropose && <button type="button" className="button button--primary" disabled={busy}
-          onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}><Plus size={16} /> Nueva propuesta</button>}
-      </div>
-      <div className="p-4">
-        <label className="form-field max-w-xs"><span>Estado</span>
-          <select value={status} onChange={event => setStatus(event.target.value as typeof status)}>
-            <option value="">Todos los estados</option>
-            {Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
-        </label>
-      </div>
-      <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
-        <tbody>{proposals.filter(item => !status || item.status === status).map(item => <tr key={item.id}>
-          <td><strong>{item.folio}</strong></td><td>{item.area}</td><td>{item.requester}</td><td>{dateLabel(item.createdDate)}</td>
-          <td>{statuses[item.status]}</td><td><button type="button" className="button button--secondary" disabled={busy}
-            onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button></td>
-        </tr>)}</tbody>
-      </table></div>
-      {!busy && !proposals.some(item => !status || item.status === status) && <p className="p-4">No hay propuestas en este estado.</p>}
-    </section>}
-  </div>;
+        })} /> : detail ? <>
+        <section className="surface primary-builder__panel">
+          <div className="primary-builder__heading">
+            <div className="grow">
+              <button type="button" className="text-button" disabled={busy} onClick={() => { setDetail(undefined); void run(refresh); }}><ArrowLeft size={16} /> Volver a Bajas</button>
+              <h3>{detail.folio} · {statuses[detail.status]}</h3>
+              <p>{detail.area} · {detail.requester} · {dateLabel(detail.createdDate)}</p>
+            </div>
+            <button type="button" className="button button--secondary" disabled={busy} onClick={() => void run(() => disposalApi.download(detail))}><Download size={16} /> Descargar listado Excel</button>
+          </div>
+          <RecordsTable records={detail.records} />
+          {detail.status !== "PROPUESTA" && <div className="grid gap-1 p-4 text-sm">
+            <strong>Dictamen {detail.decisionReference} · {dateLabel(detail.decisionDate)}</strong>
+            <p>Registró {detail.resolvedBy} · {dateLabel(detail.resolvedDate)}</p>
+            {detail.notes && <p className="whitespace-pre-wrap">{detail.notes}</p>}
+          </div>}
+        </section>
+        {canResolve && detail.status === "PROPUESTA" && <ResolutionForm key={detail.id} proposal={detail} busy={busy}
+          onResolve={decision => void run(async () => {
+            await disposalApi.resolve(detail.id, decision);
+            if (decision.status === "BAJA") onDischarged(detail.records.map(record => record.id));
+            setDetail(current => current && {...current,status:decision.status});
+            setNotice(`Resolución de ${detail.folio} registrada.`);
+            await open(detail.id);
+            await refresh();
+          })} />}
+      </> : <section className="surface primary-builder__panel">
+        <div className="primary-builder__heading flex-wrap">
+          <div className="grow"><h3>Propuestas y resoluciones</h3><p>Consulta el estado y descarga la relación de expedientes de cada propuesta.</p></div>
+        </div>
+        <div className="p-4">
+          <label className="form-field max-w-xs"><span>Estado</span>
+            <select value={status} onChange={event => setStatus(event.target.value as typeof status)}>
+              <option value="">Todos los estados</option>
+              {Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="table-scroll"><table className="data-table">
+          <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
+          <tbody>{proposals.filter(item => !status || item.status === status).map(item => <tr key={item.id}>
+            <td><strong>{item.folio}</strong></td><td>{item.area}</td><td>{item.requester}</td><td>{dateLabel(item.createdDate)}</td>
+            <td>{statuses[item.status]}</td><td><button type="button" className="button button--secondary" disabled={busy}
+              onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button></td>
+          </tr>)}</tbody>
+        </table></div>
+        {!busy && !proposals.some(item => !status || item.status === status) && <p className="p-4">No hay propuestas en este estado.</p>}
+      </section>}
+    </div>
+  </>;
 }

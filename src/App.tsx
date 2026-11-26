@@ -997,7 +997,8 @@ function Application({
             active !== "concentracion" &&
             active !== "transferencias" &&
             active !== "prestamos" &&
-            active !== "inventarios" && (
+            active !== "inventarios" &&
+            active !== "bajas" && (
               <div className="page-intro">
                 <div>
                   <h2>{modules[active].label}</h2>
