@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Plus, Search, X } from "lucide-react";
 import { disposalApi, type DisposalDetail, type DisposalProposal, type DisposalRecord } from "./api";
 import type { Role, UserRecord } from "./data";
 import type { ArchivalRecord } from "./records";
@@ -53,6 +53,58 @@ function RecordsTable({ records, selection, toggle, showArea }: {
       </tr>)}</tbody>
     </table>
   </div>;
+}
+
+function AvailableRecords({ records, canFilterArea }: { records: DisposalRecord[]; canFilterArea: boolean }) {
+  const [search, setSearch] = useState("");
+  const [area, setArea] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [page, setPage] = useState(1);
+  const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/\p{M}/gu, "");
+  const terms = normalize(search).trim().split(/\s+/).filter(Boolean);
+  const filtered = records.filter(record => {
+    if ((area && record.areaId !== area) ||
+      (from && (!record.closed || record.closed < from)) ||
+      (to && (!record.closed || record.closed > to))) return false;
+    const searchable = normalize([record.title, record.number].filter(Boolean).join(" "));
+    return terms.every(term => searchable.includes(term));
+  });
+  const pageSize = 5;
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const offset = (currentPage - 1) * pageSize;
+
+  return <>
+    <div className="grid items-end gap-3 px-4 pb-4 sm:grid-cols-2 xl:grid-cols-5">
+      <label className="form-field"><span>Buscar expediente</span>
+        <input type="search" placeholder="Nombre o número de expediente" value={search}
+          onChange={event => { setSearch(event.target.value); setPage(1); }} />
+      </label>
+      {canFilterArea && <AreaFilter records={records} area={area} placeholder="Todas las áreas"
+        onChange={value => { setArea(value); setPage(1); }} />}
+      <label className="form-field"><span>Fecha de cierre desde</span>
+        <input type="date" value={from} max={to || undefined}
+          onChange={event => { setFrom(event.target.value); setPage(1); }} />
+      </label>
+      <label className="form-field"><span>Fecha de cierre hasta</span>
+        <input type="date" value={to} min={from || undefined}
+          onChange={event => { setTo(event.target.value); setPage(1); }} />
+      </label>
+      <button type="button" className="button button--secondary justify-self-start" disabled={!search && !area && !from && !to}
+        onClick={() => { setSearch(""); setArea(""); setFrom(""); setTo(""); setPage(1); }}>Limpiar filtros</button>
+    </div>
+    {filtered.length ? <>
+      <RecordsTable records={filtered.slice(offset, offset + pageSize)} showArea={canFilterArea} />
+      <nav className="primary-builder__pagination" aria-label="Páginas de expedientes disponibles">
+        <button type="button" aria-label="Página anterior" disabled={currentPage <= 1}
+          onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} /></button>
+        <span aria-live="polite">Página {currentPage} de {pages} · {offset + 1}–{Math.min(offset + pageSize, filtered.length)} de {filtered.length}</span>
+        <button type="button" aria-label="Página siguiente" disabled={currentPage >= pages}
+          onClick={() => setPage(currentPage + 1)}><ChevronRight size={16} /></button>
+      </nav>
+    </> : <p className="p-4">No hay expedientes disponibles que coincidan con los filtros.</p>}
+  </>;
 }
 
 function NewProposal({ records, chooseArea, busy, onSubmit, onBack }: {
@@ -194,14 +246,12 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
   const [candidates, setCandidates] = useState<DisposalRecord[]>();
   const [tab, setTab] = useState<DisposalTab>("PROPUESTA");
   const [available, setAvailable] = useState<DisposalRecord[]>();
-  const [availableArea, setAvailableArea] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
   const canResolve = role === "Administrador / Coordinador";
   const tabs = canResolve ? [...proposalTabs, { id: "mine" as const, label: "Mis bajas" }] : proposalTabs;
   const visibleProposals = proposals.filter(item => tab === "mine" ? item.requesterId === String(currentUser.id) : item.status === tab);
-  const visibleAvailable = available?.filter(record => !availableArea || record.areaId === availableArea);
 
   const refresh = async () => setProposals((await disposalApi.list()).proposals);
   useEffect(() => {
@@ -305,17 +355,12 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
               if (item.id === "available") void run(async () => {
                 const { records } = await disposalApi.candidates();
                 setAvailable(records);
-                if (!records.some(record => record.areaId === availableArea)) setAvailableArea("");
               });
             }}>{item.label}</button>)}
         </nav>
-        {tab === "available" ? <>
-          {canResolve && available && <div className="px-4 pb-4">
-            <AreaFilter records={available} area={availableArea} placeholder="Todas las áreas" onChange={setAvailableArea} />
-          </div>}
-          {visibleAvailable?.length ? <RecordsTable records={visibleAvailable} showArea={canResolve} />
-            : !busy && !error && <p className="p-4">No hay expedientes disponibles para proponer.</p>}
-        </> : <>
+        {tab === "available" ? (
+          available && <AvailableRecords records={available} canFilterArea={canResolve} />
+        ) : <>
           <div className="table-scroll"><table className="data-table">
             <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
             <tbody>{visibleProposals.map(item => <tr key={item.id}>
