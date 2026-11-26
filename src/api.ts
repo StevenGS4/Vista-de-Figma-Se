@@ -159,7 +159,11 @@ export const inventoriesApi={
 };
 
 export type HomeActivity = { id:string; title:string; detail:string; module:string; action:string; date:string|null };
-export type PersonalLoan = {folio:string;status:string;inventory:string|null;record:string|null;loanDate:string;dueDate:string|null;returnedDate:string|null};
+export type PersonalLoan = {
+ folio:string;status:string;inventory:string|null;record:string|null;
+ loanDate:string;dueDate:string|null;returnedDate:string|null;
+ records:{id:string;number:string|null;title:string|null;returnedDate:string|null}[];
+};
 export type LoanNotice = {report?:OverdueLoanReport;id:string;title:string;detail:string;module:'inicio';date:string;color:'green'|'wine'|'gold'};
 export const homeApi={
  activity:async()=>((await request<{activities:HomeActivity[]}>('/api/inicio/actividad')).activities),

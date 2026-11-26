@@ -85,10 +85,27 @@ export default function ProfileActivityDialog({view,user,role,permissions,allowe
         {!loading && !error && !personalLoans.length && <p>No tienes préstamos registrados.</p>}
         {personalLoans.map(loan => {
           const timing = personalLoanTiming(loan,today);
-          return <article className={"profile-activity-item"+(timing.reminder?" home-pending--amber":"")} key={loan.folio}>
-            <div><strong>{loan.folio} · {loan.inventory || loan.record || "Préstamo"}</strong>
-              <small>{loan.status === "DEVUELTO" ? "Devuelto: "+(loan.returnedDate || "Sin fecha") : "Devolución prevista: "+(loan.dueDate || "Sin fecha")}</small></div>
-            <strong>{timing.label}</strong>
+          const returned = loan.status === "DEVUELTO";
+          const date = returned ? loan.returnedDate : loan.dueDate;
+          const displayDate = date ? date.split("-").reverse().join("/") : "Sin fecha";
+          return <article className={"profile-activity-item flex-wrap gap-3"+(timing.reminder?" home-pending--amber":"")} key={loan.folio}>
+            <div className="min-w-0 flex-1 break-words">
+              <ul className="grid gap-2">
+                {(loan.records ?? []).map(record => (
+                  <li key={record.id}>
+                    <strong className="!text-base">{record.title || "Expediente sin título"}</strong>
+                    {record.number && <span className="block text-sm font-semibold">{record.number}</span>}
+                    {!returned && record.returnedDate && <small>Devuelto el {record.returnedDate.split("-").reverse().join("/")}</small>}
+                  </li>
+                ))}
+              </ul>
+              {!loan.records?.length && <strong>{loan.record || "Expediente sin identificar"}</strong>}
+              <small className="mt-2 !text-[10px] !text-[#64706b]">Folio {loan.folio}</small>
+            </div>
+            <div className="shrink-0">
+              <strong>{timing.label}</strong>
+              <small>{returned ? "Devuelto el" : "Devolución prevista"} {displayDate}</small>
+            </div>
           </article>;
         })}
       </>}

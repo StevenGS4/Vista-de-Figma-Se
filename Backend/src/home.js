@@ -55,15 +55,29 @@ homeRouter.get('/actividad', async (req,res,next) => {
 homeRouter.get('/mis-prestamos',async(req,res,next)=>{
  try{
   if(req.auth.user.mustChangePassword)return res.status(403).json({error:'Primero cambia tu contraseña'});
-  const [loans]=await pool.execute(`SELECT p.folio,p.estado AS status,i.folio AS inventory,
+  const [rows]=await pool.execute(`SELECT p.folio,p.estado AS status,i.folio AS inventory,
    DATE_FORMAT(p.fecha_prestamo,'%Y-%m-%d') AS loanDate,
    DATE_FORMAT(p.fecha_prevista,'%Y-%m-%d') AS dueDate,
    DATE_FORMAT(p.cerrado_en,'%Y-%m-%d') AS returnedDate,
-   (SELECT CONCAT_WS(' · ',e.numero_expediente,e.titulo_asunto)
-    FROM prestamo_expedientes pe JOIN expedientes e ON e.id=pe.expediente_id
-    WHERE pe.prestamo_id=p.id ORDER BY e.id LIMIT 1) AS record
+   CAST(pe.expediente_id AS CHAR) AS recordId,e.numero_expediente AS recordNumber,e.titulo_asunto AS title,
+   DATE_FORMAT(pe.devuelto_en,'%Y-%m-%d') AS recordReturnedDate
    FROM prestamos p LEFT JOIN inventarios i ON i.id=p.inventario_id
-   WHERE p.solicitante_usuario_id=? ORDER BY p.id DESC`,[req.auth.user.id]);
+   LEFT JOIN prestamo_expedientes pe ON pe.prestamo_id=p.id
+   LEFT JOIN expedientes e ON e.id=pe.expediente_id
+   WHERE p.solicitante_usuario_id=?
+   ORDER BY p.estado='DEVUELTO',p.fecha_prevista IS NULL,p.fecha_prevista,p.id DESC,
+    pe.devuelto_en IS NOT NULL,pe.expediente_id`,[req.auth.user.id]);
+  const loansByFolio=new Map();
+  for(const {recordId,recordNumber,title,recordReturnedDate,...summary} of rows){
+   if(!loansByFolio.has(summary.folio)){
+    const record=[recordNumber,title].filter(Boolean).join(' · ')||null;
+    loansByFolio.set(summary.folio,{...summary,record,records:[]});
+   }
+   if(recordId)loansByFolio.get(summary.folio).records.push({
+    id:recordId,number:recordNumber,title,returnedDate:recordReturnedDate
+   });
+  }
+  const loans=[...loansByFolio.values()];
   res.set('Cache-Control','private, no-store');
   res.json({loans});
  }catch(error){next(error);}
