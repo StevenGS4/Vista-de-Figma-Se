@@ -10,17 +10,16 @@ const dateValid=s=>typeof s==='string'&&datePattern.test(s)&&!Number.isNaN(Date.
 const allowedPeriods=['all','week','twoweeks','fortnight','month','bimester','trimester','fourmonth','semester','year','custom'];
 const allowedStage=['tramite','concentracion','ambos'];
 const allowedDates=['inventory','opening','transfer'];
-const allowedSelection=['all','inventories','records','mixed'];
 const uniqueText=(input,max,pattern)=>(()=>{
  if(!Array.isArray(input)||input.length>max)throw error('Demasiados elementos seleccionados');
  const clean=input.map(x=>String(x));
  if(clean.some(x=>!pattern.test(x)))throw error('Selección inválida');
  return [...new Set(clean)];
 })();
-export function normalizePrimarySelection(body={}){
+export function normalizePrimarySelection(body={},requireRecords=false){
  if(!body||typeof body!=='object'||Array.isArray(body))throw error('Filtros inválidos');
- const period=body.period||'all',stage=body.stage||'ambos',dateField=body.dateField||'inventory',selection=body.selection||'all';
- if(!allowedPeriods.includes(period)||!allowedStage.includes(stage)||!allowedDates.includes(dateField)||!allowedSelection.includes(selection))
+ const period=body.period||'all',stage=body.stage||'ambos',dateField=body.dateField||'inventory';
+ if(!allowedPeriods.includes(period)||!allowedStage.includes(stage)||!allowedDates.includes(dateField))
   throw error('Tipo de filtro inválido');
  const year=body.year==null||body.year===''?null:Number(body.year);
  const block=body.block==null||body.block===''?null:Number(body.block);
@@ -33,12 +32,12 @@ export function normalizePrimarySelection(body={}){
  const section=String(body.section||'').trim(),series=String(body.series||'').trim();
  const cadido=String(body.cadido||'').trim().toLowerCase();
  if([area,creator,section,series].some(x=>x.length>80)||cadido.length>120)throw error('Filtro demasiado largo');
- const inventoryIds=uniqueText(body.inventoryIds||[],2500,/^[\w-]{1,75}$/);
+ if((body.selection && !['all','records'].includes(body.selection)) || body.inventoryIds?.length)
+  throw error('Selecciona únicamente expedientes individuales');
  const recordIds=uniqueText(body.recordIds||[],10000,/^REG-[1-9]\d*$/);
- if(selection==='inventories'&&!inventoryIds.length||selection==='records'&&!recordIds.length||
-    selection==='mixed'&&!inventoryIds.length&&!recordIds.length)
-  throw error('Selecciona inventarios o expedientes antes de consultar');
- return {period,year,block:block??1,from,to,stage,dateField,selection,area,creator,section,series,cadido,inventoryIds,recordIds};
+ if((requireRecords||body.selection==='records')&&!recordIds.length)
+  throw error('Selecciona al menos un expediente');
+ return {period,year,block:block??1,from,to,stage,dateField,area,creator,section,series,cadido,recordIds};
 }
 const iso=(year,month,day)=>new Date(Date.UTC(year,month,day)).toISOString().slice(0,10);
 export function periodBounds(filter){
@@ -69,8 +68,8 @@ export function periodBounds(filter){
  const start=(filter.block-1)*size;
  return [iso(filter.year,start,1),iso(filter.year,start+size,0)];
 }
-export async function selectPrimaryRecords(conn,user,body){
- const f=normalizePrimarySelection(body);
+export async function selectPrimaryRecords(conn,user,body,requireRecords=false){
+ const f=normalizePrimarySelection(body,requireRecords);
  const scope=exportScope(user,'transferencia');
  if(!scope)throw error('No tienes permiso para consultar transferencia primaria',403);
  if(f.area&&scope!=='GLOBAL'&&f.area!==String(user.areaId))throw error('Área fuera de tu alcance',403);
@@ -78,11 +77,11 @@ export async function selectPrimaryRecords(conn,user,body){
  const filters=['i.deleted_at IS NULL','e.deleted_at IS NULL'];
  const args=[];
  if(scope!=='GLOBAL'){filters.push('a.codigo=?');args.push(user.areaId);}
- if(scope==='PROPIO'){filters.push('i.creado_por=?');args.push(user.id);}
+ if(scope==='PROPIO'){filters.push('e.creado_por=?');args.push(user.id);}
  if(f.area){filters.push('a.codigo=?');args.push(f.area);}
  if(f.creator){
   if(!/^\d{1,16}$/.test(f.creator))throw error('Usuario inválido');
-  filters.push('i.creado_por=?');args.push(Number(f.creator));
+  filters.push('e.creado_por=?');args.push(Number(f.creator));
  }
  if(f.stage!=='ambos'){filters.push('e.etapa=?');args.push(f.stage==='tramite'?'TRAMITE':'CONCENTRACION');}
  if(f.section){filters.push('sc.codigo=?');args.push(f.section);}
@@ -97,6 +96,10 @@ export async function selectPrimaryRecords(conn,user,body){
    filters.push(column+' BETWEEN ? AND ?');args.push(...bounds);
   }
  }
+ if(f.recordIds.length){
+  filters.push('e.id IN ('+f.recordIds.map(()=>'?').join(',')+')');
+  args.push(...f.recordIds.map(id=>id.slice(4)));
+ }
  const where='WHERE '+filters.join(' AND ');
  // Contar ANTES de montar el Excel para impedir consultas enormes.
  const [count]=await conn.execute(`SELECT COUNT(*) AS n FROM expedientes e
@@ -107,13 +110,8 @@ export async function selectPrimaryRecords(conn,user,body){
  if(Number(count[0].n)>15000)throw error('Demasiados expedientes. Reduce el periodo o los filtros (máximo 15,000)',413);
  let records=await readRecords(conn,where,args);
  if(bounds&&f.dateField==='transfer')records=records.filter(r=>r.transferDate>=bounds[0]&&r.transferDate<=bounds[1]);
- if(f.selection!=='all'){
-  const inventories=new Set(f.inventoryIds),ids=new Set(f.recordIds);
-  records=records.filter(r=>
-    (f.selection!=='records'&&inventories.has(r.inventoryId)) ||
-    (f.selection!=='inventories'&&ids.has(r.id))
-  );
- }
+ if(requireRecords&&new Set(records.map(record=>record.id)).size!==f.recordIds.length)
+  throw error('Uno o más expedientes ya no coinciden con los filtros o están fuera de tu alcance',409);
  const unique=new Map(records.map(r=>[r.id,r]));
  return [...unique.values()];
 }

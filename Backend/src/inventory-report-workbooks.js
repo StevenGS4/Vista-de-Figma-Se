@@ -91,18 +91,21 @@ export function makeConcentrationInventoryWorkbook(records,seriesHeader){
  return book;
 }
 
+export function sortDocumentaryReportRecords(records){
+ const year=record=>Number(key(record).match(/(?:^|[.\/_-])((?:19|20|21)\d{2})$/)?.[1]||record.cadidoYear)||9999;
+ const sort=(a,b)=>String(a||'').localeCompare(String(b||''),'es',{numeric:true});
+ return [...records].sort((a,b)=>year(a)-year(b)||sort(key(a),key(b))||sort(a.recordNumber,b.recordNumber));
+}
+
 export function makeDocumentaryReportWorkbook(records){
  const book=new ExcelJS.Workbook();
  const sheet=setup(book,'Concentrado documental',[11,27,26,22,24,42,24,17,16,17,20,24],4);
  title(sheet,'CONCENTRADO DOCUMENTAL · REPORTE DE CONSULTA',12);
- cellRow(sheet,['Expedientes',records.length,'Inventarios',new Set(records.map(record=>record.inventoryId)).size]);
- cellRow(sheet,['Consecutivo','Folio de inventario','Área generadora','Número de expediente','Clasificación archivística',
+ cellRow(sheet,['Expedientes',records.length,'Series',new Set(records.map(record=>JSON.stringify([record.cadidoSectionId,record.cadidoCode]))).size]);
+ cellRow(sheet,['Consecutivo','Serie documental','Área generadora','Número de expediente','Clasificación archivística',
   'Descripción o asunto','Etapa','Fecha del inventario','Apertura','Fecha de transferencia','Caja','Folio de transferencia']);
  styleHeaders(sheet,4,4);
- const year=record=>Number(key(record).match(/(?:^|[.\/_-])((?:19|20|21)\d{2})$/)?.[1]||record.cadidoYear)||9999;
- const sort=(a,b)=>String(a||'').localeCompare(String(b||''),'es',{numeric:true});
- [...records].sort((a,b)=>year(a)-year(b)||sort(key(a),key(b))||sort(a.inventoryId,b.inventoryId)||sort(a.recordNumber,b.recordNumber))
-  .forEach((record,i)=>details(cellRow(sheet,[i+1,record.inventoryId,record.areaName||record.areaId,
+ sortDocumentaryReportRecords(records).forEach((record,i)=>details(cellRow(sheet,[i+1,[record.cadidoCode,record.cadidoSeriesName].filter(Boolean).join(' · '),record.areaName||record.areaId,
    record.recordNumber,key(record),subject(record),record.stage,date(record.inventoryDate),date(record.openDate),
    date(record.transferDate),record.locationBox||record.boxNumber,record.transferReference])));
  sheet.autoFilter='A4:L'+Math.max(4,sheet.rowCount);

@@ -250,24 +250,19 @@ export const areaControlApi = {
 };
 
 export type PrimaryPeriod='all'|'week'|'twoweeks'|'fortnight'|'month'|'bimester'|'trimester'|'fourmonth'|'semester'|'year'|'custom';
-export type PrimarySelectionMode='all'|'inventories'|'records'|'mixed';
 export type PrimaryFilters={
   period:PrimaryPeriod;year:number;block:number;from:string;to:string;
   dateField:'inventory'|'opening'|'transfer';
   stage:'tramite'|'concentracion'|'ambos';
-  selection:PrimarySelectionMode;area:string;creator:string;
+  area:string;creator:string;
   section:string;series:string;cadido:string;
-  inventoryIds:string[];recordIds:string[];
+  recordIds:string[];
 };
 export type PrimaryCandidate={
- id:string;inventoryId:string;recordNumber:string;title:string;inventoryDate:string;
- openDate:string;transferDate:string;areaId:string;createdBy:string;cadidoCode:string;
- archiveClassificationCode:string;section:string;series:string;stage:string;
+ id:string;recordNumber:string;title:string;openDate:string;areaId:string;cadidoCode:string;
+ archiveClassificationCode:string;sectionCode:string;section:string;series:string;stage:string;
 };
-export type PrimaryPreviewRow={
- id:string;inventoryId:string;recordNumber:string;title:string;archiveClassificationCode:string;
- inventoryDate:string;openDate:string;transferDate:string;areaId:string;stage:string;boxNumber:string;
-};
+export type PrimaryPreviewRow=PrimaryCandidate;
 async function primaryRequest<T>(path:string,filters:PrimaryFilters):Promise<T>{
  return request<T>('/api/inventarios/transferencia/'+path,{
    method:'POST',body:JSON.stringify(filters),
@@ -275,7 +270,7 @@ async function primaryRequest<T>(path:string,filters:PrimaryFilters):Promise<T>{
 }
 export const primaryTransferApi={
  options:async(filters:PrimaryFilters)=>primaryRequest<{total:number,creators:{id:string,name:string}[],records:PrimaryCandidate[]}>('opciones',filters),
- preview:async(filters:PrimaryFilters)=>primaryRequest<{total:number,inventories:number,areas:number,records:PrimaryPreviewRow[],truncated:boolean}>('vista-previa',filters),
+ preview:async(filters:PrimaryFilters)=>primaryRequest<{total:number,seriesCount:number,areas:number,records:PrimaryPreviewRow[],truncated:boolean}>('vista-previa',filters),
  async download(filters:PrimaryFilters){
   let response:Response;
   try{

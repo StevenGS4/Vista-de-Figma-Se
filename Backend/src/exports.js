@@ -4,7 +4,7 @@ import { requireAuth } from './auth.js';
 import { readRecords } from './tramite.js';
 import { exportTypes, exportScope, stageForType } from './export-policy.js';
 import { enrichConcentrationRecords } from './concentration.js';
-import { makeConcentrationInventoryWorkbook, makeDocumentaryReportWorkbook } from './inventory-report-workbooks.js';
+import { makeConcentrationInventoryWorkbook, makeDocumentaryReportWorkbook, sortDocumentaryReportRecords } from './inventory-report-workbooks.js';
 import { makeOfficialTemplateWorkbook } from './template-workbooks.js';
 import { seriesInventoryHeader } from './series-inventory-header.js';
 import { validDate } from './loan-policy.js';
@@ -140,55 +140,49 @@ exportsRouter.post('/:type/series.xlsx',async(req,res,next)=>{
  }catch(error){next(error);}
 });
 
+const documentaryRow=r=>({
+ id:r.id,recordNumber:r.recordNumber,title:r.title,openDate:r.openDate,
+ areaId:r.areaId,cadidoCode:r.cadidoCode,archiveClassificationCode:r.archiveClassificationCode,
+ sectionCode:r.cadidoSectionId,section:r.cadidoSectionName,series:r.cadidoSeriesName,stage:r.stage,
+});
+
 // Consultas y selecciones personalizadas: sin cambios de etapa ni operaciones de transferencia.
 // En cada ruta se valida el alcance del usuario antes de filtrar identificadores.
 exportsRouter.post('/transferencia/opciones',async(req,res,next)=>{
  try{
   const records=await selectPrimaryRecords(pool,req.auth.user,{
-   ...req.body,selection:'all',inventoryIds:[],recordIds:[],
+   ...req.body,recordIds:[],
   });
   const creatorIds=[...new Set(records.map(r=>Number(r.createdBy)).filter(Number.isSafeInteger))];
   const [creatorRows]=creatorIds.length?await pool.query(
    `SELECT id,CONCAT_WS(' ',nombres,apellido_paterno,NULLIF(apellido_materno,'')) AS name
     FROM usuarios WHERE id IN (${creatorIds.map(()=>'?').join(',')})`,creatorIds):[[]];
   res.set('Cache-Control','private, no-store');
-  res.json({total:records.length,creators:creatorRows.map(x=>({id:String(x.id),name:x.name})),records:records.map(r=>({
-   id:r.id,inventoryId:r.inventoryId,recordNumber:r.recordNumber,title:r.title,
-   inventoryDate:r.inventoryDate,openDate:r.openDate,transferDate:r.transferDate,
-   areaId:r.areaId,createdBy:r.createdBy,cadidoCode:r.cadidoCode,
-   archiveClassificationCode:r.archiveClassificationCode,
-   section:r.cadidoSectionName,series:r.cadidoSeriesName,stage:r.stage,
-  }))});
+  res.json({total:records.length,creators:creatorRows.map(x=>({id:String(x.id),name:x.name})),records:records.map(documentaryRow)});
  }catch(e){next(e);}
 });
 exportsRouter.post('/transferencia/vista-previa',async(req,res,next)=>{
  try{
-  const records=await selectPrimaryRecords(pool,req.auth.user,req.body);
-  const inventoryCount=new Set(records.map(r=>r.inventoryId)).size;
+  const records=await selectPrimaryRecords(pool,req.auth.user,req.body,true);
+  const seriesCount=new Set(records.map(r=>JSON.stringify([r.cadidoSectionId,r.cadidoCode]))).size;
   const areas=[...new Set(records.map(r=>r.areaId))];
   res.set('Cache-Control','private, no-store');
   res.json({
    total:records.length,
-   inventories:inventoryCount,
+   seriesCount,
    areas:areas.length,
-   records:records.slice(0,250).map(r=>({
-    id:r.id,inventoryId:r.inventoryId,recordNumber:r.recordNumber,
-    title:r.title,archiveClassificationCode:r.archiveClassificationCode,
-    inventoryDate:r.inventoryDate,openDate:r.openDate,transferDate:r.transferDate,
-    areaId:r.areaId,stage:r.stage,boxNumber:r.boxNumber,
-   })),
+   records:sortDocumentaryReportRecords(records).slice(0,250).map(documentaryRow),
    truncated:records.length>250,
   });
  }catch(e){next(e);}
 });
 exportsRouter.post('/transferencia/seleccion.xlsx',async(req,res,next)=>{
  try{
-  const records=await selectPrimaryRecords(pool,req.auth.user,req.body);
+  const records=await selectPrimaryRecords(pool,req.auth.user,req.body,true);
   if(!records.length)throw fail('No hay expedientes que coincidan con la selección',404);
   await sendXlsx(await workbookFor(records,'transferencia'),res,
    'concentrado_documental_seleccionado.xlsx',req.auth.user.id,
    {type:'transferencia',mode:'seleccion-personalizada',
-    inventoryCount:new Set(records.map(r=>r.inventoryId)).size,
     recordCount:records.length,period:req.body?.period||'all'});
  }catch(e){next(e);}
 });

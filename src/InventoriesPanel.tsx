@@ -33,7 +33,7 @@ const types = {
   },
   transferencia: {
     name: "Concentrado documental",
-    description: "Consolidado documental con filtros de fecha, CADIDO, área, usuario y selección de inventarios o expedientes.",
+    description: "Selecciona expedientes individuales por sección y serie documental.",
     icon: FolderArchive,
     accent: "gold",
   },

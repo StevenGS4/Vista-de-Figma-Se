@@ -15,7 +15,9 @@ assert.deepEqual(periodBounds(normalizePrimarySelection({...base,period:'custom'
  ['2026-11-01','2026-11-15']);
 assert.throws(()=>normalizePrimarySelection({...base,period:'custom',from:'2026-11-20',to:'2026-11-01'}),{status:400});
 assert.throws(()=>normalizePrimarySelection({...base,selection:'records',recordIds:[]}),{status:400});
-assert.throws(()=>normalizePrimarySelection({...base,selection:'mixed',recordIds:['REG-abc']}),{status:400});
+assert.throws(()=>normalizePrimarySelection({...base,selection:'mixed',inventoryIds:['INV-A']}),{status:400});
+assert.throws(()=>normalizePrimarySelection(base,true),{status:400});
+assert.deepEqual(normalizePrimarySelection({...base,recordIds:['REG-12','REG-25']},true).recordIds,['REG-12','REG-25']);
 
 const employee={id:7,areaId:'AREA-A',roles:['Personal de área'],mustChangePassword:false};
 const manager={id:8,areaId:'AREA-A',roles:['Encargado de área'],mustChangePassword:false};
@@ -32,12 +34,12 @@ await assert.rejects(()=>selectPrimaryRecords(fakeDb,employee,{...base,area:'ARE
 await assert.rejects(()=>selectPrimaryRecords(fakeDb,employee,{...base,creator:'8'}),{status:403});
 await assert.rejects(()=>selectPrimaryRecords(fakeDb,manager,{...base,area:'AREA-B'}),{status:403});
 await selectPrimaryRecords(fakeDb,employee,base);
-assert.ok(queries[0].sql.includes('a.codigo=?')&&queries[0].sql.includes('i.creado_por=?'));
+assert.ok(queries[0].sql.includes('a.codigo=?')&&queries[0].sql.includes('e.creado_por=?'));
 assert.deepEqual(queries[0].args,['AREA-A',7]);
 queries.length=0;
 await selectPrimaryRecords(fakeDb,manager,base);
 assert.ok(queries[0].sql.includes('a.codigo=?'));
-assert.ok(!queries[0].sql.includes('i.creado_por=?'));
+assert.ok(!queries[0].sql.includes('e.creado_por=?'));
 queries.length=0;
 await selectPrimaryRecords(fakeDb,admin,base);
 assert.ok(!queries[0].sql.includes('a.codigo=?'));
