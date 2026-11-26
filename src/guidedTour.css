@@ -52,7 +52,7 @@ dialog[open] > .guided-tour-help {
 }
 .guided-tour__card {
   position: fixed;
-  width: min(370px, calc(100vw - 24px));
+  width: min(460px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
   padding: 19px 20px 16px;
@@ -83,8 +83,11 @@ dialog[open] > .guided-tour-help {
   outline: none;
 }
 #guided-tour-description {
-  font-size: 13px;
-  line-height: 1.55;
+  max-height: min(48dvh, 22rem);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .guided-tour__dots {
   display: flex;

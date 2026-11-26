@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, CircleHelp, X } from "lucide-react";
-import { cleanText, contextDescription, fieldDescription, homeTour, moduleTour } from "./guidedTourContent";
+import { actionDescription, cleanText, contextDescription, fieldDescription, filterDescription, homeTour, moduleTour } from "./guidedTourContent";
 import "./guidedTour.css";
 
 type Step = { target: HTMLElement | null; title: string; description: string };
@@ -22,7 +22,11 @@ function collectSteps(module: string): Step[] {
     steps.push({ target, title, description });
   };
 
-  if (module === "inicio") {
+  const modals = [...document.querySelectorAll<HTMLElement>(
+    'dialog[open]:not(.guided-tour), .modal-backdrop > .modal, .archive-confirm-dialog, [role="dialog"][aria-modal="true"]'
+  )].filter(isVisible);
+  const modal = modals.at(-1);
+  if (module === "inicio" && !modal) {
     for (const [selector, title, description] of homeTour) {
       const nodes = [...document.querySelectorAll<HTMLElement>(selector)];
       const visible = nodes.filter(node => isVisible(node) && node.getBoundingClientRect().right > 0);
@@ -37,45 +41,44 @@ function collectSteps(module: string): Step[] {
     return steps;
   }
 
-  const modals = [...document.querySelectorAll<HTMLElement>(
-    'dialog[open]:not(.guided-tour), .modal-backdrop > .modal, .archive-confirm-dialog, [role="dialog"][aria-modal="true"]'
-  )].filter(isVisible);
-  const modal = modals.at(-1);
   const root = modal ?? document.querySelector<HTMLElement>(".workspace");
   if (!root) return steps;
   const heading = (!modal && [...root.querySelectorAll<HTMLElement>(".step-heading h3")].find(isVisible))
     || [...root.querySelectorAll<HTMLElement>("h2,h3")].find(isVisible);
-  const [title, description] = moduleTour[module] ?? ["Ayuda de la pantalla", "Revisa los controles disponibles en el panel de trabajo."];
+  const [title, description] = moduleTour[module] ?? ["Ayuda de la pantalla", "Revisa el encabezado para identificar el registro que tienes abierto. El recorrido señala los campos y acciones visibles. Avanza para entender qué dato se usa en cada control y regresa a la pantalla cuando estés listo para capturarlo. Puedes abrir la ayuda de nuevo en el paso siguiente."];
   const headingText = cleanText(heading?.textContent);
   const stepHeading = heading?.closest<HTMLElement>(".step-heading");
   const stepDescription = cleanText(stepHeading?.querySelector("p")?.textContent);
-  const screenDescription = contextDescription(headingText) || stepDescription
-    || (headingText && headingText !== title && (modal || root.querySelector("form"))
-      ? "Revisa los datos y las acciones disponibles en esta pantalla." : description);
+  const screenDescription = contextDescription(headingText) || actionDescription(headingText)?.[1]
+    || (stepDescription ? `${stepDescription} Revisa el folio y los datos que aparecen en este paso antes de continuar. Los siguientes puntos explican qué debes verificar en los campos y cómo se usa lo que captures. Si necesitas revisar otro paso, cierra la ayuda y ábrela de nuevo en esa pantalla.` : description);
   add(stepHeading ?? heading ?? root, headingText || title, screenDescription);
 
   const picker = root.querySelector<HTMLElement>(".record-selector-strip,.inventory-expedients__toolbar");
-  if (picker) add(picker, "Expediente en edición", "Selecciona la fila que quieres revisar. Los campos visibles corresponden a ese expediente.");
+  if (picker) add(picker, "Expediente en edición", "Elige la ficha que quieres revisar por su número o posición en el inventario. Los campos de abajo corresponden a la ficha seleccionada. Antes de cambiar de expediente, identifica cuál estás editando y coteja sus datos en el resumen para evitar capturar información en la fila equivocada.");
   for (const option of root.querySelectorAll<HTMLElement>(".inventory-type-card")) {
     const label = cleanText(option.querySelector("h3")?.textContent);
-    const help = /primaria/i.test(label)
-      ? "Genera la relación de Transferencia primaria. Selecciona los expedientes autorizados que quieres incluir."
+    const help = /concentrado|primaria/i.test(label)
+      ? "Abre el Concentrado documental para reunir expedientes específicos en una sola hoja Excel. Filtra por etapa, sección y serie, abre cada grupo y selecciona los expedientes individuales. Comprueba en la vista previa que estén todos los que quieres incluir antes de descargar."
       : /concentraci/i.test(label)
-        ? "Genera el inventario de los expedientes que se resguardan en Concentración."
-        : "Genera el formato de inventario de Archivo de Trámite para la selección que configures.";
+        ? "Genera un inventario por serie con los expedientes que se resguardan en Concentración. Elige la sección, la serie y el periodo. Si el trabajo requiere conocer dónde está cada expediente, marca Incluir ubicación física. Comprueba las columnas y el total en la vista previa."
+        : "Genera el inventario de Trámite por serie documental. Selecciona sección y serie, acota el periodo por fecha de apertura y agrega los filtros de área o usuario que correspondan. Revisa la vista previa, en especial el encabezado y el número de expedientes, antes de descargar la plantilla en Excel.";
     add(option, label, help);
   }
+
   const seenLabels = new Set<string>();
-  for (const label of root.querySelectorAll<HTMLElement>("label,.form-field")) {
-    if (!isVisible(label)) continue;
-    const input = label.querySelector<HTMLElement>('input:not([type="hidden"]),select,textarea');
-    if (!input || !isVisible(input)) continue;
-    const text = cleanText(input.getAttribute("aria-label") || label.querySelector(":scope > span")?.textContent
-      || (input as HTMLInputElement).placeholder || label.childNodes[0]?.textContent).replace(/\s*\*$/, "");
-    if (!text || seenLabels.has(text) || /^seleccionar expediente|^recibido |^estado de /i.test(text)) continue;
-    seenLabels.add(text);
-    const isFilter = Boolean(label.closest('.records-filters,.concentration-filters,.table-filters,[class*="filterbar"],[class*="__filters"]'));
-    add(label, text, isFilter ? "Acota la consulta por «" + text + "» y revisa los resultados." : fieldDescription(text, input));
+  for (const input of root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input:not([type="hidden"]),select,textarea')) {
+    if (!isVisible(input)) continue;
+    const label = input.labels?.[0] ?? input.closest<HTMLElement>("label,.form-field");
+    const labelText = label && (cleanText(label.querySelector(":scope > span")?.textContent)
+      || [...label.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join(" "));
+    const text = cleanText(input.getAttribute("aria-label") || labelText || input.getAttribute("placeholder")).replace(/\s*\*$/, "");
+    const key = text.replace(/^(seleccionar expediente|transferir expediente|recibido|estado de) .+/i, "$1");
+    if (!text || seenLabels.has(key)) continue;
+    seenLabels.add(key);
+    const isFilter = input.matches('[type="search"]') || /^(filtrar|buscar)/i.test(text)
+      || Boolean(input.closest('.records-filters,.concentration-filters,.table-filters,[class*="filterbar"],[class*="__filters"]'));
+    const target = label && isVisible(label) && root.contains(label) ? label : input;
+    add(target, text, isFilter ? filterDescription(text) : fieldDescription(text, input));
   }
 
   for (const node of root.querySelectorAll<HTMLElement>("h3, h2")) {
@@ -85,41 +88,32 @@ function collectSteps(module: string): Step[] {
     if (help) add(node, text, help);
   }
 
-  const tabs = [...root.querySelectorAll<HTMLElement>('[role="tab"]')].filter(isVisible);
+  const tabs = [...root.querySelectorAll<HTMLElement>('[role="tab"],.transfer-tabs button,.primary-builder__tabs button,nav[aria-label="Detalle de la transferencia"] button')].filter(isVisible);
   for (const tab of tabs) {
     const label = cleanText(tab.textContent);
-    add(tab, label, contextDescription(label) ?? (tab.getAttribute("aria-selected") === "true"
-      ? "Estás consultando esta pestaña." : "Abre esta pestaña para cambiar la vista del panel de trabajo."));
+    const name = label.replace(/^\d+\.\s*/, "").replace(/\s+\d+$/, "");
+    add(tab, label, contextDescription(name) ?? `Abre «${name}» para consultar la parte del registro que indica su nombre. Revisa qué información cambia al seleccionarla. Las pestañas pueden mostrar estados de una bandeja, evidencias de un folio o pasos de preparación. Si necesitas modificar datos, busca la acción del registro dentro de la vista correspondiente.`);
   }
 
   for (const table of root.querySelectorAll<HTMLElement>("table")) {
     const head = table.querySelector<HTMLElement>("thead") ?? table;
     const columns = [...head.querySelectorAll("th")].map(node => cleanText(node.textContent)).filter(Boolean);
     if (!columns.length) continue;
-    add(head, "Columnas del listado", "Revisa los datos de cada fila. La tabla muestra " + columns.join(", ") + ".");
+    add(head, "Columnas del listado", `Las columnas describen los datos de la tabla: ${columns.join(", ")}. Recorre la fila de izquierda a derecha y coteja sus identificadores antes de abrirla. Si hay una columna de estado o acciones, usa el folio para asegurarte de que consultas el registro correcto.`);
   }
 
-  const actions: [RegExp, string][] = [
-    [/limpiar/i, "Quita los filtros para iniciar otra consulta."],
-    [/buscar|aplicar filtros/i, "Consulta los registros que coinciden con los filtros seleccionados."],
-    [/siguiente|continuar/i, "Avanza cuando hayas completado y revisado los datos del paso actual."],
-    [/anterior|volver|regresar/i, "Regresa a la vista anterior para revisar la información."],
-    [/guardar|confirmar|registrar/i, "Revisa los datos antes de usar esta acción para registrar el cambio en el sistema."],
-    [/cancelar|cerrar/i, "Cierra este formulario o confirmación sin ejecutar la acción pendiente."],
-    [/descargar|exportar/i, "Descarga el documento correspondiente a la selección actual."],
-    [/nuevo|crear|agregar|iniciar/i, "Abre la captura o agrega un registro cuando corresponda al trabajo que estás realizando."],
-    [/revisar|vista previa|seguimiento|historial/i, "Abre la información del registro para revisarla."],
-    [/acciones/i, "Abre el menú de la fila para consultar las acciones disponibles según su estado."],
-    [/dar de baja/i, "Abre el acta del inventario seleccionado para revisar sus datos antes de confirmar la baja."],
-    [/prestar/i, "Inicia el registro del préstamo para la selección actual."],
-  ];
   const seenActions = new Set<string>();
-  for (const button of root.querySelectorAll<HTMLElement>("button")) {
+  for (const button of root.querySelectorAll<HTMLElement>('button,a[download],a[aria-label^="Descargar"]')) {
+    if (!isVisible(button) || used.has(button) || button.closest(".wizard-progress,.guided-tour-help")) continue;
     const label = cleanText(button.getAttribute("aria-label") || button.textContent || button.title);
-    const action = actions.find(([pattern]) => pattern.test(label));
-    if (!action || !isVisible(button) || seenActions.has(action[0].source) || button.closest(".wizard-progress")) continue;
-    seenActions.add(action[0].source);
-    add(button, /acciones/i.test(label) ? "Acciones por fila" : label, action[1]);
+    const action = actionDescription(label);
+    if (!label || !action) continue;
+    const [pattern, help] = action;
+    const key = button.closest("tbody") ? pattern.source
+      : label.replace(/^(Quitar selección de|Quitar|Ver ubicación de|Ocultar ubicación de|Acciones (?:del|para)) .+/i, "$1");
+    if (seenActions.has(key)) continue;
+    seenActions.add(key);
+    add(button, /^acciones/i.test(label) ? "Acciones por fila" : label, help);
   }
   return steps;
 }
@@ -229,7 +223,7 @@ export default function GuidedTour({ module }: { module: string }) {
             </button>
             <p className="guided-tour__count">Paso {index + 1} de {steps.length}</p>
             <h2 id="guided-tour-title" ref={heading} tabIndex={-1}>{active.title}</h2>
-            <p id="guided-tour-description">{active.description}</p>
+            <p key={index} id="guided-tour-description">{active.description}</p>
             <div className="guided-tour__dots" aria-hidden="true">
               {steps.map((_, step) => <span key={step} data-status={step === index ? "current" : step < index ? "previous" : "pending"} />)}
             </div>
