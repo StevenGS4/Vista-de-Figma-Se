@@ -299,10 +299,10 @@ export const primaryTransferApi={
 export type DisposalRecord = {
  id:string;number:string;title:string;inventory:string;
  section:string;sectionCode:string;series:string;code:string;classification:string;
- opened:string;closed:string;retention:string;
+ opened:string;closed:string;retention:string;areaId:string;areaName:string;
 };
 export type DisposalProposal = {
- id:string;folio:string;area:string;requester:string;createdDate:string;
+ id:string;folio:string;area:string;requester:string;requesterId:string;createdDate:string;
  status:'PROPUESTA'|'BAJA'|'NO_PROCEDE';
  decisionReference:string|null;decisionDate:string|null;notes:string|null;
  resolvedBy:string|null;resolvedDate:string|null;

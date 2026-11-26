@@ -14,34 +14,59 @@ const statuses = {
 const dateLabel = (value: string | null) => value ? value.split("-").reverse().join("/") : "—";
 const message = (error: unknown) => error instanceof Error ? error.message : "No se pudo completar la operación.";
 
-function RecordsTable({ records, selection, toggle }: {
+type DisposalTab = DisposalProposal["status"] | "available" | "mine";
+const proposalTabs: {id: DisposalTab; label: string}[] = [
+  { id: "available", label: "Expedientes disponibles" },
+  { id: "PROPUESTA", label: "En propuesta" },
+  { id: "BAJA", label: "Bajas definitivas" },
+  { id: "NO_PROCEDE", label: "No procedieron" },
+];
+
+function AreaFilter({ records, area, onChange, placeholder }: {
+  records: DisposalRecord[]; area: string; onChange: (area: string) => void; placeholder: string;
+}) {
+  const choices = [...new Map(records.map(record => [record.areaId, record.areaName])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], "es"));
+  return <label className="form-field max-w-xs"><span>Área</span>
+    <select value={area} onChange={event => onChange(event.target.value)}>
+      <option value="">{placeholder}</option>
+      {choices.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+    </select>
+  </label>;
+}
+
+function RecordsTable({ records, selection, toggle, showArea }: {
   records: DisposalRecord[];
   selection?: Set<string>;
   toggle?: (id: string) => void;
+  showArea?: boolean;
 }) {
   return <div className="table-scroll">
     <table className="data-table">
-      <thead><tr>{toggle && <th>Elegir</th>}<th>Expediente</th><th>Clasificación</th><th>Cierre</th><th>Vigencia total</th></tr></thead>
+      <thead><tr>{toggle && <th>Elegir</th>}<th>Expediente</th>{showArea && <th>Área</th>}<th>Clasificación</th><th>Cierre</th><th>Vigencia total</th></tr></thead>
       <tbody>{records.map(record => <tr key={record.id}>
         {toggle && <td><input type="checkbox" className="accent-[#205b4d]" checked={selection?.has(record.id) ?? false}
           aria-label={`Seleccionar ${record.number} ${record.title}`} onChange={() => toggle(record.id)} /></td>}
         <td><strong>{record.title}</strong><small className="block text-[#526760]">{record.number}</small></td>
+        {showArea && <td>{record.areaName}</td>}
         <td>{record.classification || record.code}</td><td>{dateLabel(record.closed)}</td><td>{record.retention || "—"}</td>
       </tr>)}</tbody>
     </table>
   </div>;
 }
 
-function NewProposal({ records, busy, onSubmit, onBack }: {
-  records: DisposalRecord[]; busy: boolean; onSubmit: (ids: string[]) => void; onBack: () => void;
+function NewProposal({ records, chooseArea, busy, onSubmit, onBack }: {
+  records: DisposalRecord[]; chooseArea: boolean; busy: boolean; onSubmit: (ids: string[]) => void; onBack: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [area, setArea] = useState("");
   const [search, setSearch] = useState("");
   const [review, setReview] = useState(false);
   const query = search.trim().toLocaleLowerCase("es");
   const groups = new Map<string, DisposalRecord[]>();
   const chosen = records.filter(record => selected.has(record.id));
   for (const record of records) {
+    if (chooseArea && record.areaId !== area) continue;
     if (query && ![record.number, record.title, record.classification, record.series, record.section]
       .some(value => value?.toLocaleLowerCase("es").includes(query))) continue;
     const key = JSON.stringify([record.sectionCode, record.code]);
@@ -64,16 +89,20 @@ function NewProposal({ records, busy, onSubmit, onBack }: {
     <section className="surface primary-builder__panel">
       <div className="primary-builder__heading"><div>
         <h3>{review ? "Revisar propuesta" : "Nueva propuesta de baja"}</h3>
-        <p>{review ? "Verifica los expedientes del listado para Oficina Central." : "Selecciona los expedientes de tu área que propondrás para baja."}</p>
+        <p>{review ? "Verifica los expedientes del listado para Oficina Central." : chooseArea ? "Elige el área y los expedientes que propondrás para baja." : "Selecciona los expedientes de tu área que propondrás para baja."}</p>
       </div></div>
       <fieldset disabled={busy} className="grid gap-3 p-4">
-        {review ? <RecordsTable records={chosen} /> : <>
+        {review ? <RecordsTable records={chosen} showArea={chooseArea} /> : <>
+          {chooseArea && <AreaFilter records={records} area={area} placeholder="Selecciona un área" onChange={value => {
+            setArea(value);
+            setSelected(new Set());
+          }} />}
           <label className="search-box">
             <Search size={16} />
             <input type="search" aria-label="Buscar expedientes" placeholder="Buscar por nombre, número, sección o serie"
               value={search} onChange={event => setSearch(event.target.value)} />
           </label>
-          {!groups.size && <p>No hay expedientes disponibles que coincidan con la búsqueda.</p>}
+          {!groups.size && <p>{chooseArea && !area ? "Selecciona un área para ver sus expedientes." : "No hay expedientes disponibles que coincidan con la búsqueda."}</p>}
           {[...groups].map(([key, group]) => <details key={key} className="primary-builder__inventory" open={query ? true : undefined}>
             <summary className="cursor-pointer px-4 py-3 text-sm">
               <strong>{group[0].code} · {group[0].series}</strong> <span>· {group[0].section} · {group.length} expedientes</span>
@@ -163,12 +192,16 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
   const [detail, setDetail] = useState<DisposalDetail>();
   const [archive, setArchive] = useState<ArchivalRecord[]>();
   const [candidates, setCandidates] = useState<DisposalRecord[]>();
-  const [status, setStatus] = useState<"" | DisposalProposal["status"]>("");
+  const [tab, setTab] = useState<DisposalTab>("PROPUESTA");
+  const [available, setAvailable] = useState<DisposalRecord[]>();
+  const [availableArea, setAvailableArea] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
-  const canPropose = role === "Encargado de área";
   const canResolve = role === "Administrador / Coordinador";
+  const tabs = canResolve ? [...proposalTabs, { id: "mine" as const, label: "Mis bajas" }] : proposalTabs;
+  const visibleProposals = proposals.filter(item => tab === "mine" ? item.requesterId === String(currentUser.id) : item.status === tab);
+  const visibleAvailable = available?.filter(record => !availableArea || record.areaId === availableArea);
 
   const refresh = async () => setProposals((await disposalApi.list()).proposals);
   useEffect(() => {
@@ -211,23 +244,23 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
           onClick={() => void run(async () => setArchive((await disposalApi.archive()).records))}>
           Expedientes dados de baja
         </button>}
-        {canPropose && (
-          <button type="button" className="button button--primary" disabled={busy}
-            onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
-            <Plus size={17} /> Nueva propuesta
-          </button>
-        )}
+        <button type="button" className="button button--primary" disabled={busy}
+          onClick={() => void run(async () => { setNotice(""); setCandidates((await disposalApi.candidates()).records); })}>
+          <Plus size={17} /> Nueva propuesta
+        </button>
       </div>}
     </div>
     <div className="primary-builder grid gap-4">
       {error && <p className="validation-summary" role="alert">{error}</p>}
       {notice && <p className="success-banner" role="status">{notice}</p>}
       {busy && <p role="status">Procesando…</p>}
-      {candidates ? <NewProposal records={candidates} busy={busy} onBack={() => setCandidates(undefined)}
+      {candidates ? <NewProposal records={candidates} chooseArea={canResolve} busy={busy} onBack={() => setCandidates(undefined)}
         onSubmit={ids => void run(async () => {
           const created = await disposalApi.create(ids);
           setNotice(`Propuesta ${created.folio} registrada.`);
           setCandidates(undefined);
+          setAvailable(undefined);
+          setTab("PROPUESTA");
           await open(created.id);
           await refresh();
         })} /> : detail ? <>
@@ -253,6 +286,7 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
         {canResolve && detail.status === "PROPUESTA" && <ResolutionForm key={detail.id} busy={busy}
           onResolve={decision => void run(async () => {
             await disposalApi.resolve(detail.id, decision);
+            setAvailable(undefined);
             if (decision.status === "BAJA") onDischarged(detail.records.map(record => record.id));
             setDetail(current => current && {...current,status:decision.status});
             setNotice(`Resolución de ${detail.folio} registrada.`);
@@ -263,23 +297,35 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
         <div className="primary-builder__heading flex-wrap">
           <div className="grow"><h3>Propuestas y resoluciones</h3><p>Consulta el estado y descarga la relación de expedientes de cada propuesta.</p></div>
         </div>
-        <div className="p-4">
-          <label className="form-field max-w-xs"><span>Estado</span>
-            <select value={status} onChange={event => setStatus(event.target.value as typeof status)}>
-              <option value="">Todos los estados</option>
-              {Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="table-scroll"><table className="data-table">
-          <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
-          <tbody>{proposals.filter(item => !status || item.status === status).map(item => <tr key={item.id}>
-            <td><strong>{item.folio}</strong></td><td>{item.area}</td><td>{item.requester}</td><td>{dateLabel(item.createdDate)}</td>
-            <td>{statuses[item.status]}</td><td>{(canResolve || item.status !== "BAJA") && <button type="button" className="button button--secondary" disabled={busy}
-              onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button>}</td>
-          </tr>)}</tbody>
-        </table></div>
-        {!busy && !proposals.some(item => !status || item.status === status) && <p className="p-4">No hay propuestas en este estado.</p>}
+        <nav className="primary-builder__tabs m-4" aria-label="Vistas de Bajas">
+          {tabs.map(item => <button key={item.id} type="button" className={tab === item.id ? "is-active" : ""}
+            aria-pressed={tab === item.id} disabled={busy} onClick={() => {
+              setTab(item.id);
+              setError("");
+              if (item.id === "available") void run(async () => {
+                const { records } = await disposalApi.candidates();
+                setAvailable(records);
+                if (!records.some(record => record.areaId === availableArea)) setAvailableArea("");
+              });
+            }}>{item.label}</button>)}
+        </nav>
+        {tab === "available" ? <>
+          {canResolve && available && <div className="px-4 pb-4">
+            <AreaFilter records={available} area={availableArea} placeholder="Todas las áreas" onChange={setAvailableArea} />
+          </div>}
+          {visibleAvailable?.length ? <RecordsTable records={visibleAvailable} showArea={canResolve} />
+            : !busy && !error && <p className="p-4">No hay expedientes disponibles para proponer.</p>}
+        </> : <>
+          <div className="table-scroll"><table className="data-table">
+            <thead><tr><th>Folio</th><th>Área</th><th>Propuesta por</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
+            <tbody>{visibleProposals.map(item => <tr key={item.id}>
+              <td><strong>{item.folio}</strong></td><td>{item.area}</td><td>{item.requester}</td><td>{dateLabel(item.createdDate)}</td>
+              <td>{statuses[item.status]}</td><td>{(canResolve || item.status !== "BAJA") && <button type="button" className="button button--secondary" disabled={busy}
+                onClick={() => void run(async () => { setNotice(""); await open(item.id); })}>Ver detalle</button>}</td>
+            </tr>)}</tbody>
+          </table></div>
+          {!busy && !visibleProposals.length && <p className="p-4">No hay propuestas en este estado.</p>}
+        </>}
       </section>}
     </div>
   </>;

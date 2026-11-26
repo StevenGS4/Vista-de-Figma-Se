@@ -20,7 +20,7 @@ const text = value => typeof value==='string'?value.trim():'';
 const pending = `EXISTS (SELECT 1 FROM propuesta_baja_expedientes be
  JOIN propuestas_baja b ON b.id=be.propuesta_id WHERE be.expediente_id=e.id AND b.estado='PROPUESTA')`;
 const proposalSelect = `SELECT CAST(b.id AS CHAR) AS id,b.area_nombre AS area,b.estado AS status,
- b.solicitante_nombre AS requester,DATE_FORMAT(b.creada_en,'%Y-%m-%d') AS createdDate,
+ b.solicitante_nombre AS requester,CAST(b.solicitado_por AS CHAR) AS requesterId,DATE_FORMAT(b.creada_en,'%Y-%m-%d') AS createdDate,
  b.dictamen_folio AS decisionReference,DATE_FORMAT(b.dictamen_fecha,'%Y-%m-%d') AS decisionDate,
  b.observaciones AS notes,b.responsable_resolucion AS resolvedBy,
  DATE_FORMAT(b.resuelta_en,'%Y-%m-%d') AS resolvedDate
@@ -36,7 +36,6 @@ disposalsRouter.use((req,res,next)=>{
 
 const admin = user => hasRole(user,roleNames.ADMIN);
 const scope = user => admin(user)?{sql:'',args:[]}:{sql:' AND b.area_codigo=?',args:[user.areaId]};
-const mayPropose = user => hasRole(user,roleNames.JEFE_AREA);
 const parseId = value => {
  if(!/^[1-9]\d{0,19}$/.test(value))throw fail('Propuesta inválida');
  return value;
@@ -52,6 +51,7 @@ const snapshot = record => ({
  section:record.cadidoSectionName||record.cadidoSectionId, sectionCode:record.cadidoSectionId,
  series:record.cadidoSeriesName, code:record.cadidoCode, classification:record.archiveClassificationCode,
  opened:record.openDate, closed:record.closeDate, retention:record.totalValidity,
+ areaId:record.areaId,areaName:record.areaName||record.areaId,
  physicalLocation:physicalLocation(record),
 });
 const withFolio = row => ({...row,folio:folio(row.id)});
@@ -93,9 +93,9 @@ disposalsRouter.get('/archivo',async(req,res,next)=>{
 disposalsRouter.get('/expedientes',async(req,res,next)=>{
  try{
   const user=req.auth.user;
-  if(!mayPropose(user))throw fail('Solo el encargado de área prepara propuestas',403);
-  const records=await readRecords(pool,`WHERE a.codigo=? AND e.etapa='CONCENTRACION'
-   AND e.disponibilidad='EN_ARCHIVO' AND NOT ${pending}`,[user.areaId]);
+  const areaFilter=admin(user)?'':' AND a.codigo=?';
+  const records=await readRecords(pool,`WHERE e.etapa='CONCENTRACION'
+   AND e.disponibilidad='EN_ARCHIVO' AND NOT ${pending}${areaFilter}`,admin(user)?[]:[user.areaId]);
   res.json({records:records.map(snapshot)});
  }catch(error){next(error);}
 });
@@ -104,20 +104,20 @@ disposalsRouter.post('/',async(req,res,next)=>{
  let conn;
  try{
   const user=req.auth.user;
-  if(!mayPropose(user))throw fail('Solo el encargado de área prepara propuestas',403);
   const selected=req.body?.recordIds;
   if(!Array.isArray(selected)||!selected.length||selected.length>15000||
      selected.some(id=>typeof id!=='string'||!/^REG-[1-9]\d{0,19}$/.test(id)))
-   throw fail('Selecciona expedientes individuales de tu área');
+   throw fail('Selecciona expedientes individuales de una misma área');
   const ids=[...new Set(selected.map(id=>id.slice(4)))];
   conn=await pool.getConnection();
   await conn.beginTransaction();
-  const [locked]=await conn.execute(`SELECT e.id,a.nombre AS area FROM expedientes e
+  const [locked]=await conn.execute(`SELECT e.id,a.codigo AS areaId,a.nombre AS area FROM expedientes e
    JOIN inventarios i ON i.id=e.inventario_id JOIN areas a ON a.id=i.area_id
-   WHERE e.id IN (${marks(ids)}) AND a.codigo=? AND e.etapa='CONCENTRACION'
+   WHERE e.id IN (${marks(ids)}) AND e.etapa='CONCENTRACION'${admin(user)?'':' AND a.codigo=?'}
     AND e.disponibilidad='EN_ARCHIVO' AND e.deleted_at IS NULL AND i.deleted_at IS NULL
-   ORDER BY e.id FOR UPDATE`,[...ids,user.areaId]);
-  if(locked.length!==ids.length)throw fail('Hay expedientes fuera de tu área o que ya no están disponibles',409);
+   ORDER BY e.id FOR UPDATE`,admin(user)?ids:[...ids,user.areaId]);
+  if(locked.length!==ids.length)throw fail('Hay expedientes fuera de tu alcance o que ya no están disponibles',409);
+  if(locked.some(row=>row.areaId!==locked[0].areaId))throw fail('Cada propuesta debe corresponder a una sola área',409);
   const [[duplicate]]=await conn.execute(`SELECT e.id FROM expedientes e
    WHERE e.id IN (${marks(ids)}) AND ${pending} LIMIT 1`,ids);
   if(duplicate)throw fail('Uno o más expedientes ya están en una propuesta de baja',409);
@@ -125,7 +125,7 @@ disposalsRouter.post('/',async(req,res,next)=>{
   if(records.length!==ids.length)throw fail('La selección cambió. Vuelve a consultar los expedientes.',409);
   const [{insertId}]=await conn.execute(`INSERT INTO propuestas_baja
    (area_codigo,area_nombre,solicitado_por,solicitante_nombre,creada_en) VALUES (?,?,?,?,UTC_TIMESTAMP() - INTERVAL 7 HOUR)`,
-   [user.areaId,locked[0].area,user.id,name(user)]);
+   [locked[0].areaId,locked[0].area,user.id,name(user)]);
   const rows=records.map(record=>[insertId,record.id.slice(4),JSON.stringify(snapshot(record))]);
   for(let i=0;i<rows.length;i+=400)
    await conn.query('INSERT INTO propuesta_baja_expedientes (propuesta_id,expediente_id,ficha) VALUES ?',[rows.slice(i,i+400)]);
