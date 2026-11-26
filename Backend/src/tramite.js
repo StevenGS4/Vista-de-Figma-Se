@@ -482,7 +482,7 @@ tramiteRouter.get('/papelera',async(req,res,next)=>{
   const user=req.auth.user,mode=allowTrash(user);
   const clause=mode==='GLOBAL'?'AND i.creado_por=?':'AND a.codigo=? AND i.creado_por=?';
   const params=mode==='GLOBAL'?[user.id]:[user.areaId,user.id];
-  const where="WHERE i.estado='TRAMITE' AND (i.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL) "+clause;
+  const where="WHERE i.estado='TRAMITE' AND e.etapa='TRAMITE' AND (i.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL) "+clause;
   const records=await readRecords(pool,where,params,true);
   res.set('Cache-Control','private, no-store');
   res.json({records:records.filter(r=>Boolean(r.inventoryDeletedAt||r.recordDeletedAt))});
@@ -558,9 +558,9 @@ tramiteRouter.post('/papelera/expedientes/:id/restaurar',async(req,res,next)=>{
   if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
   const id=Number(req.params.id.slice(4));
   conn=await pool.getConnection();await conn.beginTransaction();
-  const [rows]=await conn.execute(`SELECT e.id,e.deleted_at,i.folio,i.id AS invId,i.deleted_at AS inventory_deleted
+  const [rows]=await conn.execute(`SELECT e.id,e.etapa,e.deleted_at,i.folio,i.id AS invId,i.deleted_at AS inventory_deleted
     FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id WHERE e.id=? FOR UPDATE`,[id]);
-  if(!rows.length||!rows[0].deleted_at)throw fail('El expediente no está en la papelera',404);
+  if(!rows.length||rows[0].etapa!=='TRAMITE'||!rows[0].deleted_at)throw fail('El expediente no está en la papelera',404);
   const [[expiry]]=await conn.execute('SELECT deleted_at > DATE_SUB(NOW(), INTERVAL 60 DAY) AS restorable FROM expedientes WHERE id=?',[id]);
   if(!Number(expiry.restorable))throw fail('Este expediente cumplió sus 60 días de recuperación y no puede restaurarse',409);
   const inv=await safeInventory(conn,rows[0].folio,user,mode,true);
@@ -593,9 +593,9 @@ tramiteRouter.delete('/papelera/expedientes/:id',async(req,res,next)=>{
   if(!/^REG-[1-9]\d*$/.test(req.params.id))throw fail('Expediente inválido');
   const id=Number(req.params.id.slice(4));
   conn=await pool.getConnection();await conn.beginTransaction();
-  const [rows]=await conn.execute(`SELECT e.deleted_at,i.folio FROM expedientes e
+  const [rows]=await conn.execute(`SELECT e.etapa,e.deleted_at,i.folio FROM expedientes e
     JOIN inventarios i ON i.id=e.inventario_id WHERE e.id=? FOR UPDATE`,[id]);
-  if(!rows.length||!rows[0].deleted_at)throw fail('El expediente no está en papelera',404);
+  if(!rows.length||rows[0].etapa!=='TRAMITE'||!rows[0].deleted_at)throw fail('El expediente no está en papelera',404);
   const inv=await safeInventory(conn,rows[0].folio,user,mode,true);
   if(inv.deleted_at)throw fail('Elimina el inventario completo desde la papelera',409);
   await ensureNoHistory(conn,[id]);

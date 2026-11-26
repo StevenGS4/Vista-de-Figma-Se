@@ -53,6 +53,7 @@ import ProfileActivityDialog, { type ProfileActivityView } from "./ProfileActivi
 import HomeHeaderTools from "./HomeHeaderTools";
 import { DocumentaryTransfer } from "./transfers";
 
+const DisposalsPanel = lazy(() => import("./DisposalsPanel"));
 const AdminPanel = lazy(() => import("./AdminPanel"));
 const AreaControlPanel = lazy(() => import("./AreaControlPanel"));
 const ConcentrationPanel = lazy(() => import("./ConcentrationPanel"));
@@ -68,6 +69,7 @@ type ModuleId =
   | "transferencias"
   | "prestamos"
   | "inventarios"
+  | "bajas"
   | "control-area"
   | "administracion";
 
@@ -97,6 +99,7 @@ const roleAccess: Record<ModuleId, Role[]> = {
     "Encargado de préstamos / Control archivístico",
     "Administrador / Coordinador",
   ],
+  bajas: ["Administrador / Coordinador", "Encargado de área"],
   "control-area": ["Encargado de área"],
   administracion: ["Administrador / Coordinador"],
 };
@@ -138,6 +141,12 @@ const modules = {
     description: "Generación de inventarios con la información archivística registrada.",
     icon: Download,
   },
+  bajas: {
+    label: "Bajas",
+    short: "Bajas",
+    description: "Propón expedientes de Concentración y consulta la resolución de cada solicitud.",
+    icon: FileClock,
+  },
   "control-area": {
     label: "Control de área",
     short: "Control de área",
@@ -164,6 +173,7 @@ const moduleOrder = Object.keys(modules) as ModuleId[];
 
 function hasModulePermission(id: ModuleId, role: Role, permissions: string[]) {
   if (id === "inicio") return true;
+  if (id === "bajas") return role === "Administrador / Coordinador" || role === "Encargado de área";
   if (id === "control-area") return role === "Encargado de área" && permissions.includes("view-records");
   if (id === "tramite" || id === "concentracion") return permissions.includes("view-records");
   if (id === "transferencias") {
@@ -746,7 +756,7 @@ function Header({
   );
 }
 
-const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion" | "control-area">, string[][]> = {
+const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion" | "control-area" | "bajas">, string[][]> = {
   tramite: [
     ["SEMARNAT-NAY/UJ/2025/0042", "Unidad Jurídica", "4C.3 — Asuntos jurídicos", "En trámite"],
     ["SEMARNAT-NAY/DA/2025/0018", "Recursos Materiales", "6C.6 — Adquisiciones", "En trámite"],
@@ -769,7 +779,7 @@ const previewRows: Record<Exclude<ModuleId, "inicio" | "administracion" | "contr
   ],
 };
 
-function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion" | "control-area"> }) {
+function ModulePreview({ id }: { id: Exclude<ModuleId, "inicio" | "administracion" | "control-area" | "bajas"> }) {
   const ItemIcon = modules[id].icon;
   const columns =
     id === "tramite"
@@ -1071,6 +1081,13 @@ function Application({
             <Suspense fallback={moduleFallback}>
               <InventoriesPanel currentUser={currentUser} role={role} />
             </Suspense>
+          ) : active === "bajas" ? (
+            <Suspense fallback={moduleFallback}>
+              <DisposalsPanel role={role} onDischarged={ids => {
+                const discharged = new Set(ids);
+                onRecordsChange(archivalRecords.filter(record => !discharged.has(record.id)));
+              }} />
+            </Suspense>
           ) : active === "control-area" && role === "Encargado de área" ? (
             <Suspense fallback={moduleFallback}><AreaControlPanel mode="area"/></Suspense>
           ) : active === "administracion" &&
@@ -1085,7 +1102,7 @@ function Application({
               />
             </Suspense>
           ) : (
-            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area">} />
+            <ModulePreview id={active as Exclude<ModuleId, "inicio" | "administracion" | "control-area" | "bajas">} />
           )}
           {manualOpen && (
             <UserManualPanel key={role} role={role} modules={allowed} permissions={currentPermissions}

@@ -43,7 +43,7 @@ async function purgeArchivedRecord(id) {
   await conn.beginTransaction();
   const [rows]=await conn.execute(`SELECT e.id,e.deleted_by,i.id AS inventory_id,i.folio
     FROM expedientes e JOIN inventarios i ON i.id=e.inventario_id
-    WHERE e.id=? AND e.deleted_at IS NOT NULL
+    WHERE e.id=? AND e.etapa='TRAMITE' AND e.deleted_at IS NOT NULL
     AND e.deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
     AND i.deleted_at IS NULL AND i.estado='TRAMITE' FOR UPDATE`,[id]);
   if(!rows.length){await conn.rollback();return false;}
@@ -87,7 +87,7 @@ export async function purgeExpiredTrash() {
   for(;;){
    const [records]=await pool.execute(`SELECT e.id FROM expedientes e
      JOIN inventarios i ON i.id=e.inventario_id
-     WHERE e.id>? AND e.deleted_at IS NOT NULL
+     WHERE e.id>? AND e.etapa='TRAMITE' AND e.deleted_at IS NOT NULL
        AND e.deleted_at<=DATE_SUB(NOW(), INTERVAL 60 DAY)
        AND i.deleted_at IS NULL
      ORDER BY e.id ASC LIMIT ${CHUNK}`,[cursor]);

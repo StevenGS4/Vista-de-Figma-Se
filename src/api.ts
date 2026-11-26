@@ -296,22 +296,42 @@ export const primaryTransferApi={
  }
 };
 
-export type DisposalInventory = {folio:string; area:string; userId:string; userName:string; date:string; total:number};
-
+export type DisposalRecord = {
+ id:string;number:string;title:string;inventory:string;
+ section:string;sectionCode:string;series:string;code:string;classification:string;
+ opened:string;closed:string;retention:string;
+};
+export type DisposalProposal = {
+ id:string;folio:string;area:string;requester:string;createdDate:string;
+ status:'PROPUESTA'|'BAJA'|'NO_PROCEDE';
+ decisionReference:string|null;decisionDate:string|null;notes:string|null;
+ resolvedBy:string|null;resolvedDate:string|null;
+};
+export type DisposalDetail = DisposalProposal & {records:DisposalRecord[]};
 export const disposalApi = {
- list:()=>request<{inventories:DisposalInventory[]}>('/api/concentracion/bajas'),
- draft:(folio:string)=>request<{administrator:string; folioSuffix:string; fields:Record<string,string>}>(
-  '/api/concentracion/bajas/'+encodeURIComponent(folio)+'/borrador',
- ),
- async confirm(folio:string, fields:Record<string,string>) {
-  const response=await fetch(API_BASE+'/api/concentracion/bajas/'+encodeURIComponent(folio),{
-   method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({confirm:true,fields}),
-  });
+ list:()=>request<{proposals:DisposalProposal[]}>('/api/bajas'),
+ candidates:()=>request<{records:DisposalRecord[]}>('/api/bajas/expedientes'),
+ detail:(id:string)=>request<{proposal:DisposalDetail}>('/api/bajas/'+encodeURIComponent(id)),
+ create:(recordIds:string[])=>request<{id:string;folio:string}>('/api/bajas',{
+  method:'POST',body:JSON.stringify({recordIds}),
+ }),
+ resolve:(id:string,decision:{status:'BAJA'|'NO_PROCEDE';date:string;reference:string;notes:string})=>
+  request<{ok:boolean}>('/api/bajas/'+encodeURIComponent(id)+'/resolucion',{
+   method:'POST',body:JSON.stringify(decision),
+  }),
+ async download(proposal:DisposalProposal){
+  const response=await fetch(API_BASE+'/api/bajas/'+encodeURIComponent(proposal.id)+'/listado.xlsx',{credentials:'include'});
   if(!response.ok){
    const data=await response.json().catch(()=>({}));
-   throw new Error(data.error || 'No se pudo registrar la baja documental.');
+   throw new Error(data.error||'No se pudo descargar el listado.');
   }
-  return response.blob();
+  const url=URL.createObjectURL(await response.blob());
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=proposal.folio+'.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),30000);
  },
 };

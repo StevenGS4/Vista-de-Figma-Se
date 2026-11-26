@@ -2,7 +2,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usersApi, transferApi } from "./api";
 import AreaControlPanel from "./AreaControlPanel";
 import AdminAreasPanel from "./AdminAreasPanel";
-import AdminDisposalsPanel from "./AdminDisposalsPanel";
 import {
   ArrowLeft,
   Check,
@@ -33,7 +32,7 @@ import {
   roles,
 } from "./data";
 
-type AdminTab = "users" | "areas" | "permissions" | "activity" | "disposals" | "transfer-tests";
+type AdminTab = "users" | "areas" | "permissions" | "activity" | "transfer-tests";
 type AdminView = "list" | "form" | "detail";
 type FieldErrors = Partial<Record<keyof UserFormState | "roles", string>>;
 
@@ -1009,8 +1008,6 @@ export default function AdminPanel({
           <Users size={17} />
           Seguimiento por área
         </button>
-        <button aria-selected={tab === "disposals"} className={tab === "disposals" ? "is-active" : ""}
-          onClick={() => setTab("disposals")} role="tab" type="button">Bajas</button>
         <button aria-selected={tab === "transfer-tests"} className={tab === "transfer-tests" ? "is-active" : ""}
           onClick={() => setTab("transfer-tests")} role="tab" type="button">Pruebas</button>
       </div>
@@ -1045,7 +1042,6 @@ export default function AdminPanel({
         />
       )}
       {tab === "areas" && <AdminAreasPanel />}
-      {tab === "disposals" && <AdminDisposalsPanel />}
       {tab === "transfer-tests" && <TransferTestSettings />}
       {tab === "activity" && <AreaControlPanel mode="admin" />}
       {tab === "permissions" && (

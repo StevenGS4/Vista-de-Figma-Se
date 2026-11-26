@@ -7,7 +7,7 @@ import type { ArchivalLoan } from "./loans";
 import { assignedTransferTasks, homeToday, lastActiveInventory, personalLoanTiming } from "./homePending";
 import type { ArchivalRecord } from "./records";
 
-export type HomeModule = "inicio" | "tramite" | "concentracion" | "transferencias" | "prestamos" | "inventarios" | "control-area" | "administracion";
+export type HomeModule = "inicio" | "tramite" | "concentracion" | "transferencias" | "prestamos" | "inventarios" | "bajas" | "control-area" | "administracion";
 export type HomeNotice = { id: string; title: string; detail: string; module: HomeModule; date: string; color: "green" | "wine" | "gold" };
 const dateToday = () => {
   const now = new Date();
