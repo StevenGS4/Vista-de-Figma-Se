@@ -56,57 +56,62 @@ function NewProposal({ records, busy, onSubmit, onBack }: {
     return next;
   });
 
-  return <section className="surface primary-builder__panel">
-    <div className="primary-builder__heading"><div>
-      <h3>{review ? "Revisar propuesta" : "Nueva propuesta de baja"}</h3>
-      <p>{review ? "Verifica los expedientes del listado para Oficina Central." : "Selecciona los expedientes de tu área que propondrás para baja."}</p>
-    </div></div>
-    <fieldset disabled={busy} className="grid gap-3 p-4">
-      {review ? <RecordsTable records={chosen} /> : <>
-        <label className="search-box">
-          <Search size={16} />
-          <input type="search" aria-label="Buscar expedientes" placeholder="Buscar por nombre, número, sección o serie"
-            value={search} onChange={event => setSearch(event.target.value)} />
-        </label>
-        {!groups.size && <p>No hay expedientes disponibles que coincidan con la búsqueda.</p>}
-        {[...groups].map(([key, group]) => <details key={key} className="primary-builder__inventory" open={query ? true : undefined}>
-          <summary className="cursor-pointer px-4 py-3 text-sm">
-            <strong>{group[0].code} · {group[0].series}</strong> <span>· {group[0].section} · {group.length} expedientes</span>
-          </summary>
-          <RecordsTable records={group} selection={selected} toggle={toggle} />
-        </details>)}
-        {chosen.length > 0 && (
-          <section className="overflow-hidden rounded-lg border border-[#b4c4bb]" aria-labelledby="disposal-selection-heading">
-            <h4 id="disposal-selection-heading" className="bg-[#edf0ec] px-4 py-3 text-sm font-semibold text-[#243931]">
-              Expedientes seleccionados
-            </h4>
-            <ul className="divide-y divide-[#d6dfd9]">
-              {chosen.map(record => (
-                <li key={record.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                  <div className="min-w-0 break-words">
-                    <strong className="block text-sm">{record.title || record.number}</strong>
-                    <small className="text-[#526760]">{[record.number, record.code, record.series].filter(Boolean).join(" · ")}</small>
-                  </div>
-                  <button type="button" className="text-button" aria-label={`Quitar ${record.number} de la selección`}
-                    onClick={() => toggle(record.id)}>
-                    <X size={14} aria-hidden="true" /> Quitar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </>}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" className="text-button" onClick={review ? () => setReview(false) : onBack}><ArrowLeft size={16} /> {review ? "Cambiar selección" : "Volver a Bajas"}</button>
-        <span aria-live="polite">{selected.size} seleccionados</span>
-        <button type="button" className="button button--primary" disabled={!selected.size}
-          onClick={() => review ? onSubmit([...selected]) : setReview(true)}>
-          {review ? "Registrar propuesta" : "Revisar selección"}
-        </button>
-      </div>
-    </fieldset>
-  </section>;
+  return <>
+    <button type="button" className="text-button justify-self-start" disabled={busy}
+      onClick={review ? () => setReview(false) : onBack}>
+      <ArrowLeft size={16} /> {review ? "Cambiar selección" : "Volver a Bajas"}
+    </button>
+    <section className="surface primary-builder__panel">
+      <div className="primary-builder__heading"><div>
+        <h3>{review ? "Revisar propuesta" : "Nueva propuesta de baja"}</h3>
+        <p>{review ? "Verifica los expedientes del listado para Oficina Central." : "Selecciona los expedientes de tu área que propondrás para baja."}</p>
+      </div></div>
+      <fieldset disabled={busy} className="grid gap-3 p-4">
+        {review ? <RecordsTable records={chosen} /> : <>
+          <label className="search-box">
+            <Search size={16} />
+            <input type="search" aria-label="Buscar expedientes" placeholder="Buscar por nombre, número, sección o serie"
+              value={search} onChange={event => setSearch(event.target.value)} />
+          </label>
+          {!groups.size && <p>No hay expedientes disponibles que coincidan con la búsqueda.</p>}
+          {[...groups].map(([key, group]) => <details key={key} className="primary-builder__inventory" open={query ? true : undefined}>
+            <summary className="cursor-pointer px-4 py-3 text-sm">
+              <strong>{group[0].code} · {group[0].series}</strong> <span>· {group[0].section} · {group.length} expedientes</span>
+            </summary>
+            <RecordsTable records={group} selection={selected} toggle={toggle} />
+          </details>)}
+          {chosen.length > 0 && (
+            <section className="overflow-hidden rounded-lg border border-[#b4c4bb]" aria-labelledby="disposal-selection-heading">
+              <h4 id="disposal-selection-heading" className="bg-[#edf0ec] px-4 py-3 text-sm font-semibold text-[#243931]">
+                Expedientes seleccionados
+              </h4>
+              <ul className="divide-y divide-[#d6dfd9]">
+                {chosen.map(record => (
+                  <li key={record.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                    <div className="min-w-0 break-words">
+                      <strong className="block text-sm">{record.title || record.number}</strong>
+                      <small className="text-[#526760]">{[record.number, record.code, record.series].filter(Boolean).join(" · ")}</small>
+                    </div>
+                    <button type="button" className="text-button" aria-label={`Quitar ${record.number} de la selección`}
+                      onClick={() => toggle(record.id)}>
+                      <X size={14} aria-hidden="true" /> Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span aria-live="polite">{selected.size} seleccionados</span>
+          <button type="button" className="button button--primary" disabled={!selected.size}
+            onClick={() => review ? onSubmit([...selected]) : setReview(true)}>
+            {review ? "Registrar propuesta" : "Revisar selección"}
+          </button>
+        </div>
+      </fieldset>
+    </section>
+  </>;
 }
 
 function ResolutionForm({ proposal, busy, onResolve }: {
@@ -222,10 +227,13 @@ export default function DisposalsPanel({ currentUser, role, onDischarged }: {
           await open(created.id);
           await refresh();
         })} /> : detail ? <>
+        <button type="button" className="text-button justify-self-start" disabled={busy}
+          onClick={() => { setDetail(undefined); void run(refresh); }}>
+          <ArrowLeft size={16} /> Volver a Bajas
+        </button>
         <section className="surface primary-builder__panel">
           <div className="primary-builder__heading">
             <div className="grow">
-              <button type="button" className="text-button" disabled={busy} onClick={() => { setDetail(undefined); void run(refresh); }}><ArrowLeft size={16} /> Volver a Bajas</button>
               <h3>{detail.folio} · {statuses[detail.status]}</h3>
               <p>{detail.area} · {detail.requester} · {dateLabel(detail.createdDate)}</p>
             </div>
