@@ -1,14 +1,17 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronDown,
   Download,
   FileSpreadsheet,
   Files,
   FolderArchive,
   ShieldCheck,
+  Search,
+  X,
 } from "lucide-react";
 import type { Role, UserRecord } from "./data";
 import type { ArchivalRecord } from "./records";
@@ -121,26 +124,76 @@ const openingPeriods = [
 
 const emptyFilters: SeriesInventoryFilters = { section: "", series: "", from: "", to: "", areas: [], users: [], includePhysicalLocation: false };
 
+const normalizeFilterText = (value: string) =>
+  value.toLocaleLowerCase("es").normalize("NFD").replace(/\p{M}/gu, "");
+
 function MultiFilter({ label, options, selected, onChange }: {
-  label: string; options: { id: string; name: string }[]; selected: string[]; onChange: (ids: string[]) => void;
+  label: "Áreas" | "Usuarios"; options: { id: string; name: string }[]; selected: string[]; onChange: (ids: string[]) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const noun = label === "Áreas" ? "áreas" : "usuarios";
+  const allLabel = label === "Áreas" ? "Todas las áreas" : "Todos los usuarios";
+  const byId = useMemo(() => new Map(options.map(option => [option.id, option])), [options]);
+  const matches = useMemo(() => {
+    const terms = normalizeFilterText(search).trim().split(/\s+/).filter(Boolean);
+    return terms.length ? options.filter(option => {
+      const text = normalizeFilterText(option.name + " " + option.id);
+      return terms.every(term => text.includes(term));
+    }) : options;
+  }, [options, search]);
+  const checked = new Set(selected);
+  const pageSize = 25;
+  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+  const currentPage = Math.min(page, pages - 1);
+  const remove = (id: string) => onChange(selected.filter(value => value !== id));
+
   return (
     <fieldset className="min-w-0 rounded-lg border border-[#b4c4bb] bg-[#f8f8f3] p-3">
       <legend className="px-1 text-sm font-semibold">{label}</legend>
-      <label className="flex items-center gap-2 pb-2 text-sm">
-        <input type="checkbox" checked={!selected.length} onChange={() => onChange([])} />
-        {label === "Áreas" ? "Todas las áreas" : "Todos los usuarios"}
-      </label>
-      <div className="grid max-h-36 gap-2 overflow-auto">
-        {options.map(option => (
-          <label key={option.id} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={selected.includes(option.id)} onChange={event =>
-              onChange(event.target.checked ? [...selected, option.id] : selected.filter(id => id !== option.id))
-            } />
-            {option.name}
+      <details className="rounded-md border border-[#b4c4bb] bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          Elegir {noun}<ChevronDown size={16} aria-hidden="true" />
+        </summary>
+        <div className="grid gap-2 border-t border-[#dbe5df] p-2">
+          <label className="search-box min-w-0">
+            <Search size={16} aria-hidden="true" />
+            <input type="search" aria-label={`Buscar ${noun}`} placeholder={`Buscar ${noun} por nombre…`}
+              value={search} onChange={event => { setSearch(event.target.value); setPage(0); }}
+              onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }} />
           </label>
-        ))}
-      </div>
+          <div className="grid max-h-40 gap-1 overflow-auto">
+            {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(option => (
+              <label key={option.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1 text-sm hover:bg-[#edf3ee]">
+                <input type="checkbox" className="mt-0.5 shrink-0 accent-[#205b4d]" checked={checked.has(option.id)}
+                  onChange={event => event.target.checked ? onChange([...selected, option.id]) : remove(option.id)} />
+                <span className="break-words">{option.name}</span>
+              </label>
+            ))}
+            {!matches.length && <p className="px-2 text-sm text-[#526760]">No se encontraron {noun}.</p>}
+          </div>
+          {pages > 1 && <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+            <button type="button" className="text-button" disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}>Anterior</button>
+            <span>Página {currentPage + 1} de {pages}</span>
+            <button type="button" className="text-button" disabled={currentPage + 1 === pages}
+              onClick={() => setPage(currentPage + 1)}>Siguiente</button>
+          </div>}
+        </div>
+      </details>
+      {selected.length ? (
+        <ul className="mt-2 flex flex-wrap gap-2" aria-label={`Selección de ${noun}`}>
+          {selected.map(id => {
+            const name = byId.get(id)?.name ?? id;
+            return <li key={id} className="flex max-w-full items-center gap-1 rounded-md bg-[#e5efe8] px-2 py-1 text-xs text-[#21433a]">
+              <span className="min-w-0 break-words">{name}</span>
+              <button type="button" className="shrink-0 rounded p-1 hover:bg-[#ccdfd5]" aria-label={`Quitar ${name}`} onClick={() => remove(id)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </li>;
+          })}
+        </ul>
+      ) : <p className="mt-2 text-xs text-[#526760]">{allLabel}</p>}
     </fieldset>
   );
 }
@@ -148,6 +201,7 @@ function MultiFilter({ label, options, selected, onChange }: {
 function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; role: Role; onBack: () => void }) {
   const [options, setOptions] = useState<SeriesInventoryOptions>();
   const [filters, setFilters] = useState(emptyFilters);
+  const [filterReset, setFilterReset] = useState(0);
   const [period, setPeriod] = useState("");
   const [group, setGroup] = useState<InventoryGroup>();
   const [error, setError] = useState("");
@@ -246,8 +300,8 @@ function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; ro
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {options && (role === "Administrador / Coordinador" || role === "Encargado de préstamos / Control archivístico") &&
-              <MultiFilter label="Áreas" options={options.areas} selected={filters.areas} onChange={updateAreas} />}
-            {options && role !== "Personal de área" && <MultiFilter label="Usuarios" options={userOptions(filters.areas)}
+              <MultiFilter key={`areas-${filterReset}`} label="Áreas" options={options.areas} selected={filters.areas} onChange={updateAreas} />}
+            {options && role !== "Personal de área" && <MultiFilter key={`usuarios-${filterReset}`} label="Usuarios" options={userOptions(filters.areas)}
               selected={filters.users} onChange={users => setFilters({ ...filters, users })} />}
           </div>
           {type === "concentracion" && (
@@ -258,7 +312,7 @@ function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; ro
             </label>
           )}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button className="button--secondary" onClick={() => { setFilters(emptyFilters); setPeriod(""); setError(""); }}>Limpiar filtros</Button>
+            <Button className="button--secondary" onClick={() => { setFilters(emptyFilters); setFilterReset(count => count + 1); setPeriod(""); setError(""); }}>Limpiar filtros</Button>
             <button type="submit" className="button button--primary" disabled={!filters.series}>Ver vista previa</button>
           </div>
         </fieldset>
