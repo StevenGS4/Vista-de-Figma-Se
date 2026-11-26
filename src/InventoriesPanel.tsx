@@ -108,6 +108,17 @@ type InventoryGroup = {
   filters: SeriesInventoryFilters;
 };
 
+const openingPeriods = [
+  { value: "1d", label: "Último día", days: 1 },
+  { value: "3d", label: "Últimos 3 días", days: 3 },
+  { value: "7d", label: "Última semana", days: 7 },
+  { value: "15d", label: "Últimos 15 días", days: 15 },
+  { value: "1m", label: "Último mes", months: 1 },
+  { value: "3m", label: "Últimos tres meses", months: 3 },
+  { value: "6m", label: "Últimos seis meses", months: 6 },
+  { value: "12m", label: "Último año", months: 12 },
+] as const;
+
 const emptyFilters: SeriesInventoryFilters = { section: "", series: "", from: "", to: "", areas: [], users: [] };
 
 function MultiFilter({ label, options, selected, onChange }: {
@@ -161,17 +172,18 @@ function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; ro
   const changePeriod = (value: string) => {
     setPeriod(value);
     if (value === "custom") return;
-    if (!value) {
+    const preset = openingPeriods.find(item => item.value === value);
+    if (!preset) {
       setFilters(current => ({ ...current, from: "", to: "" }));
       return;
     }
     const to = homeToday();
     const start = new Date(`${to}T00:00:00Z`);
-    if (value === "15") start.setUTCDate(start.getUTCDate() - 14);
+    if ("days" in preset) start.setUTCDate(start.getUTCDate() - (preset.days - 1));
     else {
       const day = start.getUTCDate();
       start.setUTCDate(1);
-      start.setUTCMonth(start.getUTCMonth() - 6);
+      start.setUTCMonth(start.getUTCMonth() - preset.months);
       const last = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
       start.setUTCDate(Math.min(day, last));
     }
@@ -218,8 +230,9 @@ function SeriesInventory({ type, role, onBack }: { type: SeriesInventoryType; ro
             </label>
             <label className="form-field"><span>Periodo de apertura</span>
               <select value={period} onChange={event => changePeriod(event.target.value)}>
-                <option value="">Todas las fechas</option><option value="15">Últimos 15 días</option>
-                <option value="6">Últimos seis meses</option><option value="custom">Personalizado</option>
+                <option value="">Todas las fechas</option>
+                {openingPeriods.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                <option value="custom">Personalizado</option>
               </select>
             </label>
             {period === "custom" && <>
